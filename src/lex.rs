@@ -64,10 +64,8 @@ impl<'t> Lexer<'t> {
             }
         };
         self.byte += text.len();
-        Token::Text {
-            text,
-            at: (start, self.byte),
-        }
+        let at = (start, self.byte);
+        Token::Text { text, at }
     }
 
     fn lex_text_to_end(&mut self) -> Token<'t> {
