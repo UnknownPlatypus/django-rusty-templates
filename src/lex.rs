@@ -247,4 +247,40 @@ mod tests {
             }]
         );
     }
+
+    #[test]
+    fn test_django_example() {
+        let template = "text\n{% if test %}{{ varvalue }}{% endif %}{#comment {{not a var}} {%not a block%} #}end text";
+        let lexer = Lexer::new(template);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Text {
+                    text: "text\n",
+                    at: (0, 5),
+                },
+                Token::Tag {
+                    tag: " if test ",
+                    at: (5, 18),
+                },
+                Token::Variable {
+                    variable: " varvalue ",
+                    at: (18, 32),
+                },
+                Token::Tag {
+                    tag: " endif ",
+                    at: (32, 43),
+                },
+                Token::Comment {
+                    comment: "comment {{not a var}} {%not a block%} ",
+                    at: (43, 85),
+                },
+                Token::Text {
+                    text: "end text",
+                    at: (85, 93),
+                },
+            ]
+        );
+    }
 }
