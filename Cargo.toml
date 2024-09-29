@@ -9,4 +9,6 @@ name = "django_rusty_templates"
 crate-type = ["cdylib"]
 
 [dependencies]
+miette = { version = "7.2.0", features = ["fancy"] }
 pyo3 = "0.22.0"
+thiserror = "1.0.64"
