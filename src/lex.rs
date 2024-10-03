@@ -424,7 +424,10 @@ impl<'t> Iterator for VariableLexer<'t> {
                             self.byte += n + 1;
                             token
                         } else {
-                            todo!()
+                            let start = self.byte;
+                            let at = (start, self.byte + remainder.len());
+                            self.rest = "";
+                            Err(VariableLexerError::InvalidRemainder { at })
                         }
                     }
                     None => {
@@ -1169,6 +1172,29 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_string_argument_remainder() {
         let variable = " foo.bar|default:\"spam\"title ";
+        let lexer = VariableLexer::new(variable);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (1, 8),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (9, 16),
+                }),
+                Err(VariableLexerError::InvalidRemainder { at: (23, 28) }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_string_argument_remainder_before_filter() {
+        let variable = " foo.bar|default:\"spam\"title|title ";
         let lexer = VariableLexer::new(variable);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
