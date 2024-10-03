@@ -228,11 +228,11 @@ pub struct VariableLexer<'t> {
 }
 
 impl<'t> VariableLexer<'t> {
-    pub fn new(variable: &'t str) -> Self {
+    pub fn new(variable: &'t str, start: usize) -> Self {
         let rest = variable.trim_start();
         Self {
             rest: rest.trim_end(),
-            byte: variable.len() - rest.len(),
+            byte: start + START_TAG_LEN + variable.len() - rest.len(),
             mode: Mode::Variable,
         }
     }
@@ -767,7 +767,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_empty() {
         let variable = "  ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(tokens, vec![]);
     }
@@ -775,14 +775,14 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_variable() {
         let variable = " foo.bar ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
             vec![Ok(VariableToken {
                 token_type: VariableTokenType::Variable,
                 content: "foo.bar",
-                at: (1, 8),
+                at: (3, 10)
             })]
         );
     }
@@ -790,7 +790,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_filter() {
         let variable = " foo.bar|title ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -798,12 +798,12 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "title",
-                    at: (9, 14),
+                    at: (11, 16),
                 }),
             ]
         );
@@ -812,7 +812,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_text_argument_single_quote() {
         let variable = " foo.bar|default:'foo' ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -820,17 +820,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Text,
                     content: "foo",
-                    at: (17, 22),
+                    at: (19, 24),
                 }),
             ]
         );
@@ -839,7 +839,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_text_argument_double_quote() {
         let variable = " foo.bar|default:\"foo\" ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -847,17 +847,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Text,
                     content: "foo",
-                    at: (17, 22),
+                    at: (19, 24),
                 }),
             ]
         );
@@ -866,7 +866,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_translated_text_argument() {
         let variable = " foo.bar|default:_('foo') ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -874,17 +874,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::TranslatedText,
                     content: "foo",
-                    at: (17, 25),
+                    at: (19, 27),
                 }),
             ]
         );
@@ -893,7 +893,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_numeric_argument() {
         let variable = " foo.bar|default:500 ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -901,17 +901,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Numeric,
                     content: "500",
-                    at: (17, 20),
+                    at: (19, 22),
                 }),
             ]
         );
@@ -920,7 +920,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_variable_argument() {
         let variable = " foo.bar|default:spam ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -928,17 +928,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "spam",
-                    at: (17, 21),
+                    at: (19, 23),
                 }),
             ]
         );
@@ -947,7 +947,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_variable_argument_then_filter() {
         let variable = " foo.bar|default:spam|title ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -955,49 +955,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "spam",
-                    at: (17, 21),
-                }),
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Filter,
-                    content: "title",
-                    at: (22, 27),
-                }),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_lex_string_argument_then_filter() {
-        let variable = " foo.bar|default:\"spam\"|title ";
-        let lexer = VariableLexer::new(variable);
-        let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Variable,
-                    content: "foo.bar",
-                    at: (1, 8),
-                }),
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Filter,
-                    content: "default",
-                    at: (9, 16),
-                }),
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Text,
-                    content: "spam",
-                    at: (17, 23),
+                    at: (19, 23),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
@@ -1009,9 +977,9 @@ mod variable_lexer_tests {
     }
 
     #[test]
-    fn test_lex_argument_with_leading_underscore() {
-        let variable = " foo.bar|default:_spam ";
-        let lexer = VariableLexer::new(variable);
+    fn test_lex_string_argument_then_filter() {
+        let variable = " foo.bar|default:\"spam\"|title ";
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -1019,14 +987,46 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
-                Err(VariableLexerError::LeadingUnderscore { at: (17, 22) }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Text,
+                    content: "spam",
+                    at: (19, 25),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "title",
+                    at: (26, 31),
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_argument_with_leading_underscore() {
+        let variable = " foo.bar|default:_spam ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Err(VariableLexerError::LeadingUnderscore { at: (19, 24) }),
             ]
         );
     }
@@ -1034,7 +1034,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_argument_with_only_underscore() {
         let variable = " foo.bar|default:_ ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -1042,14 +1042,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
-                Err(VariableLexerError::LeadingUnderscore { at: (17, 18) }),
+                Err(VariableLexerError::LeadingUnderscore { at: (19, 20) }),
             ]
         );
     }
@@ -1057,7 +1057,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_text_argument_incomplete() {
         let variable = " foo.bar|default:'foo ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -1065,58 +1065,12 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
-                }),
-                Err(VariableLexerError::IncompleteString { at: (17, 21) }),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_lex_translated_text_argument_incomplete() {
-        let variable = " foo.bar|default:_('foo' ";
-        let lexer = VariableLexer::new(variable);
-        let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Variable,
-                    content: "foo.bar",
-                    at: (1, 8),
-                }),
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Filter,
-                    content: "default",
-                    at: (9, 16),
-                }),
-                Err(VariableLexerError::IncompleteTranslatedString { at: (17, 24) }),
-            ]
-        );
-    }
-
-    #[test]
-    fn test_lex_translated_text_argument_incomplete_string() {
-        let variable = " foo.bar|default:_('foo ";
-        let lexer = VariableLexer::new(variable);
-        let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Variable,
-                    content: "foo.bar",
-                    at: (1, 8),
-                }),
-                Ok(VariableToken {
-                    token_type: VariableTokenType::Filter,
-                    content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
                 Err(VariableLexerError::IncompleteString { at: (19, 23) }),
             ]
@@ -1124,9 +1078,9 @@ mod variable_lexer_tests {
     }
 
     #[test]
-    fn test_lex_translated_text_argument_missing_string() {
-        let variable = " foo.bar|default:_( ";
-        let lexer = VariableLexer::new(variable);
+    fn test_lex_translated_text_argument_incomplete() {
+        let variable = " foo.bar|default:_('foo' ";
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -1134,14 +1088,60 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
-                Err(VariableLexerError::MissingTranslatedString { at: (17, 19) }),
+                Err(VariableLexerError::IncompleteTranslatedString { at: (19, 26) }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_translated_text_argument_incomplete_string() {
+        let variable = " foo.bar|default:_('foo ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Err(VariableLexerError::IncompleteString { at: (21, 25) }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_translated_text_argument_missing_string() {
+        let variable = " foo.bar|default:_( ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Err(VariableLexerError::MissingTranslatedString { at: (19, 21) }),
             ]
         );
     }
@@ -1149,7 +1149,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_translated_text_argument_missing_string_trailing_chars() {
         let variable = " foo.bar|default:_(foo) ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -1157,14 +1157,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
-                Err(VariableLexerError::MissingTranslatedString { at: (17, 23) }),
+                Err(VariableLexerError::MissingTranslatedString { at: (19, 25) }),
             ]
         );
     }
@@ -1172,7 +1172,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_string_argument_remainder() {
         let variable = " foo.bar|default:\"spam\"title ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -1180,14 +1180,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (23, 28) }),
+                Err(VariableLexerError::InvalidRemainder { at: (25, 30) }),
             ]
         );
     }
@@ -1195,7 +1195,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_string_argument_remainder_before_filter() {
         let variable = " foo.bar|default:\"spam\"title|title ";
-        let lexer = VariableLexer::new(variable);
+        let lexer = VariableLexer::new(variable, 0);
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
@@ -1203,14 +1203,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (1, 8),
+                    at: (3, 10),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (9, 16),
+                    at: (11, 18),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (23, 28) }),
+                Err(VariableLexerError::InvalidRemainder { at: (25, 30) }),
             ]
         );
     }
