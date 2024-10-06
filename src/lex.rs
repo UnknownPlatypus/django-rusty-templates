@@ -1171,6 +1171,38 @@ mod variable_lexer_tests {
     }
 
     #[test]
+    fn test_lex_numeric_argument_scientific_negative_exponent() {
+        // Django mishandles this case, so we do too:
+        // https://code.djangoproject.com/ticket/35816
+        let variable = " foo.bar|default:5.2e-3 ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Err(VariableLexerError::InvalidRemainder { at: (23, 25) }),
+                /* When fixed we can do:
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Numeric,
+                    content: "5.2e-3",
+                    at: (19, 25),
+                }),
+                */
+            ]
+        );
+    }
+
+    #[test]
     fn test_lex_variable_argument() {
         let variable = " foo.bar|default:spam ";
         let lexer = VariableLexer::new(variable, 0);
