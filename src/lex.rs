@@ -195,9 +195,9 @@ pub enum VariableTokenType {
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct VariableToken<'t> {
-    token_type: VariableTokenType,
-    content: &'t str,
-    at: (usize, usize),
+    pub token_type: VariableTokenType,
+    pub content: &'t str,
+    pub at: (usize, usize),
 }
 
 enum Mode {

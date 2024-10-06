@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 miette = { version = "7.2.0", features = ["fancy"] }
-pyo3 = "0.22.0"
+num-bigint = "0.4.6"
+pyo3 = { version = "0.22.0", features = ["num-bigint"] }
 thiserror = "1.0.64"
 unicode-xid = "0.2.6"
