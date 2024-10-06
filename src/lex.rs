@@ -805,6 +805,46 @@ mod lexer_tests {
             ]
         );
     }
+
+    #[test]
+    fn test_verbatim_open_tag() {
+        let template = "{% verbatim %}Don't {% ";
+        let lexer = Lexer::new(template);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Tag {
+                    tag: " verbatim ",
+                    at: (0, 14),
+                },
+                Token::Text {
+                    text: "Don't {% ",
+                    at: (14, 23),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn test_verbatim_no_tag() {
+        let template = "{% verbatim %}Don't end verbatim";
+        let lexer = Lexer::new(template);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Tag {
+                    tag: " verbatim ",
+                    at: (0, 14),
+                },
+                Token::Text {
+                    text: "Don't end verbatim",
+                    at: (14, 32),
+                },
+            ]
+        );
+    }
 }
 
 #[cfg(test)]
