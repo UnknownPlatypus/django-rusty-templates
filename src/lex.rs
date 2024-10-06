@@ -1144,6 +1144,33 @@ mod variable_lexer_tests {
     }
 
     #[test]
+    fn test_lex_numeric_argument_scientific() {
+        let variable = " foo.bar|default:5.2e3 ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Numeric,
+                    content: "5.2e3",
+                    at: (19, 24),
+                }),
+            ]
+        );
+    }
+
+    #[test]
     fn test_lex_variable_argument() {
         let variable = " foo.bar|default:spam ";
         let lexer = VariableLexer::new(variable, 0);
