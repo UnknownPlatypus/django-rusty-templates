@@ -1350,6 +1350,29 @@ mod variable_lexer_tests {
     }
 
     #[test]
+    fn test_lex_translated_text_argument_incomplete_string_double_quotes() {
+        let variable = " foo.bar|default:_(\"foo ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Err(VariableLexerError::IncompleteString { at: (21, 25) }),
+            ]
+        );
+    }
+
+    #[test]
     fn test_lex_translated_text_argument_missing_string() {
         let variable = " foo.bar|default:_( ";
         let lexer = VariableLexer::new(variable, 0);
