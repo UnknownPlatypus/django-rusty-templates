@@ -1,3 +1,4 @@
+use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
@@ -205,22 +206,43 @@ enum Mode {
     Argument,
 }
 
-#[derive(Error, Debug, PartialEq, Eq)]
+#[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
 pub enum VariableLexerError {
     #[error("Variables and attributes may not begin with underscores")]
-    LeadingUnderscore { at: (usize, usize) },
+    LeadingUnderscore {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error("Expected a complete string literal")]
-    IncompleteString { at: (usize, usize) },
+    IncompleteString {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error("Expected a complete translation string")]
-    IncompleteTranslatedString { at: (usize, usize) },
+    IncompleteTranslatedString {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error("Expected a string literal within translation")]
-    MissingTranslatedString { at: (usize, usize) },
+    MissingTranslatedString {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error("Could not parse the remainder")]
-    InvalidRemainder { at: (usize, usize) },
+    InvalidRemainder {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error("Expected a valid filter name")]
-    InvalidFilterName { at: (usize, usize) },
+    InvalidFilterName {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error("Expected a valid variable name")]
-    InvalidVariableName { at: (usize, usize) },
+    InvalidVariableName {
+        #[label("here")]
+        at: SourceSpan,
+    },
 }
 
 pub struct VariableLexer<'t> {
@@ -250,7 +272,7 @@ impl<'t> VariableLexer<'t> {
                 None => {
                     let at = (self.byte, count);
                     self.rest = "";
-                    return Err(VariableLexerError::IncompleteString { at });
+                    return Err(VariableLexerError::IncompleteString { at: at.into() });
                 }
                 Some(c) => c,
             };
@@ -283,14 +305,14 @@ impl<'t> VariableLexer<'t> {
             None => {
                 let at = (start, 2);
                 self.rest = "";
-                return Err(VariableLexerError::MissingTranslatedString { at });
+                return Err(VariableLexerError::MissingTranslatedString { at: at.into() });
             }
             Some('\'') => self.lex_text(chars, '\'')?,
             Some('"') => self.lex_text(chars, '"')?,
             _ => {
                 let at = (start, self.rest.len() + 2);
                 self.rest = "";
-                return Err(VariableLexerError::MissingTranslatedString { at });
+                return Err(VariableLexerError::MissingTranslatedString { at: at.into() });
             }
         };
         match chars.next() {
@@ -306,7 +328,7 @@ impl<'t> VariableLexer<'t> {
             _ => {
                 let at = (start, self.byte - start);
                 self.rest = "";
-                Err(VariableLexerError::IncompleteTranslatedString { at })
+                Err(VariableLexerError::IncompleteTranslatedString { at: at.into() })
             }
         }
     }
@@ -344,7 +366,7 @@ impl<'t> VariableLexer<'t> {
                 _ => {
                     let at = (self.byte + offset, var.len());
                     self.rest = "";
-                    return Err(VariableLexerError::InvalidVariableName { at });
+                    return Err(VariableLexerError::InvalidVariableName { at: at.into() });
                 }
             }
         }
@@ -388,7 +410,7 @@ impl<'t> VariableLexer<'t> {
                     .unwrap_or(self.rest.len());
                 let at = (self.byte, next);
                 self.rest = "";
-                Err(VariableLexerError::InvalidFilterName { at })
+                Err(VariableLexerError::InvalidFilterName { at: at.into() })
             }
         }
     }
@@ -407,7 +429,7 @@ impl<'t> VariableLexer<'t> {
                     let at = (self.byte, end);
                     self.byte += self.rest.len();
                     self.rest = "";
-                    Err(VariableLexerError::LeadingUnderscore { at })
+                    Err(VariableLexerError::LeadingUnderscore { at: at.into() })
                 }
             }
             '\'' => self.lex_text(&mut chars, '\''),
@@ -432,7 +454,7 @@ impl<'t> VariableLexer<'t> {
             Some(n) => {
                 let at = (self.byte + n, remainder.trim().len());
                 self.rest = "";
-                Err(VariableLexerError::InvalidRemainder { at })
+                Err(VariableLexerError::InvalidRemainder { at: at.into() })
             }
         }
     }
@@ -873,7 +895,9 @@ mod variable_lexer_tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![Err(VariableLexerError::InvalidVariableName { at: (3, 4) })]
+            vec![Err(VariableLexerError::InvalidVariableName {
+                at: (3, 4).into()
+            })]
         );
     }
 
@@ -884,7 +908,9 @@ mod variable_lexer_tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![Err(VariableLexerError::InvalidVariableName { at: (7, 4) })]
+            vec![Err(VariableLexerError::InvalidVariableName {
+                at: (7, 4).into()
+            })]
         );
     }
 
@@ -950,7 +976,7 @@ mod variable_lexer_tests {
                     content: "foo.bar",
                     at: (3, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (16, 5) }),
+                Err(VariableLexerError::InvalidRemainder { at: (16, 5).into() }),
             ]
         );
     }
@@ -968,7 +994,7 @@ mod variable_lexer_tests {
                     content: "foo.bar",
                     at: (3, 7),
                 }),
-                Err(VariableLexerError::InvalidFilterName { at: (11, 5) }),
+                Err(VariableLexerError::InvalidFilterName { at: (11, 5).into() }),
             ]
         );
     }
@@ -1182,7 +1208,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (23, 2) }),
+                Err(VariableLexerError::InvalidRemainder { at: (23, 2).into() }),
                 /* When fixed we can do:
                 Ok(VariableToken {
                     token_type: VariableTokenType::Numeric,
@@ -1303,7 +1329,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::LeadingUnderscore { at: (19, 5) }),
+                Err(VariableLexerError::LeadingUnderscore { at: (19, 5).into() }),
             ]
         );
     }
@@ -1326,7 +1352,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::LeadingUnderscore { at: (19, 1) }),
+                Err(VariableLexerError::LeadingUnderscore { at: (19, 1).into() }),
             ]
         );
     }
@@ -1349,7 +1375,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteString { at: (19, 4) }),
+                Err(VariableLexerError::IncompleteString { at: (19, 4).into() }),
             ]
         );
     }
@@ -1372,7 +1398,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteTranslatedString { at: (19, 7) }),
+                Err(VariableLexerError::IncompleteTranslatedString { at: (19, 7).into() }),
             ]
         );
     }
@@ -1395,7 +1421,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteString { at: (21, 4) }),
+                Err(VariableLexerError::IncompleteString { at: (21, 4).into() }),
             ]
         );
     }
@@ -1418,7 +1444,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteString { at: (21, 4) }),
+                Err(VariableLexerError::IncompleteString { at: (21, 4).into() }),
             ]
         );
     }
@@ -1441,7 +1467,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::MissingTranslatedString { at: (19, 2) }),
+                Err(VariableLexerError::MissingTranslatedString { at: (19, 2).into() }),
             ]
         );
     }
@@ -1464,7 +1490,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::MissingTranslatedString { at: (19, 6) }),
+                Err(VariableLexerError::MissingTranslatedString { at: (19, 6).into() }),
             ]
         );
     }
@@ -1487,7 +1513,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (25, 5) }),
+                Err(VariableLexerError::InvalidRemainder { at: (25, 5).into() }),
             ]
         );
     }
@@ -1510,7 +1536,7 @@ mod variable_lexer_tests {
                     content: "default",
                     at: (11, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (25, 5) }),
+                Err(VariableLexerError::InvalidRemainder { at: (25, 5).into() }),
             ]
         );
     }
