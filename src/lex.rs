@@ -1063,6 +1063,33 @@ mod variable_lexer_tests {
     }
 
     #[test]
+    fn test_lex_translated_text_argument_double_quoted() {
+        let variable = " foo.bar|default:_(\"foo\") ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::TranslatedText,
+                    content: "foo",
+                    at: (19, 27),
+                }),
+            ]
+        );
+    }
+
+    #[test]
     fn test_lex_numeric_argument() {
         let variable = " foo.bar|default:500 ";
         let lexer = VariableLexer::new(variable, 0);
