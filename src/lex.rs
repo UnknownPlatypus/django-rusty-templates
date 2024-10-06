@@ -919,6 +919,33 @@ mod variable_lexer_tests {
     }
 
     #[test]
+    fn test_lex_filter_chain() {
+        let variable = " foo.bar|title|length ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "title",
+                    at: (11, 16),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "length",
+                    at: (17, 23),
+                }),
+            ]
+        );
+    }
+
+    #[test]
     fn test_lex_filter_remainder() {
         let variable = " foo.bar|title'foo' ";
         let lexer = VariableLexer::new(variable, 0);
