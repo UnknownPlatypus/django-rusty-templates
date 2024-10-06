@@ -262,7 +262,7 @@ impl<'t> VariableLexer<'t> {
             count += 1;
             if next == '\\' {
                 count += 1;
-                self.next();
+                chars.next();
             } else if next == end {
                 let start = self.byte;
                 let content = &self.rest[1..count - 1];
@@ -1003,6 +1003,33 @@ mod variable_lexer_tests {
                     token_type: VariableTokenType::Text,
                     content: "foo",
                     at: (19, 24),
+                }),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_lex_text_argument_escaped() {
+        let variable = " foo.bar|default:'foo\\\'' ";
+        let lexer = VariableLexer::new(variable, 0);
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Variable,
+                    content: "foo.bar",
+                    at: (3, 10),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Filter,
+                    content: "default",
+                    at: (11, 18),
+                }),
+                Ok(VariableToken {
+                    token_type: VariableTokenType::Text,
+                    content: "foo\\\'",
+                    at: (19, 26),
                 }),
             ]
         );
