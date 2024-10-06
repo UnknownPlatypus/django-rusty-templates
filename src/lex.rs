@@ -53,7 +53,6 @@ impl<'t> Lexer<'t> {
             .iter()
             .filter_map(|n| *n)
             .min();
-        let start = self.byte;
         let text = match next {
             None => {
                 let text = self.rest;
@@ -66,17 +65,16 @@ impl<'t> Lexer<'t> {
                 text
             }
         };
+        let at = (self.byte, text.len());
         self.byte += text.len();
-        let at = (start, self.byte);
         Token::Text { text, at }
     }
 
     fn lex_text_to_end(&mut self) -> Token<'t> {
-        let start = self.byte;
         let text = self.rest;
-        self.rest = "";
+        let at = (self.byte, text.len());
         self.byte += text.len();
-        let at = (start, self.byte);
+        self.rest = "";
         Token::Text { text, at }
     }
 
@@ -86,13 +84,12 @@ impl<'t> Lexer<'t> {
             EndTag::Tag => "%}",
             EndTag::Comment => "#}",
         };
-        let start = self.byte;
         let tag = match self.rest.find(end_str) {
             None => {
-                self.byte += self.rest.len();
                 let text = self.rest;
+                let at = (self.byte, text.len());
+                self.byte += self.rest.len();
                 self.rest = "";
-                let at = (start, self.byte);
                 return Token::Text { text, at };
             }
             Some(n) => {
@@ -101,8 +98,8 @@ impl<'t> Lexer<'t> {
                 tag
             }
         };
+        let at = (self.byte, tag.len() + 4);
         self.byte += tag.len() + 4;
-        let at = (start, self.byte);
         match end_tag {
             EndTag::Variable => Token::Variable { variable: tag, at },
             EndTag::Tag => Token::Tag { tag, at },
@@ -116,7 +113,6 @@ impl<'t> Lexer<'t> {
 
         let mut rest = self.rest;
         let mut index = 0;
-        let start = self.byte;
         loop {
             let next_tag = rest.find("{%");
             match next_tag {
@@ -140,14 +136,15 @@ impl<'t> Lexer<'t> {
                             if text.is_empty() {
                                 // Return the endverbatim tag since we have no text
                                 let tag = &self.rest[2..end_tag];
-                                self.byte += tag.len() + 4;
-                                self.rest = &self.rest[tag.len() + 4..];
-                                let at = (start, self.byte);
+                                let tag_len = tag.len() + 4;
+                                let at = (self.byte, tag_len);
+                                self.byte += tag_len;
+                                self.rest = &self.rest[tag_len..];
                                 return Token::Tag { tag, at };
                             } else {
                                 self.rest = &self.rest[index..];
+                                let at = (self.byte, index);
                                 self.byte += index;
-                                let at = (start, self.byte);
                                 return Token::Text { text, at };
                             }
                         }
@@ -251,9 +248,7 @@ impl<'t> VariableLexer<'t> {
         loop {
             let next = match chars.next() {
                 None => {
-                    let start = self.byte;
-                    let end = self.byte + count;
-                    let at = (start, end);
+                    let at = (self.byte, count);
                     self.rest = "";
                     return Err(VariableLexerError::IncompleteString { at });
                 }
@@ -264,11 +259,10 @@ impl<'t> VariableLexer<'t> {
                 count += 1;
                 chars.next();
             } else if next == end {
-                let start = self.byte;
+                let at = (self.byte, count);
                 let content = &self.rest[1..count - 1];
-                self.byte += content.len() + 2;
                 self.rest = &self.rest[count..];
-                let at = (start, self.byte);
+                self.byte += count;
                 return Ok(VariableToken {
                     token_type: VariableTokenType::Text,
                     content,
@@ -287,14 +281,14 @@ impl<'t> VariableLexer<'t> {
         self.rest = &self.rest[2..];
         let token = match chars.next() {
             None => {
-                let at = (start, self.byte);
+                let at = (start, 2);
                 self.rest = "";
                 return Err(VariableLexerError::MissingTranslatedString { at });
             }
             Some('\'') => self.lex_text(chars, '\'')?,
             Some('"') => self.lex_text(chars, '"')?,
             _ => {
-                let at = (start, self.byte + self.rest.len());
+                let at = (start, self.rest.len() + 2);
                 self.rest = "";
                 return Err(VariableLexerError::MissingTranslatedString { at });
             }
@@ -306,11 +300,11 @@ impl<'t> VariableLexer<'t> {
                 Ok(VariableToken {
                     token_type: VariableTokenType::TranslatedText,
                     content: token.content,
-                    at: (start, self.byte),
+                    at: (start, self.byte - start),
                 })
             }
             _ => {
-                let at = (start, self.byte);
+                let at = (start, self.byte - start);
                 self.rest = "";
                 Err(VariableLexerError::IncompleteTranslatedString { at })
             }
@@ -322,11 +316,10 @@ impl<'t> VariableLexer<'t> {
             .rest
             .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == 'e'))
             .unwrap_or(self.rest.len());
-        let start = self.byte;
-        self.byte += end;
         let content = &self.rest[..end];
         self.rest = &self.rest[end..];
-        let at = (start, self.byte);
+        let at = (self.byte, end);
+        self.byte += end;
         VariableToken {
             token_type: VariableTokenType::Numeric,
             content,
@@ -349,13 +342,13 @@ impl<'t> VariableLexer<'t> {
                     continue;
                 }
                 _ => {
-                    let at = (self.byte + offset, self.byte + offset + var.len());
+                    let at = (self.byte + offset, var.len());
                     self.rest = "";
                     return Err(VariableLexerError::InvalidVariableName { at });
                 }
             }
         }
-        let at = (self.byte, self.byte + end);
+        let at = (self.byte, end);
         self.byte += end;
         self.rest = &self.rest[end..];
         Ok(VariableToken {
@@ -378,7 +371,7 @@ impl<'t> VariableLexer<'t> {
 
         match filter.chars().next() {
             Some(c) if c.is_xid_start() => {
-                let at = (self.byte, self.byte + end);
+                let at = (self.byte, end);
                 self.byte += end;
                 self.rest = &self.rest[end..];
                 Ok(VariableToken {
@@ -393,7 +386,7 @@ impl<'t> VariableLexer<'t> {
                     .filter_map(|n| *n)
                     .min()
                     .unwrap_or(self.rest.len());
-                let at = (self.byte, self.byte + next);
+                let at = (self.byte, next);
                 self.rest = "";
                 Err(VariableLexerError::InvalidFilterName { at })
             }
@@ -407,12 +400,11 @@ impl<'t> VariableLexer<'t> {
                 if let Some('(') = chars.next() {
                     self.lex_translated(&mut chars)
                 } else {
-                    let start = self.byte;
                     let end = self
                         .rest
                         .find(char::is_whitespace)
                         .unwrap_or(self.rest.len());
-                    let at = (start, start + end);
+                    let at = (self.byte, end);
                     self.byte += self.rest.len();
                     self.rest = "";
                     Err(VariableLexerError::LeadingUnderscore { at })
@@ -438,7 +430,7 @@ impl<'t> VariableLexer<'t> {
                 Ok(token)
             }
             Some(n) => {
-                let at = (self.byte + n, self.byte + remainder.trim_end().len());
+                let at = (self.byte + n, remainder.trim().len());
                 self.rest = "";
                 Err(VariableLexerError::InvalidRemainder { at })
             }
@@ -631,23 +623,23 @@ mod lexer_tests {
                 },
                 Token::Tag {
                     tag: " if test ",
-                    at: (5, 18),
+                    at: (5, 13),
                 },
                 Token::Variable {
                     variable: " varvalue ",
-                    at: (18, 32),
+                    at: (18, 14),
                 },
                 Token::Tag {
                     tag: " endif ",
-                    at: (32, 43),
+                    at: (32, 11),
                 },
                 Token::Comment {
                     comment: "comment {{not a var}} {%not a block%} ",
-                    at: (43, 85),
+                    at: (43, 42),
                 },
                 Token::Text {
                     text: "end text",
-                    at: (85, 93),
+                    at: (85, 8),
                 },
             ]
         );
@@ -667,11 +659,11 @@ mod lexer_tests {
                 },
                 Token::Text {
                     text: "{{bare   }}",
-                    at: (14, 25),
+                    at: (14, 11),
                 },
                 Token::Tag {
                     tag: " endverbatim ",
-                    at: (25, 42),
+                    at: (25, 17),
                 },
             ]
         );
@@ -691,11 +683,11 @@ mod lexer_tests {
                 },
                 Token::Text {
                     text: "{% endif %}",
-                    at: (14, 25),
+                    at: (14, 11),
                 },
                 Token::Tag {
                     tag: " endverbatim ",
-                    at: (25, 42),
+                    at: (25, 17),
                 },
             ]
         );
@@ -715,11 +707,11 @@ mod lexer_tests {
                 },
                 Token::Text {
                     text: "It's the {% verbatim %} tag",
-                    at: (14, 41),
+                    at: (14, 27),
                 },
                 Token::Tag {
                     tag: " endverbatim ",
-                    at: (41, 58),
+                    at: (41, 17),
                 },
             ]
         );
@@ -739,15 +731,15 @@ mod lexer_tests {
                 },
                 Token::Text {
                     text: "{% verbatim %}",
-                    at: (14, 28),
+                    at: (14, 14),
                 },
                 Token::Tag {
                     tag: " endverbatim ",
-                    at: (28, 45),
+                    at: (28, 17),
                 },
                 Token::Tag {
                     tag: " endverbatim ",
-                    at: (45, 62),
+                    at: (45, 17),
                 },
             ]
         );
@@ -767,15 +759,15 @@ mod lexer_tests {
                 },
                 Token::Tag {
                     tag: " endverbatim ",
-                    at: (14, 31),
+                    at: (14, 17),
                 },
                 Token::Tag {
                     tag: " verbatim ",
-                    at: (31, 45),
+                    at: (31, 14),
                 },
                 Token::Tag {
                     tag: " endverbatim ",
-                    at: (45, 62),
+                    at: (45, 17),
                 },
             ]
         );
@@ -796,11 +788,11 @@ mod lexer_tests {
                 },
                 Token::Text {
                     text: "Don't {% endverbatim %} just yet",
-                    at: (22, 54),
+                    at: (22, 32),
                 },
                 Token::Tag {
                     tag: " endverbatim special ",
-                    at: (54, 79),
+                    at: (54, 25),
                 },
             ]
         );
@@ -820,7 +812,7 @@ mod lexer_tests {
                 },
                 Token::Text {
                     text: "Don't {% ",
-                    at: (14, 23),
+                    at: (14, 9),
                 },
             ]
         );
@@ -840,7 +832,7 @@ mod lexer_tests {
                 },
                 Token::Text {
                     text: "Don't end verbatim",
-                    at: (14, 32),
+                    at: (14, 18),
                 },
             ]
         );
@@ -869,7 +861,7 @@ mod variable_lexer_tests {
             vec![Ok(VariableToken {
                 token_type: VariableTokenType::Variable,
                 content: "foo.bar",
-                at: (3, 10)
+                at: (3, 7)
             })]
         );
     }
@@ -881,7 +873,7 @@ mod variable_lexer_tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![Err(VariableLexerError::InvalidVariableName { at: (3, 7) })]
+            vec![Err(VariableLexerError::InvalidVariableName { at: (3, 4) })]
         );
     }
 
@@ -892,7 +884,7 @@ mod variable_lexer_tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![Err(VariableLexerError::InvalidVariableName { at: (7, 11) })]
+            vec![Err(VariableLexerError::InvalidVariableName { at: (7, 4) })]
         );
     }
 
@@ -907,12 +899,12 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "title",
-                    at: (11, 16),
+                    at: (11, 5),
                 }),
             ]
         );
@@ -929,17 +921,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "title",
-                    at: (11, 16),
+                    at: (11, 5),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "length",
-                    at: (17, 23),
+                    at: (17, 6),
                 }),
             ]
         );
@@ -956,9 +948,9 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (16, 21) }),
+                Err(VariableLexerError::InvalidRemainder { at: (16, 5) }),
             ]
         );
     }
@@ -974,9 +966,9 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
-                Err(VariableLexerError::InvalidFilterName { at: (11, 16) }),
+                Err(VariableLexerError::InvalidFilterName { at: (11, 5) }),
             ]
         );
     }
@@ -992,17 +984,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Text,
                     content: "foo",
-                    at: (19, 24),
+                    at: (19, 5),
                 }),
             ]
         );
@@ -1019,17 +1011,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Text,
                     content: "foo",
-                    at: (19, 24),
+                    at: (19, 5),
                 }),
             ]
         );
@@ -1046,17 +1038,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Text,
                     content: "foo\\\'",
-                    at: (19, 26),
+                    at: (19, 7),
                 }),
             ]
         );
@@ -1073,17 +1065,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::TranslatedText,
                     content: "foo",
-                    at: (19, 27),
+                    at: (19, 8),
                 }),
             ]
         );
@@ -1100,17 +1092,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::TranslatedText,
                     content: "foo",
-                    at: (19, 27),
+                    at: (19, 8),
                 }),
             ]
         );
@@ -1127,17 +1119,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Numeric,
                     content: "500",
-                    at: (19, 22),
+                    at: (19, 3),
                 }),
             ]
         );
@@ -1154,17 +1146,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Numeric,
                     content: "5.2e3",
-                    at: (19, 24),
+                    at: (19, 5),
                 }),
             ]
         );
@@ -1183,19 +1175,19 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (23, 25) }),
+                Err(VariableLexerError::InvalidRemainder { at: (23, 2) }),
                 /* When fixed we can do:
                 Ok(VariableToken {
                     token_type: VariableTokenType::Numeric,
                     content: "5.2e-3",
-                    at: (19, 25),
+                    at: (19, 6),
                 }),
                 */
             ]
@@ -1213,17 +1205,17 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "spam",
-                    at: (19, 23),
+                    at: (19, 4),
                 }),
             ]
         );
@@ -1240,22 +1232,22 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "spam",
-                    at: (19, 23),
+                    at: (19, 4),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "title",
-                    at: (24, 29),
+                    at: (24, 5),
                 }),
             ]
         );
@@ -1272,22 +1264,22 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Text,
                     content: "spam",
-                    at: (19, 25),
+                    at: (19, 6),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "title",
-                    at: (26, 31),
+                    at: (26, 5),
                 }),
             ]
         );
@@ -1304,14 +1296,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::LeadingUnderscore { at: (19, 24) }),
+                Err(VariableLexerError::LeadingUnderscore { at: (19, 5) }),
             ]
         );
     }
@@ -1327,14 +1319,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::LeadingUnderscore { at: (19, 20) }),
+                Err(VariableLexerError::LeadingUnderscore { at: (19, 1) }),
             ]
         );
     }
@@ -1350,14 +1342,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteString { at: (19, 23) }),
+                Err(VariableLexerError::IncompleteString { at: (19, 4) }),
             ]
         );
     }
@@ -1373,14 +1365,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteTranslatedString { at: (19, 26) }),
+                Err(VariableLexerError::IncompleteTranslatedString { at: (19, 7) }),
             ]
         );
     }
@@ -1396,14 +1388,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteString { at: (21, 25) }),
+                Err(VariableLexerError::IncompleteString { at: (21, 4) }),
             ]
         );
     }
@@ -1419,14 +1411,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::IncompleteString { at: (21, 25) }),
+                Err(VariableLexerError::IncompleteString { at: (21, 4) }),
             ]
         );
     }
@@ -1442,14 +1434,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::MissingTranslatedString { at: (19, 21) }),
+                Err(VariableLexerError::MissingTranslatedString { at: (19, 2) }),
             ]
         );
     }
@@ -1465,14 +1457,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::MissingTranslatedString { at: (19, 25) }),
+                Err(VariableLexerError::MissingTranslatedString { at: (19, 6) }),
             ]
         );
     }
@@ -1488,14 +1480,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (25, 30) }),
+                Err(VariableLexerError::InvalidRemainder { at: (25, 5) }),
             ]
         );
     }
@@ -1511,14 +1503,14 @@ mod variable_lexer_tests {
                 Ok(VariableToken {
                     token_type: VariableTokenType::Variable,
                     content: "foo.bar",
-                    at: (3, 10),
+                    at: (3, 7),
                 }),
                 Ok(VariableToken {
                     token_type: VariableTokenType::Filter,
                     content: "default",
-                    at: (11, 18),
+                    at: (11, 7),
                 }),
-                Err(VariableLexerError::InvalidRemainder { at: (25, 30) }),
+                Err(VariableLexerError::InvalidRemainder { at: (25, 5) }),
             ]
         );
     }
