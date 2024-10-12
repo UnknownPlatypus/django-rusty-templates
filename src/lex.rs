@@ -4,6 +4,8 @@ use unicode_xid::UnicodeXID;
 
 pub const START_TAG_LEN: usize = 2;
 pub const END_TAG_LEN: usize = 2;
+pub const START_TRANSLATE_LEN: usize = 2;
+pub const END_TRANSLATE_LEN: usize = 1;
 
 enum EndTag {
     Variable,
@@ -359,26 +361,26 @@ impl<'t> FilterLexer<'t> {
         chars: &mut std::str::Chars,
     ) -> Result<Argument<'t>, VariableLexerError> {
         let start = self.byte;
-        self.byte += 2;
-        self.rest = &self.rest[2..];
+        self.byte += START_TRANSLATE_LEN;
+        self.rest = &self.rest[START_TRANSLATE_LEN..];
         let token = match chars.next() {
             None => {
-                let at = (start, 2);
+                let at = (start, START_TRANSLATE_LEN);
                 self.rest = "";
                 return Err(VariableLexerError::MissingTranslatedString { at: at.into() });
             }
             Some('\'') => self.lex_text(chars, '\'')?,
             Some('"') => self.lex_text(chars, '"')?,
             _ => {
-                let at = (start, self.rest.len() + 2);
+                let at = (start, self.rest.len() + START_TRANSLATE_LEN);
                 self.rest = "";
                 return Err(VariableLexerError::MissingTranslatedString { at: at.into() });
             }
         };
         match chars.next() {
             Some(')') => {
-                self.byte += 1;
-                self.rest = &self.rest[1..];
+                self.byte += END_TRANSLATE_LEN;
+                self.rest = &self.rest[END_TRANSLATE_LEN..];
                 Ok(Argument {
                     argument_type: ArgumentType::TranslatedText,
                     content: token.content,
