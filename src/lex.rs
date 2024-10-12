@@ -398,9 +398,15 @@ impl<'t> FilterLexer<'t> {
     fn lex_numeric(&mut self) -> Argument<'t> {
         let end = self
             .rest
-            .find(|c: char| !(c.is_ascii_digit() || c == '.' || c == 'e'))
+            .find(|c: char| !(c.is_ascii_digit() || c == '-' || c == '.' || c == 'e'))
             .unwrap_or(self.rest.len());
         let content = &self.rest[..end];
+        // Match django bug
+        let (content, end) = match content[1..].find('-') {
+            Some(n) => (&content[..n + 1], n + 1),
+            None => (content, end),
+        };
+        // End match django bug
         self.rest = &self.rest[end..];
         let at = (self.byte, end);
         self.byte += end;
@@ -489,7 +495,7 @@ impl<'t> FilterLexer<'t> {
             }
             '\'' => self.lex_text(&mut chars, '\'')?,
             '"' => self.lex_text(&mut chars, '"')?,
-            '0'..='9' => self.lex_numeric(),
+            '0'..='9' | '-' => self.lex_numeric(),
             _ => self.lex_variable_argument()?,
         }))
     }
@@ -1109,6 +1115,25 @@ mod variable_lexer_tests {
                     argument_type: ArgumentType::Numeric,
                     content: "500",
                     at: (19, 3),
+                }),
+                content: "default",
+                at: (11, 7),
+            })]
+        );
+    }
+
+    #[test]
+    fn test_lex_numeric_argument_negative() {
+        let variable = " foo.bar|default:-0.5 ";
+        let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![Ok(FilterToken {
+                argument: Some(Argument {
+                    argument_type: ArgumentType::Numeric,
+                    content: "-0.5",
+                    at: (19, 4),
                 }),
                 content: "default",
                 at: (11, 7),
