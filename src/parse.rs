@@ -3,7 +3,7 @@ use num_bigint::BigInt;
 use thiserror::Error;
 
 use crate::lex::{
-    Lexer, Token, VariableLexer, VariableLexerError, VariableToken, VariableTokenType,
+    lex_variable, Argument, ArgumentType, Lexer, Token, VariableLexerError, START_TAG_LEN,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -98,33 +98,18 @@ impl<'t> Parser<'t> {
         variable: &'t str,
         at: (usize, usize),
     ) -> Result<TokenTree<'t>, ParseError> {
-        let mut variable_lexer = VariableLexer::new(variable, at.0).peekable();
-        let token = match variable_lexer.next() {
+        let (variable_token, filter_lexer) = match lex_variable(variable, at.0 + START_TAG_LEN)? {
             None => return Err(ParseError::EmptyVariable { at: at.into() }),
-            Some(token) => token?,
+            Some(t) => t,
         };
-        let mut var = token
-            .parse_variable()
-            .expect("The first token from VariableLexer is always a VariableTokenType::Variable");
-        while let Some(filter) = variable_lexer.next() {
-            let filter = filter?;
-            let argument = match variable_lexer.peek() {
-                Some(token) => match token {
-                    Ok(VariableToken {
-                        token_type: VariableTokenType::Filter,
-                        ..
-                    }) => None,
-                    _ => variable_lexer
-                        .next()
-                        .expect("peek is Some")?
-                        .parse_argument()?,
-                },
+        let mut var = TokenTree::Variable(Variable::new(variable_token.content, variable_token.at));
+        for filter_token in filter_lexer {
+            let filter_token = filter_token?;
+            let argument = match filter_token.argument {
                 None => None,
+                Some(a) => Some(a.parse()?),
             };
-            let filter = match filter.token_type {
-                VariableTokenType::Filter => Filter::new(filter.content, var, argument),
-                _ => unreachable!("Expected a VariableTokenType::Filter"),
-            };
+            let filter = Filter::new(filter_token.content, var, argument);
             var = TokenTree::Filter(Box::new(filter));
         }
         Ok(var)
@@ -135,32 +120,20 @@ impl<'t> Parser<'t> {
     }
 }
 
-impl<'t> VariableToken<'t> {
-    fn parse_variable(self) -> Option<TokenTree<'t>> {
-        match self.token_type {
-            VariableTokenType::Variable => {
-                Some(TokenTree::Variable(Variable::new(self.content, self.at)))
-            }
-            _ => None,
-        }
-    }
-
-    fn parse_argument(self) -> Result<Option<TokenTree<'t>>, ParseError> {
-        Ok(Some(match self.token_type {
-            VariableTokenType::Filter => return Ok(None),
-            VariableTokenType::Variable => {
-                TokenTree::Variable(Variable::new(self.content, self.at))
-            }
-            VariableTokenType::Text => TokenTree::Text(self.content),
-            VariableTokenType::Numeric => match self.content.parse::<BigInt>() {
+impl<'t> Argument<'t> {
+    fn parse(self) -> Result<TokenTree<'t>, ParseError> {
+        Ok(match self.argument_type {
+            ArgumentType::Variable => TokenTree::Variable(Variable::new(self.content, self.at)),
+            ArgumentType::Text => TokenTree::Text(self.content),
+            ArgumentType::Numeric => match self.content.parse::<BigInt>() {
                 Ok(n) => TokenTree::Int(n),
                 Err(_) => match self.content.parse::<f64>() {
                     Ok(f) => TokenTree::Float(f),
                     Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
                 },
             },
-            VariableTokenType::TranslatedText => TokenTree::TranslatedText(self.content),
-        }))
+            ArgumentType::TranslatedText => TokenTree::TranslatedText(self.content),
+        })
     }
 }
 
