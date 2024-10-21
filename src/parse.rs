@@ -3,7 +3,7 @@ use num_bigint::BigInt;
 use thiserror::Error;
 
 use crate::lex::{
-    lex_variable, Argument, ArgumentType, Lexer, Token, VariableLexerError, START_TAG_LEN,
+    lex_variable, Argument, ArgumentType, Lexer, TokenType, VariableLexerError, START_TAG_LEN,
 };
 
 #[derive(Debug, PartialEq, Eq)]
@@ -83,13 +83,13 @@ impl<'t> Parser<'t> {
     pub fn parse(&mut self) -> Result<Vec<TokenTree<'t>>, ParseError> {
         let mut nodes = Vec::new();
         while let Some(token) = self.lexer.next() {
-            nodes.push(match token {
-                Token::Text { .. } => TokenTree::Text(token.content(self.template)),
-                Token::Comment { .. } => continue,
-                Token::Variable { at, .. } => {
-                    self.parse_variable(token.content(self.template), at)?
+            nodes.push(match token.token_type {
+                TokenType::Text => TokenTree::Text(token.content(self.template)),
+                TokenType::Comment => continue,
+                TokenType::Variable => {
+                    self.parse_variable(token.content(self.template), token.at)?
                 }
-                Token::Tag { at, .. } => self.parse_tag(token.content(self.template), at)?,
+                TokenType::Tag => self.parse_tag(token.content(self.template), token.at)?,
             })
         }
         Ok(nodes)
