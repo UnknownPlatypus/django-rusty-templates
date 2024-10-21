@@ -104,7 +104,10 @@ impl<'t> Parser<'t> {
             None => return Err(ParseError::EmptyVariable { at: at.into() }),
             Some(t) => t,
         };
-        let mut var = TokenTree::Variable(Variable::new(variable_token.content, variable_token.at));
+        let mut var = TokenTree::Variable(Variable::new(
+            variable_token.content(self.template),
+            variable_token.at,
+        ));
         for filter_token in filter_lexer {
             let filter_token = filter_token?;
             let argument = match filter_token.argument {

@@ -249,9 +249,15 @@ pub struct FilterToken<'t> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct VariableToken<'t> {
-    pub content: &'t str,
+pub struct VariableToken {
     pub at: (usize, usize),
+}
+
+impl<'t> VariableToken {
+    pub fn content(&self, template: &'t str) -> &'t str {
+        let (start, len) = self.at;
+        &template[start..start + len]
+    }
 }
 
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
@@ -333,7 +339,7 @@ pub fn lex_variable(
     let end = content.len();
     let at = (start, end);
     Ok(Some((
-        VariableToken { content, at },
+        VariableToken { at },
         FilterLexer::new(&rest[end..], start + end),
     )))
 }
@@ -863,15 +869,11 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_variable() {
-        let variable = " foo.bar ";
+        let template = "{{ foo.bar }}";
+        let variable = &template[START_TAG_LEN..(template.len() - END_TAG_LEN)];
         let (token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
-        assert_eq!(
-            token,
-            VariableToken {
-                content: "foo.bar",
-                at: (3, 7)
-            }
-        );
+        assert_eq!(token, VariableToken { at: (3, 7) });
+        assert_eq!(token.content(template), "foo.bar");
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(tokens, vec![]);
     }
