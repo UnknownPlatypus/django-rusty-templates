@@ -14,27 +14,15 @@ enum EndTag {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub enum Token<'t> {
-    Text {
-        text: &'t str,
-        at: (usize, usize),
-    },
-    Variable {
-        variable: &'t str,
-        at: (usize, usize),
-    },
-    Tag {
-        tag: &'t str,
-        at: (usize, usize),
-    },
-    Comment {
-        comment: &'t str,
-        at: (usize, usize),
-    },
+pub enum Token {
+    Text { at: (usize, usize) },
+    Variable { at: (usize, usize) },
+    Tag { at: (usize, usize) },
+    Comment { at: (usize, usize) },
 }
 
-impl<'a, 't> Token<'a> {
-    fn content(&self, template: &'t str) -> &'t str {
+impl<'t> Token {
+    pub fn content(&self, template: &'t str) -> &'t str {
         let (start, end) = match self {
             Token::Text {
                 at: (start, len), ..
@@ -54,6 +42,7 @@ impl<'a, 't> Token<'a> {
 }
 
 pub struct Lexer<'t> {
+    template: &'t str,
     rest: &'t str,
     byte: usize,
     verbatim: Option<&'t str>,
@@ -62,13 +51,14 @@ pub struct Lexer<'t> {
 impl<'t> Lexer<'t> {
     pub fn new(template: &'t str) -> Self {
         Self {
+            template,
             rest: template,
             byte: 0,
             verbatim: None,
         }
     }
 
-    fn lex_text(&mut self) -> Token<'t> {
+    fn lex_text(&mut self) -> Token {
         let next_tag = self.rest.find("{%");
         let next_variable = self.rest.find("{{");
         let next_comment = self.rest.find("{#");
@@ -90,18 +80,18 @@ impl<'t> Lexer<'t> {
         };
         let at = (self.byte, text.len());
         self.byte += text.len();
-        Token::Text { text, at }
+        Token::Text { at }
     }
 
-    fn lex_text_to_end(&mut self) -> Token<'t> {
+    fn lex_text_to_end(&mut self) -> Token {
         let text = self.rest;
         let at = (self.byte, text.len());
         self.byte += text.len();
         self.rest = "";
-        Token::Text { text, at }
+        Token::Text { at }
     }
 
-    fn lex_tag(&mut self, end_tag: EndTag) -> Token<'t> {
+    fn lex_tag(&mut self, end_tag: EndTag) -> Token {
         let end_str = match end_tag {
             EndTag::Variable => "}}",
             EndTag::Tag => "%}",
@@ -113,7 +103,7 @@ impl<'t> Lexer<'t> {
                 let at = (self.byte, text.len());
                 self.byte += self.rest.len();
                 self.rest = "";
-                return Token::Text { text, at };
+                return Token::Text { at };
             }
             Some(n) => {
                 let tag = &self.rest[START_TAG_LEN..n];
@@ -124,13 +114,13 @@ impl<'t> Lexer<'t> {
         let at = (self.byte, tag.len() + 4);
         self.byte += tag.len() + 4;
         match end_tag {
-            EndTag::Variable => Token::Variable { variable: tag, at },
-            EndTag::Tag => Token::Tag { tag, at },
-            EndTag::Comment => Token::Comment { comment: tag, at },
+            EndTag::Variable => Token::Variable { at },
+            EndTag::Tag => Token::Tag { at },
+            EndTag::Comment => Token::Comment { at },
         }
     }
 
-    fn lex_verbatim(&mut self, verbatim: &'t str) -> Token<'t> {
+    fn lex_verbatim(&mut self, verbatim: &'t str) -> Token {
         let verbatim = verbatim.trim();
         self.verbatim = None;
 
@@ -163,12 +153,12 @@ impl<'t> Lexer<'t> {
                                 let at = (self.byte, tag_len);
                                 self.byte += tag_len;
                                 self.rest = &self.rest[tag_len..];
-                                return Token::Tag { tag, at };
+                                return Token::Tag { at };
                             } else {
                                 self.rest = &self.rest[index..];
                                 let at = (self.byte, index);
                                 self.byte += index;
-                                return Token::Text { text, at };
+                                return Token::Text { at };
                             }
                         }
                     }
@@ -179,7 +169,7 @@ impl<'t> Lexer<'t> {
 }
 
 impl<'t> Iterator for Lexer<'t> {
-    type Item = Token<'t>;
+    type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.rest.is_empty() {
@@ -190,8 +180,8 @@ impl<'t> Iterator for Lexer<'t> {
                 Some("{{") => self.lex_tag(EndTag::Variable),
                 Some("{%") => {
                     let tag = self.lex_tag(EndTag::Tag);
-                    if let Token::Tag { tag: verbatim, .. } = tag {
-                        let verbatim = verbatim.trim();
+                    if let Token::Tag { .. } = tag {
+                        let verbatim = tag.content(self.template).trim();
                         if verbatim == "verbatim" || verbatim.starts_with("verbatim ") {
                             self.verbatim = Some(verbatim)
                         }
@@ -570,7 +560,7 @@ impl<'t> Iterator for FilterLexer<'t> {
 mod lexer_tests {
     use super::*;
 
-    fn contents<'t>(template: &'t str, tokens: Vec<Token>) -> Vec<&'t str> {
+    fn contents(template: &str, tokens: Vec<Token>) -> Vec<&str> {
         tokens.iter().map(|t| t.content(template)).collect()
     }
 
@@ -587,13 +577,7 @@ mod lexer_tests {
         let template = "Just some text";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Text {
-                text: template,
-                at: (0, 14),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Text { at: (0, 14) }]);
         assert_eq!(contents(template, tokens), vec![template]);
     }
 
@@ -602,13 +586,7 @@ mod lexer_tests {
         let template = "    ";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Text {
-                text: template,
-                at: (0, 4),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Text { at: (0, 4) }]);
         assert_eq!(contents(template, tokens), vec![template]);
     }
 
@@ -617,13 +595,7 @@ mod lexer_tests {
         let template = "{# comment #}";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Comment {
-                comment: " comment ",
-                at: (0, 13),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Comment { at: (0, 13) }]);
         assert_eq!(contents(template, tokens), vec![" comment "]);
     }
 
@@ -632,13 +604,7 @@ mod lexer_tests {
         let template = "{{ foo.bar|title }}";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Variable {
-                variable: " foo.bar|title ",
-                at: (0, 19),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Variable { at: (0, 19) }]);
         assert_eq!(contents(template, tokens), vec![" foo.bar|title "]);
     }
 
@@ -647,13 +613,7 @@ mod lexer_tests {
         let template = "{% for foo in bar %}";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Tag {
-                tag: " for foo in bar ",
-                at: (0, 20),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Tag { at: (0, 20) }]);
         assert_eq!(contents(template, tokens), vec![" for foo in bar "]);
     }
 
@@ -662,13 +622,7 @@ mod lexer_tests {
         let template = "{# comment #";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Text {
-                text: template,
-                at: (0, 12),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Text { at: (0, 12) }]);
         assert_eq!(contents(template, tokens), vec![template]);
     }
 
@@ -677,13 +631,7 @@ mod lexer_tests {
         let template = "{{ foo.bar|title }";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Text {
-                text: template,
-                at: (0, 18),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Text { at: (0, 18) }]);
         assert_eq!(contents(template, tokens), vec![template]);
     }
 
@@ -692,13 +640,7 @@ mod lexer_tests {
         let template = "{% for foo in bar %";
         let lexer = Lexer::new(template);
         let tokens: Vec<_> = lexer.collect();
-        assert_eq!(
-            tokens,
-            vec![Token::Text {
-                text: template,
-                at: (0, 19),
-            }]
-        );
+        assert_eq!(tokens, vec![Token::Text { at: (0, 19) }]);
         assert_eq!(contents(template, tokens), vec![template]);
     }
 
@@ -710,30 +652,12 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Text {
-                    text: "text\n",
-                    at: (0, 5),
-                },
-                Token::Tag {
-                    tag: " if test ",
-                    at: (5, 13),
-                },
-                Token::Variable {
-                    variable: " varvalue ",
-                    at: (18, 14),
-                },
-                Token::Tag {
-                    tag: " endif ",
-                    at: (32, 11),
-                },
-                Token::Comment {
-                    comment: "comment {{not a var}} {%not a block%} ",
-                    at: (43, 42),
-                },
-                Token::Text {
-                    text: "end text",
-                    at: (85, 8),
-                },
+                Token::Text { at: (0, 5) },
+                Token::Tag { at: (5, 13) },
+                Token::Variable { at: (18, 14) },
+                Token::Tag { at: (32, 11) },
+                Token::Comment { at: (43, 42) },
+                Token::Text { at: (85, 8) },
             ]
         );
         assert_eq!(
@@ -757,18 +681,9 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (0, 14),
-                },
-                Token::Text {
-                    text: "{{bare   }}",
-                    at: (14, 11),
-                },
-                Token::Tag {
-                    tag: " endverbatim ",
-                    at: (25, 17),
-                },
+                Token::Tag { at: (0, 14) },
+                Token::Text { at: (14, 11) },
+                Token::Tag { at: (25, 17) },
             ]
         );
         assert_eq!(
@@ -785,18 +700,9 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (0, 14),
-                },
-                Token::Text {
-                    text: "{% endif %}",
-                    at: (14, 11),
-                },
-                Token::Tag {
-                    tag: " endverbatim ",
-                    at: (25, 17),
-                },
+                Token::Tag { at: (0, 14) },
+                Token::Text { at: (14, 11) },
+                Token::Tag { at: (25, 17) },
             ]
         );
         assert_eq!(
@@ -813,18 +719,9 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (0, 14),
-                },
-                Token::Text {
-                    text: "It's the {% verbatim %} tag",
-                    at: (14, 27),
-                },
-                Token::Tag {
-                    tag: " endverbatim ",
-                    at: (41, 17),
-                },
+                Token::Tag { at: (0, 14) },
+                Token::Text { at: (14, 27) },
+                Token::Tag { at: (41, 17) },
             ]
         );
         assert_eq!(
@@ -841,22 +738,10 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (0, 14),
-                },
-                Token::Text {
-                    text: "{% verbatim %}",
-                    at: (14, 14),
-                },
-                Token::Tag {
-                    tag: " endverbatim ",
-                    at: (28, 17),
-                },
-                Token::Tag {
-                    tag: " endverbatim ",
-                    at: (45, 17),
-                },
+                Token::Tag { at: (0, 14) },
+                Token::Text { at: (14, 14) },
+                Token::Tag { at: (28, 17) },
+                Token::Tag { at: (45, 17) },
             ]
         );
         assert_eq!(
@@ -878,22 +763,10 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (0, 14),
-                },
-                Token::Tag {
-                    tag: " endverbatim ",
-                    at: (14, 17),
-                },
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (31, 14),
-                },
-                Token::Tag {
-                    tag: " endverbatim ",
-                    at: (45, 17),
-                },
+                Token::Tag { at: (0, 14) },
+                Token::Tag { at: (14, 17) },
+                Token::Tag { at: (31, 14) },
+                Token::Tag { at: (45, 17) },
             ]
         );
         assert_eq!(
@@ -911,18 +784,9 @@ mod lexer_tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Tag {
-                    tag: " verbatim special ",
-                    at: (0, 22),
-                },
-                Token::Text {
-                    text: "Don't {% endverbatim %} just yet",
-                    at: (22, 32),
-                },
-                Token::Tag {
-                    tag: " endverbatim special ",
-                    at: (54, 25),
-                },
+                Token::Tag { at: (0, 22) },
+                Token::Text { at: (22, 32) },
+                Token::Tag { at: (54, 25) },
             ]
         );
         assert_eq!(
@@ -942,16 +806,7 @@ mod lexer_tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (0, 14),
-                },
-                Token::Text {
-                    text: "Don't {% ",
-                    at: (14, 9),
-                },
-            ]
+            vec![Token::Tag { at: (0, 14) }, Token::Text { at: (14, 9) }]
         );
         assert_eq!(contents(template, tokens), vec![" verbatim ", "Don't {% "]);
     }
@@ -963,16 +818,7 @@ mod lexer_tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![
-                Token::Tag {
-                    tag: " verbatim ",
-                    at: (0, 14),
-                },
-                Token::Text {
-                    text: "Don't end verbatim",
-                    at: (14, 18),
-                },
-            ]
+            vec![Token::Tag { at: (0, 14) }, Token::Text { at: (14, 18) }]
         );
         assert_eq!(
             contents(template, tokens),

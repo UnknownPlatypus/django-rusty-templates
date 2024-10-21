@@ -84,10 +84,12 @@ impl<'t> Parser<'t> {
         let mut nodes = Vec::new();
         while let Some(token) = self.lexer.next() {
             nodes.push(match token {
-                Token::Text { text, .. } => TokenTree::Text(text),
+                Token::Text { .. } => TokenTree::Text(token.content(self.template)),
                 Token::Comment { .. } => continue,
-                Token::Variable { variable, at } => self.parse_variable(variable, at)?,
-                Token::Tag { tag, at } => self.parse_tag(tag, at)?,
+                Token::Variable { at, .. } => {
+                    self.parse_variable(token.content(self.template), at)?
+                }
+                Token::Tag { at, .. } => self.parse_tag(token.content(self.template), at)?,
             })
         }
         Ok(nodes)
