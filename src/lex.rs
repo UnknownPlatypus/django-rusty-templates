@@ -33,6 +33,26 @@ pub enum Token<'t> {
     },
 }
 
+impl<'a, 't> Token<'a> {
+    fn content(&self, template: &'t str) -> &'t str {
+        let (start, end) = match self {
+            Token::Text {
+                at: (start, len), ..
+            } => (*start, start + len),
+            Token::Variable {
+                at: (start, len), ..
+            } => (start + START_TAG_LEN, start + len - END_TAG_LEN),
+            Token::Tag {
+                at: (start, len), ..
+            } => (start + START_TAG_LEN, start + len - END_TAG_LEN),
+            Token::Comment {
+                at: (start, len), ..
+            } => (start + START_TAG_LEN, start + len - END_TAG_LEN),
+        };
+        &template[start..end]
+    }
+}
+
 pub struct Lexer<'t> {
     rest: &'t str,
     byte: usize,
@@ -550,6 +570,10 @@ impl<'t> Iterator for FilterLexer<'t> {
 mod lexer_tests {
     use super::*;
 
+    fn contents<'t>(template: &'t str, tokens: Vec<Token>) -> Vec<&'t str> {
+        tokens.iter().map(|t| t.content(template)).collect()
+    }
+
     #[test]
     fn test_lex_empty() {
         let template = "";
@@ -570,6 +594,7 @@ mod lexer_tests {
                 at: (0, 14),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![template]);
     }
 
     #[test]
@@ -584,6 +609,7 @@ mod lexer_tests {
                 at: (0, 4),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![template]);
     }
 
     #[test]
@@ -598,6 +624,7 @@ mod lexer_tests {
                 at: (0, 13),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![" comment "]);
     }
 
     #[test]
@@ -612,6 +639,7 @@ mod lexer_tests {
                 at: (0, 19),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![" foo.bar|title "]);
     }
 
     #[test]
@@ -626,6 +654,7 @@ mod lexer_tests {
                 at: (0, 20),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![" for foo in bar "]);
     }
 
     #[test]
@@ -640,6 +669,7 @@ mod lexer_tests {
                 at: (0, 12),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![template]);
     }
 
     #[test]
@@ -654,6 +684,7 @@ mod lexer_tests {
                 at: (0, 18),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![template]);
     }
 
     #[test]
@@ -668,6 +699,7 @@ mod lexer_tests {
                 at: (0, 19),
             }]
         );
+        assert_eq!(contents(template, tokens), vec![template]);
     }
 
     #[test]
@@ -704,6 +736,17 @@ mod lexer_tests {
                 },
             ]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![
+                "text\n",
+                " if test ",
+                " varvalue ",
+                " endif ",
+                "comment {{not a var}} {%not a block%} ",
+                "end text",
+            ]
+        );
     }
 
     #[test]
@@ -727,6 +770,10 @@ mod lexer_tests {
                     at: (25, 17),
                 },
             ]
+        );
+        assert_eq!(
+            contents(template, tokens),
+            vec![" verbatim ", "{{bare   }}", " endverbatim "]
         );
     }
 
@@ -752,6 +799,10 @@ mod lexer_tests {
                 },
             ]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![" verbatim ", "{% endif %}", " endverbatim "]
+        );
     }
 
     #[test]
@@ -775,6 +826,10 @@ mod lexer_tests {
                     at: (41, 17),
                 },
             ]
+        );
+        assert_eq!(
+            contents(template, tokens),
+            vec![" verbatim ", "It's the {% verbatim %} tag", " endverbatim "]
         );
     }
 
@@ -802,6 +857,15 @@ mod lexer_tests {
                     tag: " endverbatim ",
                     at: (45, 17),
                 },
+            ]
+        );
+        assert_eq!(
+            contents(template, tokens),
+            vec![
+                " verbatim ",
+                "{% verbatim %}",
+                " endverbatim ",
+                " endverbatim ",
             ]
         );
     }
@@ -832,6 +896,10 @@ mod lexer_tests {
                 },
             ]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![" verbatim ", " endverbatim ", " verbatim ", " endverbatim "]
+        );
     }
 
     #[test]
@@ -857,6 +925,14 @@ mod lexer_tests {
                 },
             ]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![
+                " verbatim special ",
+                "Don't {% endverbatim %} just yet",
+                " endverbatim special ",
+            ]
+        );
     }
 
     #[test]
@@ -877,6 +953,7 @@ mod lexer_tests {
                 },
             ]
         );
+        assert_eq!(contents(template, tokens), vec![" verbatim ", "Don't {% "]);
     }
 
     #[test]
@@ -896,6 +973,10 @@ mod lexer_tests {
                     at: (14, 18),
                 },
             ]
+        );
+        assert_eq!(
+            contents(template, tokens),
+            vec![" verbatim ", "Don't end verbatim"]
         );
     }
 }
