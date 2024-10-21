@@ -95,27 +95,26 @@ impl<'t> Lexer<'t> {
             .iter()
             .filter_map(|n| *n)
             .min();
-        let text = match next {
+        let len = match next {
             None => {
-                let text = self.rest;
+                let len = self.rest.len();
                 self.rest = "";
-                text
+                len
             }
             Some(n) => {
-                let text = &self.rest[..n];
                 self.rest = &self.rest[n..];
-                text
+                n
             }
         };
-        let at = (self.byte, text.len());
-        self.byte += text.len();
+        let at = (self.byte, len);
+        self.byte += len;
         Token::text(at)
     }
 
     fn lex_text_to_end(&mut self) -> Token {
-        let text = self.rest;
-        let at = (self.byte, text.len());
-        self.byte += text.len();
+        let len = self.rest.len();
+        let at = (self.byte, len);
+        self.byte += len;
         self.rest = "";
         Token::text(at)
     }
@@ -126,22 +125,22 @@ impl<'t> Lexer<'t> {
             EndTag::Tag => "%}",
             EndTag::Comment => "#}",
         };
-        let tag = match self.rest.find(end_str) {
+        let len = match self.rest.find(end_str) {
             None => {
-                let text = self.rest;
-                let at = (self.byte, text.len());
-                self.byte += self.rest.len();
+                let len = self.rest.len();
+                let at = (self.byte, len);
+                self.byte += len;
                 self.rest = "";
                 return Token::text(at);
             }
             Some(n) => {
-                let tag = &self.rest[START_TAG_LEN..n];
-                self.rest = &self.rest[n + END_TAG_LEN..];
-                tag
+                let len = n + end_str.len();
+                self.rest = &self.rest[len..];
+                len
             }
         };
-        let at = (self.byte, tag.len() + 4);
-        self.byte += tag.len() + 4;
+        let at = (self.byte, len);
+        self.byte += len;
         match end_tag {
             EndTag::Variable => Token::variable(at),
             EndTag::Tag => Token::tag(at),
@@ -174,11 +173,9 @@ impl<'t> Lexer<'t> {
                             }
 
                             index += start_tag;
-                            let text = &self.rest[..index];
-                            if text.is_empty() {
+                            if index == 0 {
                                 // Return the endverbatim tag since we have no text
-                                let tag = &self.rest[2..end_tag];
-                                let tag_len = tag.len() + 4;
+                                let tag_len = end_tag + "%}".len();
                                 let at = (self.byte, tag_len);
                                 self.byte += tag_len;
                                 self.rest = &self.rest[tag_len..];
