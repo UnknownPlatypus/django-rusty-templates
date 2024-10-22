@@ -112,7 +112,7 @@ impl<'t> Parser<'t> {
             let filter_token = filter_token?;
             let argument = match filter_token.argument {
                 None => None,
-                Some(a) => Some(a.parse()?),
+                Some(a) => Some(a.parse(self.template)?),
             };
             let filter = Filter::new(filter_token.content, var, argument);
             var = TokenTree::Filter(Box::new(filter));
@@ -126,18 +126,20 @@ impl<'t> Parser<'t> {
 }
 
 impl<'t> Argument<'t> {
-    fn parse(self) -> Result<TokenTree<'t>, ParseError> {
+    fn parse(self, template: &'t str) -> Result<TokenTree<'t>, ParseError> {
         Ok(match self.argument_type {
-            ArgumentType::Variable => TokenTree::Variable(Variable::new(self.content, self.at)),
-            ArgumentType::Text => TokenTree::Text(self.content),
+            ArgumentType::Variable => {
+                TokenTree::Variable(Variable::new(self.content(template), self.at))
+            }
+            ArgumentType::Text => TokenTree::Text(self.content(template)),
             ArgumentType::Numeric => match self.content.parse::<BigInt>() {
                 Ok(n) => TokenTree::Int(n),
-                Err(_) => match self.content.parse::<f64>() {
+                Err(_) => match self.content(template).parse::<f64>() {
                     Ok(f) => TokenTree::Float(f),
                     Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
                 },
             },
-            ArgumentType::TranslatedText => TokenTree::TranslatedText(self.content),
+            ArgumentType::TranslatedText => TokenTree::TranslatedText(self.content(template)),
         })
     }
 }

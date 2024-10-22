@@ -6,6 +6,7 @@ pub const START_TAG_LEN: usize = 2;
 pub const END_TAG_LEN: usize = 2;
 pub const START_TRANSLATE_LEN: usize = 2;
 pub const END_TRANSLATE_LEN: usize = 1;
+pub const QUOTE_LEN: usize = 1;
 
 enum EndTag {
     Variable,
@@ -241,11 +242,39 @@ pub struct Argument<'t> {
     pub at: (usize, usize),
 }
 
+impl<'a, 't> Argument<'a> {
+    pub fn content(&self, template: &'t str) -> &'t str {
+        let (start, len) = self.at;
+        let end = start + len;
+        match self.argument_type {
+            ArgumentType::Variable => &template[start..end],
+            ArgumentType::Numeric => &template[start..end],
+            ArgumentType::Text => {
+                let start = start + QUOTE_LEN;
+                let end = end - QUOTE_LEN;
+                &template[start..end]
+            }
+            ArgumentType::TranslatedText => {
+                let start = start + START_TRANSLATE_LEN + QUOTE_LEN;
+                let end = end - QUOTE_LEN - END_TRANSLATE_LEN;
+                &template[start..end]
+            }
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct FilterToken<'t> {
     pub content: &'t str,
     pub at: (usize, usize),
     pub argument: Option<Argument<'t>>,
+}
+
+impl<'a, 't> FilterToken<'a> {
+    pub fn content(&self, template: &'t str) -> &'t str {
+        let (start, len) = self.at;
+        &template[start..start + len]
+    }
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -861,6 +890,26 @@ mod lexer_tests {
 mod variable_lexer_tests {
     use super::*;
 
+    fn contents<'t>(
+        template: &'t str,
+        tokens: Vec<Result<FilterToken<'_>, VariableLexerError>>,
+    ) -> Vec<(&'t str, Option<&'t str>)> {
+        tokens
+            .iter()
+            .map(|t| match t {
+                Ok(t) => match t.argument {
+                    Some(ref a) => (t.content(template), Some(a.content(template))),
+                    None => (t.content(template), None),
+                },
+                Err(_) => unreachable!(),
+            })
+            .collect()
+    }
+
+    fn trim_variable(template: &str) -> &str {
+        &template[START_TAG_LEN..(template.len() - END_TAG_LEN)]
+    }
+
     #[test]
     fn test_lex_empty() {
         let variable = "  ";
@@ -870,7 +919,7 @@ mod variable_lexer_tests {
     #[test]
     fn test_lex_variable() {
         let template = "{{ foo.bar }}";
-        let variable = &template[START_TAG_LEN..(template.len() - END_TAG_LEN)];
+        let variable = trim_variable(template);
         let (token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         assert_eq!(token, VariableToken { at: (3, 7) });
         assert_eq!(token.content(template), "foo.bar");
@@ -900,7 +949,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_filter() {
-        let variable = " foo.bar|title ";
+        let template = "{{ foo.bar|title }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -911,11 +961,13 @@ mod variable_lexer_tests {
                 argument: None,
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("title", None)]);
     }
 
     #[test]
     fn test_lex_filter_chain() {
-        let variable = " foo.bar|title|length ";
+        let template = "{{ foo.bar|title|length }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -933,11 +985,16 @@ mod variable_lexer_tests {
                 }),
             ]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![("title", None), ("length", None)]
+        );
     }
 
     #[test]
     fn test_lex_filter_remainder() {
-        let variable = " foo.bar|title'foo' ";
+        let template = "{{ foo.bar|title'foo' }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -950,7 +1007,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_filter_invalid_start() {
-        let variable = " foo.bar|'foo' ";
+        let template = "{{ foo.bar|'foo' }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -963,7 +1021,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_text_argument_single_quote() {
-        let variable = " foo.bar|default:'foo' ";
+        let template = "{{ foo.bar|default:'foo' }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -978,11 +1037,13 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("foo"))]);
     }
 
     #[test]
     fn test_lex_text_argument_double_quote() {
-        let variable = " foo.bar|default:\"foo\" ";
+        let template = "{{ foo.bar|default:\"foo\" }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -997,11 +1058,13 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("foo"))]);
     }
 
     #[test]
     fn test_lex_text_argument_escaped() {
-        let variable = " foo.bar|default:'foo\\\'' ";
+        let template = "{{ foo.bar|default:'foo\\\'' }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1016,11 +1079,16 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![("default", Some("foo\\\'"))]
+        );
     }
 
     #[test]
     fn test_lex_translated_text_argument() {
-        let variable = " foo.bar|default:_('foo') ";
+        let template = "{{ foo.bar|default:_('foo') }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1035,11 +1103,13 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("foo"))]);
     }
 
     #[test]
     fn test_lex_translated_text_argument_double_quoted() {
-        let variable = " foo.bar|default:_(\"foo\") ";
+        let template = "{{ foo.bar|default:_(\"foo\") }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1054,11 +1124,13 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("foo"))]);
     }
 
     #[test]
     fn test_lex_numeric_argument() {
-        let variable = " foo.bar|default:500 ";
+        let template = "{{ foo.bar|default:500 }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1073,11 +1145,13 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("500"))]);
     }
 
     #[test]
     fn test_lex_numeric_argument_negative() {
-        let variable = " foo.bar|default:-0.5 ";
+        let template = "{{ foo.bar|default:-0.5 }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1092,11 +1166,13 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("-0.5"))]);
     }
 
     #[test]
     fn test_lex_numeric_argument_scientific() {
-        let variable = " foo.bar|default:5.2e3 ";
+        let template = "{{ foo.bar|default:5.2e3 }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1111,13 +1187,15 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("5.2e3"))]);
     }
 
     #[test]
     fn test_lex_numeric_argument_scientific_negative_exponent() {
         // Django mishandles this case, so we do too:
         // https://code.djangoproject.com/ticket/35816
-        let variable = " foo.bar|default:5.2e-3 ";
+        let template = "{{ foo.bar|default:5.2e-3 }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1128,20 +1206,20 @@ mod variable_lexer_tests {
                 Ok(FilterToken {
                     argument: Some(Argument {
                         argument_type: ArgumentType::Numeric,
-                            content: "5.2e-3",
-                            at: (19, 6),
+                        at: (19, 6),
                     }),
-                    content: "default",
                     at: (11, 7),
                 })
                 */
             ]
         );
+        //assert_eq!(contents(template, tokens), vec![("default", Some("5.2e-3"))]);
     }
 
     #[test]
     fn test_lex_variable_argument() {
-        let variable = " foo.bar|default:spam ";
+        let template = "{{ foo.bar|default:spam }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1156,11 +1234,13 @@ mod variable_lexer_tests {
                 at: (11, 7),
             })]
         );
+        assert_eq!(contents(template, tokens), vec![("default", Some("spam"))]);
     }
 
     #[test]
     fn test_lex_variable_argument_then_filter() {
-        let variable = " foo.bar|default:spam|title ";
+        let template = "{{ foo.bar|default:spam|title }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1182,11 +1262,16 @@ mod variable_lexer_tests {
                 }),
             ]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![("default", Some("spam")), ("title", None)]
+        );
     }
 
     #[test]
     fn test_lex_string_argument_then_filter() {
-        let variable = " foo.bar|default:\"spam\"|title ";
+        let template = "{{ foo.bar|default:\"spam\"|title }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1208,11 +1293,16 @@ mod variable_lexer_tests {
                 }),
             ]
         );
+        assert_eq!(
+            contents(template, tokens),
+            vec![("default", Some("spam")), ("title", None)]
+        );
     }
 
     #[test]
     fn test_lex_argument_with_leading_underscore() {
-        let variable = " foo.bar|default:_spam ";
+        let template = "{{ foo.bar|default:_spam }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1225,7 +1315,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_argument_with_only_underscore() {
-        let variable = " foo.bar|default:_ ";
+        let template = "{{ foo.bar|default:_ }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1238,7 +1329,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_text_argument_incomplete() {
-        let variable = " foo.bar|default:'foo ";
+        let template = "{{ foo.bar|default:'foo }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1251,7 +1343,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_translated_text_argument_incomplete() {
-        let variable = " foo.bar|default:_('foo' ";
+        let template = "{{ foo.bar|default:_('foo' }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1264,7 +1357,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_translated_text_argument_incomplete_string() {
-        let variable = " foo.bar|default:_('foo ";
+        let template = "{{ foo.bar|default:_('foo }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1277,7 +1371,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_translated_text_argument_incomplete_string_double_quotes() {
-        let variable = " foo.bar|default:_(\"foo ";
+        let template = "{{ foo.bar|default:_(\"foo }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1290,7 +1385,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_translated_text_argument_missing_string() {
-        let variable = " foo.bar|default:_( ";
+        let template = "{{ foo.bar|default:_( }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1303,7 +1399,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_translated_text_argument_missing_string_trailing_chars() {
-        let variable = " foo.bar|default:_(foo) ";
+        let template = "{{ foo.bar|default:_(foo) }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1316,7 +1413,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_string_argument_remainder() {
-        let variable = " foo.bar|default:\"spam\"title ";
+        let template = "{{ foo.bar|default:\"spam\"title }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
@@ -1329,7 +1427,8 @@ mod variable_lexer_tests {
 
     #[test]
     fn test_lex_string_argument_remainder_before_filter() {
-        let variable = " foo.bar|default:\"spam\"title|title ";
+        let template = "{{ foo.bar|default:\"spam\"title|title }}";
+        let variable = trim_variable(template);
         let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
