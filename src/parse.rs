@@ -47,27 +47,32 @@ impl<'t> Text {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Filter<'t> {
+pub enum Filter {
     External {
-        name: &'t str,
-        left: TokenTree<'t>,
-        right: Option<TokenTree<'t>>,
+        at: (usize, usize),
+        left: TokenTree,
+        right: Option<TokenTree>,
     },
 }
 
-impl<'t> Filter<'t> {
-    fn new(name: &'t str, left: TokenTree<'t>, right: Option<TokenTree<'t>>) -> Self {
-        Self::External { name, left, right }
+impl<'t> Filter {
+    fn new(
+        _template: &'t str,
+        at: (usize, usize),
+        left: TokenTree,
+        right: Option<TokenTree>,
+    ) -> Self {
+        Self::External { at, left, right }
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub enum TokenTree<'t> {
+pub enum TokenTree {
     Text(Text),
     TranslatedText(Text),
     Tag(Tag),
     Variable(Variable),
-    Filter(Box<Filter<'t>>),
+    Filter(Box<Filter>),
     Float(f64),
     Int(BigInt),
 }
@@ -102,7 +107,7 @@ impl<'t> Parser<'t> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<TokenTree<'t>>, ParseError> {
+    pub fn parse(&mut self) -> Result<Vec<TokenTree>, ParseError> {
         let mut nodes = Vec::new();
         while let Some(token) = self.lexer.next() {
             nodes.push(match token.token_type {
@@ -121,7 +126,7 @@ impl<'t> Parser<'t> {
         &self,
         variable: &'t str,
         at: (usize, usize),
-    ) -> Result<TokenTree<'t>, ParseError> {
+    ) -> Result<TokenTree, ParseError> {
         let (variable_token, filter_lexer) = match lex_variable(variable, at.0 + START_TAG_LEN)? {
             None => return Err(ParseError::EmptyVariable { at: at.into() }),
             Some(t) => t,
@@ -133,19 +138,19 @@ impl<'t> Parser<'t> {
                 None => None,
                 Some(ref a) => Some(a.parse(self.template)?),
             };
-            let filter = Filter::new(filter_token.content(self.template), var, argument);
+            let filter = Filter::new(self.template, filter_token.at, var, argument);
             var = TokenTree::Filter(Box::new(filter));
         }
         Ok(var)
     }
 
-    fn parse_tag(&mut self, tag: &'t str, at: (usize, usize)) -> Result<TokenTree<'t>, ParseError> {
+    fn parse_tag(&mut self, tag: &'t str, at: (usize, usize)) -> Result<TokenTree, ParseError> {
         todo!()
     }
 }
 
 impl<'t> Argument {
-    fn parse(&self, template: &'t str) -> Result<TokenTree<'t>, ParseError> {
+    fn parse(&self, template: &'t str) -> Result<TokenTree, ParseError> {
         Ok(match self.argument_type {
             ArgumentType::Variable => TokenTree::Variable(Variable::new(self.at)),
             ArgumentType::Text => TokenTree::Text(Text::new(self.content_at())),
@@ -230,7 +235,7 @@ mod tests {
 
         let foo = Variable { at: (3, 3) };
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: TokenTree::Variable(foo),
             right: None,
         }));
@@ -246,12 +251,12 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: foo,
             right: None,
         }));
         let baz = TokenTree::Filter(Box::new(Filter::External {
-            name: "baz",
+            at: (11, 3),
             left: bar,
             right: None,
         }));
@@ -267,7 +272,7 @@ mod tests {
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Variable { at: (11, 3) };
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: foo,
             right: Some(TokenTree::Variable(baz)),
         }));
@@ -284,7 +289,7 @@ mod tests {
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Text::new((12, 3));
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: foo,
             right: Some(TokenTree::Text(baz)),
         }));
@@ -301,7 +306,7 @@ mod tests {
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Text::new((14, 3));
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: foo,
             right: Some(TokenTree::TranslatedText(baz)),
         }));
@@ -318,7 +323,7 @@ mod tests {
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Float(5.2e3);
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: foo,
             right: Some(num),
         }));
@@ -334,7 +339,7 @@ mod tests {
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Int(99.into());
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: foo,
             right: Some(num),
         }));
@@ -350,7 +355,7 @@ mod tests {
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Int("99999999999999999".parse::<BigInt>().unwrap());
         let bar = TokenTree::Filter(Box::new(Filter::External {
-            name: "bar",
+            at: (7, 3),
             left: foo,
             right: Some(num),
         }));
