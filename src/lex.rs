@@ -490,6 +490,7 @@ impl<'t> FilterLexer<'t> {
             at,
         }
     }
+
     fn lex_variable_argument(&mut self) -> Result<Argument, VariableLexerError> {
         let content = trim_variable(self.rest);
         match check_variable_attrs(content, self.byte) {
