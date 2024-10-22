@@ -30,6 +30,22 @@ impl<'t> Variable {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Text {
+    at: (usize, usize),
+}
+
+impl<'t> Text {
+    fn new(at: (usize, usize)) -> Self {
+        Self { at }
+    }
+
+    fn content(&self, template: &'t str) -> &'t str {
+        let (start, len) = self.at;
+        &template[start..start + len]
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Filter<'t> {
     External {
@@ -47,8 +63,8 @@ impl<'t> Filter<'t> {
 
 #[derive(Debug, PartialEq)]
 pub enum TokenTree<'t> {
-    Text(&'t str),
-    TranslatedText(&'t str),
+    Text(Text),
+    TranslatedText(Text),
     Tag(Tag),
     Variable(Variable),
     Filter(Box<Filter<'t>>),
@@ -90,7 +106,7 @@ impl<'t> Parser<'t> {
         let mut nodes = Vec::new();
         while let Some(token) = self.lexer.next() {
             nodes.push(match token.token_type {
-                TokenType::Text => TokenTree::Text(token.content(self.template)),
+                TokenType::Text => TokenTree::Text(Text::new(token.at)),
                 TokenType::Comment => continue,
                 TokenType::Variable => {
                     self.parse_variable(token.content(self.template), token.at)?
@@ -132,7 +148,7 @@ impl<'t> Argument {
     fn parse(&self, template: &'t str) -> Result<TokenTree<'t>, ParseError> {
         Ok(match self.argument_type {
             ArgumentType::Variable => TokenTree::Variable(Variable::new(self.at)),
-            ArgumentType::Text => TokenTree::Text(self.content(template)),
+            ArgumentType::Text => TokenTree::Text(Text::new(self.content_at())),
             ArgumentType::Numeric => match self.content(template).parse::<BigInt>() {
                 Ok(n) => TokenTree::Int(n),
                 Err(_) => match self.content(template).parse::<f64>() {
@@ -140,7 +156,7 @@ impl<'t> Argument {
                     Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
                 },
             },
-            ArgumentType::TranslatedText => TokenTree::TranslatedText(self.content(template)),
+            ArgumentType::TranslatedText => TokenTree::TranslatedText(Text::new(self.content_at())),
         })
     }
 }
@@ -162,7 +178,9 @@ mod tests {
         let template = "Some text";
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
-        assert_eq!(nodes, vec![TokenTree::Text(template)]);
+        let text = Text::new((0, template.len()));
+        assert_eq!(nodes, vec![TokenTree::Text(text)]);
+        assert_eq!(text.content(template), template);
     }
 
     #[test]
@@ -264,13 +282,14 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let baz = TokenTree::Text("baz");
+        let baz = Text::new((12, 3));
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
             left: foo,
-            right: Some(baz),
+            right: Some(TokenTree::Text(baz)),
         }));
         assert_eq!(nodes, vec![bar]);
+        assert_eq!(baz.content(template), "baz");
     }
 
     #[test]
@@ -280,13 +299,14 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let baz = TokenTree::TranslatedText("baz");
+        let baz = Text::new((14, 3));
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
             left: foo,
-            right: Some(baz),
+            right: Some(TokenTree::TranslatedText(baz)),
         }));
         assert_eq!(nodes, vec![bar]);
+        assert_eq!(baz.content(template), "baz");
     }
 
     #[test]
