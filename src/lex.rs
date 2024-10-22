@@ -242,23 +242,28 @@ pub struct Argument {
 }
 
 impl<'t> Argument {
-    pub fn content(&self, template: &'t str) -> &'t str {
-        let (start, len) = self.at;
-        let end = start + len;
+    pub fn content_at(&self) -> (usize, usize) {
         match self.argument_type {
-            ArgumentType::Variable => &template[start..end],
-            ArgumentType::Numeric => &template[start..end],
+            ArgumentType::Variable => self.at,
+            ArgumentType::Numeric => self.at,
             ArgumentType::Text => {
+                let (start, len) = self.at;
                 let start = start + QUOTE_LEN;
-                let end = end - QUOTE_LEN;
-                &template[start..end]
+                let len = len - 2 * QUOTE_LEN;
+                (start, len)
             }
             ArgumentType::TranslatedText => {
+                let (start, len) = self.at;
                 let start = start + START_TRANSLATE_LEN + QUOTE_LEN;
-                let end = end - QUOTE_LEN - END_TRANSLATE_LEN;
-                &template[start..end]
+                let len = len - START_TRANSLATE_LEN - END_TRANSLATE_LEN - 2 * QUOTE_LEN;
+                (start, len)
             }
         }
+    }
+
+    pub fn content(&self, template: &'t str) -> &'t str {
+        let (start, len) = self.content_at();
+        &template[start..start + len]
     }
 }
 
