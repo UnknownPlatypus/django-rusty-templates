@@ -9,18 +9,24 @@ use crate::lex::{
 #[derive(Debug, PartialEq, Eq)]
 pub enum Tag {}
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct Variable<'t> {
-    parts: Vec<&'t str>,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Variable {
     at: (usize, usize),
 }
 
-impl<'t> Variable<'t> {
-    fn new(variable: &'t str, at: (usize, usize)) -> Self {
-        Self {
-            parts: variable.split(".").collect(),
-            at,
-        }
+impl<'t> Variable {
+    fn new(at: (usize, usize)) -> Self {
+        Self { at }
+    }
+
+    fn content(&self, template: &'t str) -> &'t str {
+        let (start, len) = self.at;
+        &template[start..start + len]
+    }
+
+    fn parts(&self, template: &'t str) -> impl Iterator<Item = &'t str> {
+        let variable = self.content(template);
+        variable.split(".")
     }
 }
 
@@ -44,7 +50,7 @@ pub enum TokenTree<'t> {
     Text(&'t str),
     TranslatedText(&'t str),
     Tag(Tag),
-    Variable(Variable<'t>),
+    Variable(Variable),
     Filter(Box<Filter<'t>>),
     Float(f64),
     Int(BigInt),
@@ -104,10 +110,7 @@ impl<'t> Parser<'t> {
             None => return Err(ParseError::EmptyVariable { at: at.into() }),
             Some(t) => t,
         };
-        let mut var = TokenTree::Variable(Variable::new(
-            variable_token.content(self.template),
-            variable_token.at,
-        ));
+        let mut var = TokenTree::Variable(Variable::new(variable_token.at));
         for filter_token in filter_lexer {
             let filter_token = filter_token?;
             let argument = match filter_token.argument {
@@ -128,9 +131,7 @@ impl<'t> Parser<'t> {
 impl<'t> Argument {
     fn parse(&self, template: &'t str) -> Result<TokenTree<'t>, ParseError> {
         Ok(match self.argument_type {
-            ArgumentType::Variable => {
-                TokenTree::Variable(Variable::new(self.content(template), self.at))
-            }
+            ArgumentType::Variable => TokenTree::Variable(Variable::new(self.at)),
             ArgumentType::Text => TokenTree::Text(self.content(template)),
             ArgumentType::Numeric => match self.content(template).parse::<BigInt>() {
                 Ok(n) => TokenTree::Int(n),
@@ -185,13 +186,9 @@ mod tests {
         let template = "{{ foo }}";
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
-        assert_eq!(
-            nodes,
-            vec![TokenTree::Variable(Variable {
-                parts: vec!["foo"],
-                at: (3, 3)
-            })]
-        );
+        let variable = Variable { at: (3, 3) };
+        assert_eq!(nodes, vec![TokenTree::Variable(variable)]);
+        assert_eq!(variable.parts(template).collect::<Vec<_>>(), vec!["foo"]);
     }
 
     #[test]
@@ -199,12 +196,11 @@ mod tests {
         let template = "{{ foo.bar.baz }}";
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
+        let variable = Variable { at: (3, 11) };
+        assert_eq!(nodes, vec![TokenTree::Variable(variable)]);
         assert_eq!(
-            nodes,
-            vec![TokenTree::Variable(Variable {
-                parts: vec!["foo", "bar", "baz"],
-                at: (3, 11),
-            })]
+            variable.parts(template).collect::<Vec<_>>(),
+            vec!["foo", "bar", "baz"]
         );
     }
 
@@ -214,16 +210,14 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
+        let foo = Variable { at: (3, 3) };
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
-            left: foo,
+            left: TokenTree::Variable(foo),
             right: None,
         }));
         assert_eq!(nodes, vec![bar]);
+        assert_eq!(foo.parts(template).collect::<Vec<_>>(), vec!["foo"]);
     }
 
     #[test]
@@ -232,10 +226,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
             left: foo,
@@ -255,20 +246,15 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
-        let baz = TokenTree::Variable(Variable {
-            parts: vec!["baz"],
-            at: (11, 3),
-        });
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let baz = Variable { at: (11, 3) };
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
             left: foo,
-            right: Some(baz),
+            right: Some(TokenTree::Variable(baz)),
         }));
         assert_eq!(nodes, vec![bar]);
+        assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);
     }
 
     #[test]
@@ -277,10 +263,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = TokenTree::Text("baz");
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
@@ -296,10 +279,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = TokenTree::TranslatedText("baz");
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
@@ -315,10 +295,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Float(5.2e3);
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
@@ -334,10 +311,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Int(99.into());
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
@@ -353,10 +327,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable {
-            parts: vec!["foo"],
-            at: (3, 3),
-        });
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Int("99999999999999999".parse::<BigInt>().unwrap());
         let bar = TokenTree::Filter(Box::new(Filter::External {
             name: "bar",
