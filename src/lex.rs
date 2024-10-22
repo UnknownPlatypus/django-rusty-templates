@@ -236,13 +236,12 @@ pub enum ArgumentType {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Argument<'t> {
+pub struct Argument {
     pub argument_type: ArgumentType,
-    pub content: &'t str,
     pub at: (usize, usize),
 }
 
-impl<'a, 't> Argument<'a> {
+impl<'t> Argument {
     pub fn content(&self, template: &'t str) -> &'t str {
         let (start, len) = self.at;
         let end = start + len;
@@ -264,13 +263,12 @@ impl<'a, 't> Argument<'a> {
 }
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct FilterToken<'t> {
-    pub content: &'t str,
+pub struct FilterToken {
     pub at: (usize, usize),
-    pub argument: Option<Argument<'t>>,
+    pub argument: Option<Argument>,
 }
 
-impl<'a, 't> FilterToken<'a> {
+impl<'t> FilterToken {
     pub fn content(&self, template: &'t str) -> &'t str {
         let (start, len) = self.at;
         &template[start..start + len]
@@ -402,7 +400,7 @@ impl<'t> FilterLexer<'t> {
         &mut self,
         chars: &mut std::str::Chars,
         end: char,
-    ) -> Result<Argument<'t>, VariableLexerError> {
+    ) -> Result<Argument, VariableLexerError> {
         let mut count = 1;
         loop {
             let next = match chars.next() {
@@ -419,12 +417,10 @@ impl<'t> FilterLexer<'t> {
                 chars.next();
             } else if next == end {
                 let at = (self.byte, count);
-                let content = &self.rest[1..count - 1];
                 self.rest = &self.rest[count..];
                 self.byte += count;
                 return Ok(Argument {
                     argument_type: ArgumentType::Text,
-                    content,
                     at,
                 });
             }
@@ -434,11 +430,11 @@ impl<'t> FilterLexer<'t> {
     fn lex_translated(
         &mut self,
         chars: &mut std::str::Chars,
-    ) -> Result<Argument<'t>, VariableLexerError> {
+    ) -> Result<Argument, VariableLexerError> {
         let start = self.byte;
         self.byte += START_TRANSLATE_LEN;
         self.rest = &self.rest[START_TRANSLATE_LEN..];
-        let token = match chars.next() {
+        match chars.next() {
             None => {
                 let at = (start, START_TRANSLATE_LEN);
                 self.rest = "";
@@ -458,7 +454,6 @@ impl<'t> FilterLexer<'t> {
                 self.rest = &self.rest[END_TRANSLATE_LEN..];
                 Ok(Argument {
                     argument_type: ArgumentType::TranslatedText,
-                    content: token.content,
                     at: (start, self.byte - start),
                 })
             }
@@ -470,16 +465,16 @@ impl<'t> FilterLexer<'t> {
         }
     }
 
-    fn lex_numeric(&mut self) -> Argument<'t> {
+    fn lex_numeric(&mut self) -> Argument {
         let end = self
             .rest
             .find(|c: char| !(c.is_ascii_digit() || c == '-' || c == '.' || c == 'e'))
             .unwrap_or(self.rest.len());
         let content = &self.rest[..end];
         // Match django bug
-        let (content, end) = match content[1..].find('-') {
-            Some(n) => (&content[..n + 1], n + 1),
-            None => (content, end),
+        let end = match content[1..].find('-') {
+            Some(n) => n + 1,
+            None => end,
         };
         // End match django bug
         self.rest = &self.rest[end..];
@@ -487,11 +482,10 @@ impl<'t> FilterLexer<'t> {
         self.byte += end;
         Argument {
             argument_type: ArgumentType::Numeric,
-            content,
             at,
         }
     }
-    fn lex_variable_argument(&mut self) -> Result<Argument<'t>, VariableLexerError> {
+    fn lex_variable_argument(&mut self) -> Result<Argument, VariableLexerError> {
         let content = trim_variable(self.rest);
         match check_variable_attrs(content, self.byte) {
             Ok(()) => {}
@@ -506,12 +500,11 @@ impl<'t> FilterLexer<'t> {
         self.rest = &self.rest[end..];
         Ok(Argument {
             argument_type: ArgumentType::Variable,
-            content,
             at,
         })
     }
 
-    fn lex_filter(&mut self) -> Result<FilterToken<'t>, VariableLexerError> {
+    fn lex_filter(&mut self) -> Result<FilterToken, VariableLexerError> {
         let filter = self.rest.trim_start();
         let start = self.rest.len() - filter.len();
         self.byte += start;
@@ -528,11 +521,7 @@ impl<'t> FilterLexer<'t> {
                 self.byte += end;
                 self.rest = &self.rest[end..];
                 let argument = self.lex_argument()?;
-                Ok(FilterToken {
-                    content: filter,
-                    at,
-                    argument,
-                })
+                Ok(FilterToken { at, argument })
             }
             _ => {
                 let next = self.rest.find("|").unwrap_or(self.rest.len());
@@ -543,7 +532,7 @@ impl<'t> FilterLexer<'t> {
         }
     }
 
-    fn lex_argument(&mut self) -> Result<Option<Argument<'t>>, VariableLexerError> {
+    fn lex_argument(&mut self) -> Result<Option<Argument>, VariableLexerError> {
         let next = match (self.rest.find("|"), self.rest.find(":")) {
             (_, None) => return Ok(None),
             (Some(f), Some(a)) if f < a => return Ok(None),
@@ -577,10 +566,10 @@ impl<'t> FilterLexer<'t> {
 
     fn lex_remainder(
         &mut self,
-        token: FilterToken<'t>,
+        token: FilterToken,
         remainder: &'t str,
         start_next: usize,
-    ) -> Result<FilterToken<'t>, VariableLexerError> {
+    ) -> Result<FilterToken, VariableLexerError> {
         match remainder.find(|c: char| !c.is_whitespace()) {
             None => {
                 self.rest = &self.rest[start_next..];
@@ -606,7 +595,7 @@ impl<'t> FilterLexer<'t> {
 }
 
 impl<'t> Iterator for FilterLexer<'t> {
-    type Item = Result<FilterToken<'t>, VariableLexerError>;
+    type Item = Result<FilterToken, VariableLexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.rest.is_empty() {
@@ -890,10 +879,10 @@ mod lexer_tests {
 mod variable_lexer_tests {
     use super::*;
 
-    fn contents<'t>(
-        template: &'t str,
-        tokens: Vec<Result<FilterToken<'_>, VariableLexerError>>,
-    ) -> Vec<(&'t str, Option<&'t str>)> {
+    fn contents(
+        template: &str,
+        tokens: Vec<Result<FilterToken, VariableLexerError>>,
+    ) -> Vec<(&str, Option<&str>)> {
         tokens
             .iter()
             .map(|t| match t {
@@ -956,7 +945,6 @@ mod variable_lexer_tests {
         assert_eq!(
             tokens,
             vec![Ok(FilterToken {
-                content: "title",
                 at: (11, 5),
                 argument: None,
             })]
@@ -975,12 +963,10 @@ mod variable_lexer_tests {
             vec![
                 Ok(FilterToken {
                     argument: None,
-                    content: "title",
                     at: (11, 5),
                 }),
                 Ok(FilterToken {
                     argument: None,
-                    content: "length",
                     at: (17, 6),
                 }),
             ]
@@ -1030,10 +1016,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::Text,
-                    content: "foo",
                     at: (19, 5),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1051,10 +1035,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::Text,
-                    content: "foo",
                     at: (19, 5),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1072,10 +1054,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::Text,
-                    content: "foo\\\'",
                     at: (19, 7),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1096,10 +1076,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::TranslatedText,
-                    content: "foo",
                     at: (19, 8),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1117,10 +1095,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::TranslatedText,
-                    content: "foo",
                     at: (19, 8),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1138,10 +1114,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::Numeric,
-                    content: "500",
                     at: (19, 3),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1159,10 +1133,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::Numeric,
-                    content: "-0.5",
                     at: (19, 4),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1180,10 +1152,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::Numeric,
-                    content: "5.2e3",
                     at: (19, 5),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1227,10 +1197,8 @@ mod variable_lexer_tests {
             vec![Ok(FilterToken {
                 argument: Some(Argument {
                     argument_type: ArgumentType::Variable,
-                    content: "spam",
                     at: (19, 4),
                 }),
-                content: "default",
                 at: (11, 7),
             })]
         );
@@ -1249,15 +1217,12 @@ mod variable_lexer_tests {
                 Ok(FilterToken {
                     argument: Some(Argument {
                         argument_type: ArgumentType::Variable,
-                        content: "spam",
                         at: (19, 4),
                     }),
-                    content: "default",
                     at: (11, 7),
                 }),
                 Ok(FilterToken {
                     argument: None,
-                    content: "title",
                     at: (24, 5),
                 }),
             ]
@@ -1280,15 +1245,12 @@ mod variable_lexer_tests {
                 Ok(FilterToken {
                     argument: Some(Argument {
                         argument_type: ArgumentType::Text,
-                        content: "spam",
                         at: (19, 6),
                     }),
-                    content: "default",
                     at: (11, 7),
                 }),
                 Ok(FilterToken {
                     argument: None,
-                    content: "title",
                     at: (26, 5),
                 }),
             ]
