@@ -342,7 +342,7 @@ fn check_variable_attrs(variable: &str, start: usize) -> Result<(), VariableLexe
     let mut offset = 0;
     for var in variable.split('.') {
         match var.chars().next() {
-            Some(c) if c.is_xid_start() && c != '_' => {
+            Some(c) if c != '_' => {
                 offset += var.len() + 1;
                 continue;
             }
@@ -360,12 +360,17 @@ pub fn lex_variable(
     start: usize,
 ) -> Result<Option<(VariableToken, FilterLexer)>, VariableLexerError> {
     let rest = variable.trim_start();
-    let start = start + variable.len() - rest.len();
-
-    let content = trim_variable(rest);
-    if content.is_empty() {
+    if rest.trim().is_empty() {
         return Ok(None);
     }
+
+    let start = start + variable.len() - rest.len();
+    let content = trim_variable(rest);
+    if content.is_empty() {
+        let at = (start, rest.trim().len());
+        return Err(VariableLexerError::InvalidVariableName { at: at.into() });
+    }
+
     check_variable_attrs(content, start)?;
 
     let end = content.len();
@@ -923,6 +928,28 @@ mod variable_lexer_tests {
     }
 
     #[test]
+    fn test_lex_variable_index() {
+        let template = "{{ 1 }}";
+        let variable = trim_variable(template);
+        let (token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
+        assert_eq!(token, VariableToken { at: (3, 1) });
+        assert_eq!(token.content(template), "1");
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(tokens, vec![]);
+    }
+
+    #[test]
+    fn test_lex_variable_negative_index() {
+        let template = "{{ -1 }}";
+        let variable = trim_variable(template);
+        let err = lex_variable(variable, START_TAG_LEN).unwrap_err();
+        assert_eq!(
+            err,
+            VariableLexerError::InvalidVariableName { at: (3, 2).into() }
+        );
+    }
+
+    #[test]
     fn test_lex_variable_start_underscore() {
         let variable = " _foo.bar ";
         let err = lex_variable(variable, START_TAG_LEN).unwrap_err();
@@ -939,6 +966,28 @@ mod variable_lexer_tests {
         assert_eq!(
             err,
             VariableLexerError::InvalidVariableName { at: (7, 4).into() }
+        );
+    }
+
+    #[test]
+    fn test_lex_attribute_index() {
+        let template = "{{ foo.1 }}";
+        let variable = trim_variable(template);
+        let (token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
+        assert_eq!(token, VariableToken { at: (3, 5) });
+        assert_eq!(token.content(template), "foo.1");
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(tokens, vec![]);
+    }
+
+    #[test]
+    fn test_lex_attribute_negative_index() {
+        let template = "{{ foo.-1 }}";
+        let variable = trim_variable(template);
+        let err = lex_variable(variable, START_TAG_LEN).unwrap_err();
+        assert_eq!(
+            err,
+            VariableLexerError::InvalidVariableName { at: (7, 0).into() }
         );
     }
 
