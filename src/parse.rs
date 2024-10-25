@@ -24,7 +24,7 @@ impl<'t> Variable {
         &template[start..start + len]
     }
 
-    fn parts(&self, template: &'t str) -> impl Iterator<Item = &'t str> {
+    pub fn parts(&self, template: &'t str) -> impl Iterator<Item = &'t str> {
         let variable = self.content(template);
         variable.split(".")
     }
@@ -40,7 +40,7 @@ impl<'t> Text {
         Self { at }
     }
 
-    fn content(&self, template: &'t str) -> &'t str {
+    pub fn content(&self, template: &'t str) -> &'t str {
         let (start, len) = self.at;
         &template[start..start + len]
     }
