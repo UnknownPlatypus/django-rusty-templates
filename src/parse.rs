@@ -6,7 +6,7 @@ use crate::lex::{
     lex_variable, Argument, ArgumentType, Lexer, TokenType, VariableLexerError, START_TAG_LEN,
 };
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Tag {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -46,7 +46,7 @@ impl<'t> Text {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Filter {
     External {
         at: (usize, usize),
@@ -66,7 +66,7 @@ impl<'t> Filter {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokenTree {
     Text(Text),
     TranslatedText(Text),

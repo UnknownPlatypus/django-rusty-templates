@@ -9,6 +9,7 @@ mod django_rusty_templates {
 
     use crate::parse::{Parser, TokenTree};
 
+    #[derive(Clone)]
     #[pyclass]
     pub struct Template {
         filename: Option<String>,
