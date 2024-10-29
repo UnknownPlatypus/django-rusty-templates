@@ -1,23 +1,142 @@
 use pyo3::prelude::*;
 
 #[pymodule]
-mod django_rusty_templates {
+pub mod django_rusty_templates {
     use std::collections::HashMap;
+    use std::path::PathBuf;
 
+    use encoding_rs::Encoding;
+    use pyo3::import_exception_bound;
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyString};
 
+    use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader};
     use crate::parse::{Parser, TokenTree};
+
+    import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
+    import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
+
+    #[pyclass]
+    struct Engine {
+        dirs: Vec<String>,
+        app_dirs: bool,
+        context_processors: Vec<String>,
+        debug: bool,
+        string_if_invalid: String,
+        encoding: &'static Encoding,
+        libraries: HashMap<String, Py<PyAny>>,
+        builtins: Vec<String>,
+        autoescape: bool,
+        template_loaders: Vec<Loader>,
+    }
+
+    impl Engine {
+        fn find_template_loader<'py>(
+            py: Python<'py>,
+            loader: &str,
+            args: Option<Bound<'py, PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            todo!()
+        }
+    }
+
+    #[pymethods]
+    impl Engine {
+        #[new]
+        #[pyo3(signature = (dirs=None, app_dirs=false, context_processors=None, debug=false, loaders=None, string_if_invalid="".to_string(), file_charset="utf-8".to_string(), libraries=None, builtins=None, autoescape=true))]
+        fn new(
+            py: Python<'_>,
+            dirs: Option<Bound<'_, PyAny>>,
+            app_dirs: bool,
+            context_processors: Option<Bound<'_, PyAny>>,
+            debug: bool,
+            loaders: Option<Bound<'_, PyAny>>,
+            string_if_invalid: String,
+            file_charset: String,
+            libraries: Option<Bound<'_, PyAny>>,
+            builtins: Option<Bound<'_, PyAny>>,
+            autoescape: bool,
+        ) -> PyResult<Self> {
+            let dirs = match dirs {
+                Some(dirs) => dirs.extract()?,
+                None => Vec::new(),
+            };
+            let context_processors = match context_processors {
+                Some(context_processors) => context_processors.extract()?,
+                None => Vec::new(),
+            };
+            let encoding = match Encoding::for_label(file_charset.as_bytes()) {
+                Some(encoding) => encoding,
+                None => todo!(),
+            };
+            let template_loaders = match loaders {
+                Some(_) if app_dirs => {
+                    let err = ImproperlyConfigured::new_err(
+                        "app_dirs must not be set when loaders is defined.",
+                    );
+                    return Err(err);
+                }
+                Some(loaders) => todo!(),
+                None => {
+                    let filesystem_loader =
+                        Loader::FileSystem(FileSystemLoader::new(dirs.clone(), encoding));
+                    let appdirs_loader = Loader::AppDirs(AppDirsLoader {});
+                    let loaders = if app_dirs {
+                        vec![filesystem_loader, appdirs_loader]
+                    } else {
+                        vec![filesystem_loader]
+                    };
+                    let cached_loader = Loader::Cached(CachedLoader::new(loaders));
+                    vec![cached_loader]
+                }
+            };
+            let libraries = HashMap::new();
+            let builtins = vec![];
+            Ok(Self {
+                dirs,
+                app_dirs,
+                context_processors,
+                debug,
+                template_loaders,
+                string_if_invalid,
+                encoding,
+                libraries,
+                builtins,
+                autoescape,
+            })
+        }
+
+        fn get_template(&mut self, template_name: String) -> PyResult<Template> {
+            let mut tried = Vec::new();
+            for loader in &mut self.template_loaders {
+                match loader.get_template(&template_name) {
+                    Ok(template) => return template,
+                    Err(e) => tried.push(e.tried),
+                }
+            }
+            Err(TemplateDoesNotExist::new_err((template_name, tried)))
+        }
+    }
 
     #[derive(Clone)]
     #[pyclass]
     pub struct Template {
-        filename: Option<String>,
+        filename: Option<PathBuf>,
         template: String,
         nodes: Vec<TokenTree>,
     }
 
     impl Template {
+        pub fn new(template: &str, filename: PathBuf) -> PyResult<Self> {
+            let mut parser = Parser::new(template);
+            let nodes = parser.parse().unwrap();
+            Ok(Self {
+                template: template.to_string(),
+                filename: Some(filename),
+                nodes,
+            })
+        }
+
         fn from_str(template: &str) -> PyResult<Self> {
             let mut parser = Parser::new(template);
             let nodes = parser.parse().unwrap();

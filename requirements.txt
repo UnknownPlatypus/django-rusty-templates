@@ -1,0 +1,4 @@
+django
+maturin
+pytest
+pytest-django
