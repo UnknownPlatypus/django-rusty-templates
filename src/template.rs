@@ -49,9 +49,20 @@ mod django_rusty_templates {
             Self::from_str(template)
         }
 
-        pub fn render(&self, context: Bound<'_, PyDict>) -> PyResult<String> {
-            let py = context.py();
-            let context = context.extract()?;
+        #[pyo3(signature = (context=None, request=None))]
+        pub fn render(
+            &self,
+            py: Python<'_>,
+            context: Option<Bound<'_, PyDict>>,
+            request: Option<Bound<'_, PyAny>>,
+        ) -> PyResult<String> {
+            let context = match context {
+                Some(context) => context.extract()?,
+                None => HashMap::new(),
+            };
+            if let Some(request) = request {
+                todo!()
+            }
             self._render(py, &context)
         }
     }
@@ -73,7 +84,7 @@ mod tests {
             let template = Template::from_string(template_string).unwrap();
             let context = PyDict::new_bound(py);
 
-            assert_eq!(template.render(context).unwrap(), "");
+            assert_eq!(template.render(py, Some(context), None).unwrap(), "");
         })
     }
 
@@ -87,7 +98,10 @@ mod tests {
             let context = PyDict::new_bound(py);
             context.set_item("user", "Lily").unwrap();
 
-            assert_eq!(template.render(context).unwrap(), "Hello Lily!");
+            assert_eq!(
+                template.render(py, Some(context), None).unwrap(),
+                "Hello Lily!"
+            );
         })
     }
 
@@ -100,7 +114,7 @@ mod tests {
             let template = Template::from_string(template_string).unwrap();
             let context = PyDict::new_bound(py);
 
-            assert_eq!(template.render(context).unwrap(), "Hello !");
+            assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
         })
     }
 
@@ -128,7 +142,10 @@ user = User(["Lily"])
             let context = PyDict::new_bound(py);
             context.set_item("user", user.into_any()).unwrap();
 
-            assert_eq!(template.render(context).unwrap(), "Hello Lily!");
+            assert_eq!(
+                template.render(py, Some(context), None).unwrap(),
+                "Hello Lily!"
+            );
         })
     }
 }
