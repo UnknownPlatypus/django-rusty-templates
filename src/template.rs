@@ -106,10 +106,10 @@ pub mod django_rusty_templates {
             })
         }
 
-        fn get_template(&mut self, template_name: String) -> PyResult<Template> {
+        fn get_template(&mut self, py: Python<'_>, template_name: String) -> PyResult<Template> {
             let mut tried = Vec::new();
             for loader in &mut self.template_loaders {
-                match loader.get_template(&template_name) {
+                match loader.get_template(py, &template_name) {
                     Ok(template) => return template,
                     Err(e) => tried.push(e.tried),
                 }
@@ -118,12 +118,12 @@ pub mod django_rusty_templates {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     #[pyclass]
     pub struct Template {
-        filename: Option<PathBuf>,
-        template: String,
-        nodes: Vec<TokenTree>,
+        pub filename: Option<PathBuf>,
+        pub template: String,
+        pub nodes: Vec<TokenTree>,
     }
 
     impl Template {
