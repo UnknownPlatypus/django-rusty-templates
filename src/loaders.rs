@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use encoding_rs::Encoding;
 use pyo3::exceptions::PyUnicodeError;
 use pyo3::prelude::*;
+use sugar_path::SugarPath;
 
 use crate::template::django_rusty_templates::Template;
 
@@ -13,9 +14,19 @@ pub struct LoaderError {
 }
 
 fn safe_join(directory: &Path, template_name: &str) -> Option<PathBuf> {
-    // TODO: check safety invariants
-    // https://github.com/django/django/blob/4c3897bb154a3d3a94e5f7e146d0b8bf41e27d81/django/utils/_os.py#L9
-    Some(directory.join(template_name))
+    let final_path = match std::path::absolute(directory.join(template_name)) {
+        Ok(path) => path.normalize(),
+        Err(_) => return None,
+    };
+    let directory = match std::path::absolute(directory) {
+        Ok(directory) => directory,
+        Err(_) => return None,
+    };
+    if final_path.starts_with(directory) {
+        Some(final_path)
+    } else {
+        None
+    }
 }
 
 pub struct FileSystemLoader {
@@ -178,10 +189,9 @@ mod tests {
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
             let template = loader.get_template(py, "basic.txt").unwrap().unwrap();
 
-            assert_eq!(
-                template.filename.unwrap(),
-                PathBuf::from("tests/templates/basic.txt")
-            );
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/basic.txt");
+            assert_eq!(template.filename.unwrap(), expected);
         })
     }
 
@@ -194,11 +204,13 @@ mod tests {
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
             let error = loader.get_template(py, "missing.txt").unwrap_err();
 
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/missing.txt");
             assert_eq!(
                 error,
                 LoaderError {
                     tried: vec![(
-                        "tests/templates/missing.txt".to_string(),
+                        expected.display().to_string(),
                         "Source does not exist".to_string(),
                     )],
                 },
@@ -215,10 +227,84 @@ mod tests {
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
             let error = loader.get_template(py, "invalid.txt").unwrap().unwrap_err();
 
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/invalid.txt");
             assert_eq!(
                 error.to_string(),
-                "UnicodeError: Could not open \"tests/templates/invalid.txt\" with UTF-8 encoding."
+                format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
             );
         })
+    }
+
+    #[test]
+    fn test_safe_join_absolute() {
+        let path = PathBuf::from("/abc/");
+        let joined = safe_join(&path, "def").unwrap();
+        assert_eq!(joined, PathBuf::from("/abc/def"));
+    }
+
+    #[test]
+    fn test_safe_join_relative() {
+        let path = PathBuf::from("abc");
+        let joined = safe_join(&path, "def").unwrap();
+        let mut expected = std::env::current_dir().unwrap();
+        expected.push("abc/def");
+        assert_eq!(joined, expected);
+    }
+
+    #[test]
+    fn test_safe_join_absolute_starts_with_sep() {
+        let path = PathBuf::from("/abc/");
+        let joined = safe_join(&path, "/def");
+        assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_relative_starts_with_sep() {
+        let path = PathBuf::from("abc");
+        let joined = safe_join(&path, "/def");
+        assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_absolute_parent() {
+        let path = PathBuf::from("/abc/");
+        let joined = safe_join(&path, "../def");
+        assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_relative_parent() {
+        let path = PathBuf::from("abc");
+        let joined = safe_join(&path, "../def");
+        assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_absolute_parent_starts_with_sep() {
+        let path = PathBuf::from("/abc/");
+        let joined = safe_join(&path, "/../def");
+        assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_relative_parent_starts_with_sep() {
+        let path = PathBuf::from("abc");
+        let joined = safe_join(&path, "/../def");
+        assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_django_example() {
+        let path = PathBuf::from("/dir");
+        let joined = safe_join(&path, "/../d");
+        assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_django_example_variant() {
+        let path = PathBuf::from("/dir");
+        let joined = safe_join(&path, "/../directory");
+        assert_eq!(joined, None);
     }
 }
