@@ -13,15 +13,16 @@ pub struct LoaderError {
     pub tried: Vec<(String, String)>,
 }
 
+fn absolute(path: &Path) -> Option<PathBuf> {
+    match path.as_os_str().is_empty() {
+        false => std::path::absolute(path).ok(),
+        true => std::env::current_dir().ok(),
+    }
+}
+
 fn safe_join(directory: &Path, template_name: &str) -> Option<PathBuf> {
-    let final_path = match std::path::absolute(directory.join(template_name)) {
-        Ok(path) => path.normalize(),
-        Err(_) => return None,
-    };
-    let directory = match std::path::absolute(directory) {
-        Ok(directory) => directory,
-        Err(_) => return None,
-    };
+    let final_path = absolute(&directory.join(template_name))?.normalize();
+    let directory = absolute(directory)?;
     if final_path.starts_with(directory) {
         Some(final_path)
     } else {
@@ -306,5 +307,22 @@ mod tests {
         let path = PathBuf::from("/dir");
         let joined = safe_join(&path, "/../directory");
         assert_eq!(joined, None);
+    }
+
+    #[test]
+    fn test_safe_join_empty_path() {
+        let path = PathBuf::from("");
+        let joined = safe_join(&path, "directory").unwrap();
+        let mut expected = std::env::current_dir().unwrap();
+        expected.push("directory");
+        assert_eq!(joined, expected);
+    }
+
+    #[test]
+    fn test_safe_join_empty_path_and_template_name() {
+        let path = PathBuf::from("");
+        let joined = safe_join(&path, "").unwrap();
+        let expected = std::env::current_dir().unwrap();
+        assert_eq!(joined, expected);
     }
 }
