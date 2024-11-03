@@ -13,16 +13,16 @@ pub struct LoaderError {
     pub tried: Vec<(String, String)>,
 }
 
-fn absolute(path: &Path) -> Option<PathBuf> {
+fn abspath(path: &Path) -> Option<PathBuf> {
     match path.as_os_str().is_empty() {
-        false => std::path::absolute(path).ok(),
+        false => std::path::absolute(path).map(|p| p.normalize()).ok(),
         true => std::env::current_dir().ok(),
     }
 }
 
 fn safe_join(directory: &Path, template_name: &str) -> Option<PathBuf> {
-    let final_path = absolute(&directory.join(template_name))?.normalize();
-    let directory = absolute(directory)?;
+    let final_path = abspath(&directory.join(template_name))?;
+    let directory = abspath(directory)?;
     if final_path.starts_with(directory) {
         Some(final_path)
     } else {
@@ -181,6 +181,8 @@ impl Loader {
 mod tests {
     use super::*;
 
+    use quickcheck::quickcheck;
+
     #[test]
     fn test_filesystem_loader() {
         pyo3::prepare_freethreaded_python();
@@ -324,5 +326,33 @@ mod tests {
         let joined = safe_join(&path, "").unwrap();
         let expected = std::env::current_dir().unwrap();
         assert_eq!(joined, expected);
+    }
+
+    #[test]
+    fn test_safe_join_parent_and_empty_template_name() {
+        let path = PathBuf::from("..");
+        let joined = safe_join(&path, "").unwrap();
+        let mut expected = std::env::current_dir().unwrap();
+        expected.push("..");
+        assert_eq!(joined, expected.normalize());
+    }
+
+    #[test]
+    fn test_safe_join_matches_django_safe_join() {
+        pyo3::prepare_freethreaded_python();
+
+        fn matches(path: PathBuf, template_name: String) -> bool {
+            Python::with_gil(|py| {
+                let utils_os = PyModule::import_bound(py, "django.utils._os").unwrap();
+                let django_safe_join = utils_os.getattr("safe_join").unwrap();
+
+                let joined = django_safe_join
+                    .call1((&path, &template_name))
+                    .map(|joined| joined.extract().unwrap_or_default())
+                    .ok();
+                joined == safe_join(&path, &template_name)
+            })
+        }
+        quickcheck(matches as fn(PathBuf, String) -> bool)
     }
 }
