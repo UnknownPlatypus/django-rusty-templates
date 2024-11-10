@@ -15,6 +15,17 @@ pub mod django_rusty_templates {
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
+    import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
+
+    impl TemplateSyntaxError {
+        fn with_source_code(
+            err: miette::Report,
+            source: impl miette::SourceCode + 'static,
+        ) -> PyErr {
+            let miette_err = err.with_source_code(source);
+            TemplateSyntaxError::new_err(format!("{miette_err:?}"))
+        }
+    }
 
     #[pyclass]
     struct Engine {
@@ -134,7 +145,14 @@ pub mod django_rusty_templates {
     impl Template {
         pub fn new(template: &str, filename: PathBuf) -> PyResult<Self> {
             let mut parser = Parser::new(template);
-            let nodes = parser.parse().unwrap();
+            let nodes = match parser.parse() {
+                Ok(nodes) => nodes,
+                Err(err) => {
+                    let source =
+                        miette::NamedSource::new(filename.to_string_lossy(), template.to_string());
+                    return Err(TemplateSyntaxError::with_source_code(err.into(), source));
+                }
+            };
             Ok(Self {
                 template: template.to_string(),
                 filename: Some(filename),

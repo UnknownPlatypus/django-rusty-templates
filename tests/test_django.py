@@ -1,4 +1,8 @@
+from pathlib import Path
+from textwrap import dedent
+
 import pytest
+from django.template.exceptions import TemplateSyntaxError
 from django.template.loader import get_template
 
 
@@ -10,3 +14,19 @@ def render(template, context, *, using):
 def test_render_template():
     context = {"user": "Lily"}
     assert render("basic.txt", context, using="rusty") == render("basic.txt", context, using="django")
+
+
+def test_parse_error():
+    with pytest.raises(TemplateSyntaxError) as excinfo:
+        get_template("parse_error.txt", using="rusty")
+
+    template_dir = Path("tests/templates").absolute()
+    expected = """\
+  × Empty variable tag
+   ╭─[%s/parse_error.txt:1:28]
+ 1 │ This is an empty variable: {{ }}
+   ·                            ──┬──
+   ·                              ╰── here
+   ╰────
+""" % template_dir
+    assert str(excinfo.value) == expected
