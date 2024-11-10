@@ -160,7 +160,7 @@ pub mod django_rusty_templates {
             })
         }
 
-        fn new_from_string(template: String) -> PyResult<Self> {
+        pub fn new_from_string(template: String) -> PyResult<Self> {
             let mut parser = Parser::new(&template);
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
@@ -220,6 +220,52 @@ mod tests {
 
     use pyo3::types::{PyDict, PyDictMethods, PyString};
     use pyo3::Python;
+
+    #[test]
+    fn test_syntax_error() {
+        pyo3::prepare_freethreaded_python();
+
+        let mut filename = std::env::current_dir().unwrap();
+        filename.push("tests");
+        filename.push("templates");
+        filename.push("parse_error.txt");
+
+        let expected = format!(
+            "TemplateSyntaxError:   × Empty variable tag
+   ╭─[{}:1:28]
+ 1 │ This is an empty variable: {{{{ }}}}
+   ·                            ──┬──
+   ·                              ╰── here
+   ╰────
+",
+            filename.display(),
+        );
+
+        let template_string = std::fs::read_to_string(&filename).unwrap();
+        let error = Template::new(&template_string, filename).unwrap_err();
+
+        let error_string = format!("{error}");
+        assert_eq!(error_string, expected);
+    }
+
+    #[test]
+    fn test_syntax_error_from_string() {
+        pyo3::prepare_freethreaded_python();
+
+        let template_string = "{{ foo.bar|title'foo' }}".to_string();
+        let error = Template::new_from_string(template_string).unwrap_err();
+
+        let expected = "TemplateSyntaxError:   × Could not parse the remainder
+   ╭────
+ 1 │ {{ foo.bar|title'foo' }}
+   ·                 ──┬──
+   ·                   ╰── here
+   ╰────
+";
+
+        let error_string = format!("{error}");
+        assert_eq!(error_string, expected);
+    }
 
     #[test]
     fn test_render_empty_template() {
