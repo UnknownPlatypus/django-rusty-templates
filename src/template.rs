@@ -15,9 +15,20 @@ pub mod django_rusty_templates {
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
+    import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
+
+    impl TemplateSyntaxError {
+        fn with_source_code(
+            err: miette::Report,
+            source: impl miette::SourceCode + 'static,
+        ) -> PyErr {
+            let miette_err = err.with_source_code(source);
+            TemplateSyntaxError::new_err(format!("{miette_err:?}"))
+        }
+    }
 
     #[pyclass]
-    struct Engine {
+    pub struct Engine {
         dirs: Vec<String>,
         app_dirs: bool,
         context_processors: Vec<String>,
@@ -44,7 +55,7 @@ pub mod django_rusty_templates {
     impl Engine {
         #[new]
         #[pyo3(signature = (dirs=None, app_dirs=false, context_processors=None, debug=false, loaders=None, string_if_invalid="".to_string(), file_charset="utf-8".to_string(), libraries=None, builtins=None, autoescape=true))]
-        fn new(
+        pub fn new(
             py: Python<'_>,
             dirs: Option<Bound<'_, PyAny>>,
             app_dirs: bool,
@@ -116,6 +127,11 @@ pub mod django_rusty_templates {
             }
             Err(TemplateDoesNotExist::new_err((template_name, tried)))
         }
+
+        #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
+        pub fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
+            Template::new_from_string(template_code.extract()?)
+        }
     }
 
     #[derive(Clone, Debug)]
@@ -129,7 +145,14 @@ pub mod django_rusty_templates {
     impl Template {
         pub fn new(template: &str, filename: PathBuf) -> PyResult<Self> {
             let mut parser = Parser::new(template);
-            let nodes = parser.parse().unwrap();
+            let nodes = match parser.parse() {
+                Ok(nodes) => nodes,
+                Err(err) => {
+                    let source =
+                        miette::NamedSource::new(filename.to_string_lossy(), template.to_string());
+                    return Err(TemplateSyntaxError::with_source_code(err.into(), source));
+                }
+            };
             Ok(Self {
                 template: template.to_string(),
                 filename: Some(filename),
@@ -137,11 +160,16 @@ pub mod django_rusty_templates {
             })
         }
 
-        fn from_str(template: &str) -> PyResult<Self> {
-            let mut parser = Parser::new(template);
-            let nodes = parser.parse().unwrap();
+        pub fn new_from_string(template: String) -> PyResult<Self> {
+            let mut parser = Parser::new(&template);
+            let nodes = match parser.parse() {
+                Ok(nodes) => nodes,
+                Err(err) => {
+                    return Err(TemplateSyntaxError::with_source_code(err.into(), template));
+                }
+            };
             Ok(Self {
-                template: template.to_string(),
+                template,
                 filename: None,
                 nodes,
             })
@@ -164,8 +192,7 @@ pub mod django_rusty_templates {
     impl Template {
         #[staticmethod]
         pub fn from_string(template: Bound<'_, PyString>) -> PyResult<Self> {
-            let template = template.extract::<&str>()?;
-            Self::from_str(template)
+            Self::new_from_string(template.extract()?)
         }
 
         #[pyo3(signature = (context=None, request=None))]
@@ -193,6 +220,52 @@ mod tests {
 
     use pyo3::types::{PyDict, PyDictMethods, PyString};
     use pyo3::Python;
+
+    #[test]
+    fn test_syntax_error() {
+        pyo3::prepare_freethreaded_python();
+
+        let mut filename = std::env::current_dir().unwrap();
+        filename.push("tests");
+        filename.push("templates");
+        filename.push("parse_error.txt");
+
+        let expected = format!(
+            "TemplateSyntaxError:   × Empty variable tag
+   ╭─[{}:1:28]
+ 1 │ This is an empty variable: {{{{ }}}}
+   ·                            ──┬──
+   ·                              ╰── here
+   ╰────
+",
+            filename.display(),
+        );
+
+        let template_string = std::fs::read_to_string(&filename).unwrap();
+        let error = Template::new(&template_string, filename).unwrap_err();
+
+        let error_string = format!("{error}");
+        assert_eq!(error_string, expected);
+    }
+
+    #[test]
+    fn test_syntax_error_from_string() {
+        pyo3::prepare_freethreaded_python();
+
+        let template_string = "{{ foo.bar|title'foo' }}".to_string();
+        let error = Template::new_from_string(template_string).unwrap_err();
+
+        let expected = "TemplateSyntaxError:   × Could not parse the remainder
+   ╭────
+ 1 │ {{ foo.bar|title'foo' }}
+   ·                 ──┬──
+   ·                   ╰── here
+   ╰────
+";
+
+        let error_string = format!("{error}");
+        assert_eq!(error_string, expected);
+    }
 
     #[test]
     fn test_render_empty_template() {
@@ -265,6 +338,33 @@ user = User(["Lily"])
                 template.render(py, Some(context), None).unwrap(),
                 "Hello Lily!"
             );
+        })
+    }
+
+    #[test]
+    fn test_engine_from_string() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = Engine::new(
+                py,
+                None,
+                false,
+                None,
+                false,
+                None,
+                "".to_string(),
+                "utf-8".to_string(),
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+            let template_string = PyString::new_bound(py, "Hello {{ user }}!");
+            let template = engine.from_string(template_string).unwrap();
+            let context = PyDict::new_bound(py);
+
+            assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
         })
     }
 }
