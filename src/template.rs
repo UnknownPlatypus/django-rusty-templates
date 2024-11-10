@@ -162,7 +162,12 @@ pub mod django_rusty_templates {
 
         fn from_string_inner(template: String) -> PyResult<Self> {
             let mut parser = Parser::new(&template);
-            let nodes = parser.parse().unwrap();
+            let nodes = match parser.parse() {
+                Ok(nodes) => nodes,
+                Err(err) => {
+                    return Err(TemplateSyntaxError::with_source_code(err.into(), template));
+                }
+            };
             Ok(Self {
                 template,
                 filename: None,

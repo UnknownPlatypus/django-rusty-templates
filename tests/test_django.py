@@ -2,6 +2,7 @@ from pathlib import Path
 from textwrap import dedent
 
 import pytest
+from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 from django.template.loader import get_template
 
@@ -29,4 +30,26 @@ def test_parse_error():
    ·                              ╰── here
    ╰────
 """ % template_dir
+    assert str(excinfo.value) == expected
+
+
+def test_parse_error_from_string():
+    rusty_engine = engines["rusty"]
+
+    template = """
+This is an invalid filter name: {{ variable|'invalid'|title }}
+"""
+
+    with pytest.raises(TemplateSyntaxError) as excinfo:
+        rusty_engine.from_string(template)
+
+    expected = """\
+  × Expected a valid filter name
+   ╭─[2:45]
+ 1 │\x20
+ 2 │ This is an invalid filter name: {{ variable|'invalid'|title }}
+   ·                                             ────┬────
+   ·                                                 ╰── here
+   ╰────
+"""
     assert str(excinfo.value) == expected
