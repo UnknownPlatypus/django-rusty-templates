@@ -28,7 +28,7 @@ pub mod django_rusty_templates {
     }
 
     #[pyclass]
-    struct Engine {
+    pub struct Engine {
         dirs: Vec<String>,
         app_dirs: bool,
         context_processors: Vec<String>,
@@ -55,7 +55,7 @@ pub mod django_rusty_templates {
     impl Engine {
         #[new]
         #[pyo3(signature = (dirs=None, app_dirs=false, context_processors=None, debug=false, loaders=None, string_if_invalid="".to_string(), file_charset="utf-8".to_string(), libraries=None, builtins=None, autoescape=true))]
-        fn new(
+        pub fn new(
             py: Python<'_>,
             dirs: Option<Bound<'_, PyAny>>,
             app_dirs: bool,
@@ -129,7 +129,7 @@ pub mod django_rusty_templates {
         }
 
         #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
-        fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
+        pub fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
             Template::from_string_inner(template_code.extract()?)
         }
     }
@@ -292,6 +292,33 @@ user = User(["Lily"])
                 template.render(py, Some(context), None).unwrap(),
                 "Hello Lily!"
             );
+        })
+    }
+
+    #[test]
+    fn test_engine_from_string() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = Engine::new(
+                py,
+                None,
+                false,
+                None,
+                false,
+                None,
+                "".to_string(),
+                "utf-8".to_string(),
+                None,
+                None,
+                false,
+            )
+            .unwrap();
+            let template_string = PyString::new_bound(py, "Hello {{ user }}!");
+            let template = engine.from_string(template_string).unwrap();
+            let context = PyDict::new_bound(py);
+
+            assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
         })
     }
 }
