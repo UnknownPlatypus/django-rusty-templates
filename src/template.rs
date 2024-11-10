@@ -119,7 +119,7 @@ pub mod django_rusty_templates {
 
         #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
         fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
-            Template::from_str(template_code.extract()?)
+            Template::from_string_inner(template_code.extract()?)
         }
     }
 
@@ -142,11 +142,11 @@ pub mod django_rusty_templates {
             })
         }
 
-        fn from_str(template: &str) -> PyResult<Self> {
-            let mut parser = Parser::new(template);
+        fn from_string_inner(template: String) -> PyResult<Self> {
+            let mut parser = Parser::new(&template);
             let nodes = parser.parse().unwrap();
             Ok(Self {
-                template: template.to_string(),
+                template,
                 filename: None,
                 nodes,
             })
@@ -169,8 +169,7 @@ pub mod django_rusty_templates {
     impl Template {
         #[staticmethod]
         pub fn from_string(template: Bound<'_, PyString>) -> PyResult<Self> {
-            let template = template.extract::<&str>()?;
-            Self::from_str(template)
+            Self::from_string_inner(template.extract()?)
         }
 
         #[pyo3(signature = (context=None, request=None))]
