@@ -116,6 +116,11 @@ pub mod django_rusty_templates {
             }
             Err(TemplateDoesNotExist::new_err((template_name, tried)))
         }
+
+        #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
+        fn from_string(&self, template_code: String) -> PyResult<Template> {
+            Template::from_str(&template_code)
+        }
     }
 
     #[derive(Clone, Debug)]
