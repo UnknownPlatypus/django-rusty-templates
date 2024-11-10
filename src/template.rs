@@ -118,8 +118,8 @@ pub mod django_rusty_templates {
         }
 
         #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
-        fn from_string(&self, template_code: String) -> PyResult<Template> {
-            Template::from_str(&template_code)
+        fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
+            Template::from_str(template_code.extract()?)
         }
     }
 
