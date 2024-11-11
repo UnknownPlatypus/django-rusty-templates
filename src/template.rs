@@ -55,6 +55,7 @@ pub mod django_rusty_templates {
     impl Engine {
         #[new]
         #[pyo3(signature = (dirs=None, app_dirs=false, context_processors=None, debug=false, loaders=None, string_if_invalid="".to_string(), file_charset="utf-8".to_string(), libraries=None, builtins=None, autoescape=true))]
+        #[allow(clippy::too_many_arguments)] // We're matching Django's Engine __init__ signature
         pub fn new(
             py: Python<'_>,
             dirs: Option<Bound<'_, PyAny>>,
