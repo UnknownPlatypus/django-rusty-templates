@@ -243,7 +243,9 @@ mod tests {
         );
 
         let template_string = std::fs::read_to_string(&filename).unwrap();
-        let error = Template::new(&template_string, filename).unwrap_err();
+        let error = temp_env::with_var("NO_COLOR", Some("1"), || {
+            Template::new(&template_string, filename).unwrap_err()
+        });
 
         let error_string = format!("{error}");
         assert_eq!(error_string, expected);
@@ -254,7 +256,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         let template_string = "{{ foo.bar|title'foo' }}".to_string();
-        let error = Template::new_from_string(template_string).unwrap_err();
+        let error = temp_env::with_var("NO_COLOR", Some("1"), || {
+            Template::new_from_string(template_string).unwrap_err()
+        });
 
         let expected = "TemplateSyntaxError:   × Could not parse the remainder
    ╭────
