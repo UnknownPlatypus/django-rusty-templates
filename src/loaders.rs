@@ -343,7 +343,7 @@ mod tests {
 
         fn matches(path: PathBuf, template_name: String) -> bool {
             Python::with_gil(|py| {
-                let utils_os = PyModule::import_bound(py, "django.utils._os").unwrap();
+                let utils_os = PyModule::import(py, "django.utils._os").unwrap();
                 let django_safe_join = utils_os.getattr("safe_join").unwrap();
 
                 let joined = django_safe_join

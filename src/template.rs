@@ -273,9 +273,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new_bound(py, "");
+            let template_string = PyString::new(py, "");
             let template = Template::from_string(template_string).unwrap();
-            let context = PyDict::new_bound(py);
+            let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "");
         })
@@ -286,9 +286,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new_bound(py, "Hello {{ user }}!");
+            let template_string = PyString::new(py, "Hello {{ user }}!");
             let template = Template::from_string(template_string).unwrap();
-            let context = PyDict::new_bound(py);
+            let context = PyDict::new(py);
             context.set_item("user", "Lily").unwrap();
 
             assert_eq!(
@@ -303,9 +303,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new_bound(py, "Hello {{ user }}!");
+            let template_string = PyString::new(py, "Hello {{ user }}!");
             let template = Template::from_string(template_string).unwrap();
-            let context = PyDict::new_bound(py);
+            let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
         })
@@ -316,11 +316,11 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new_bound(py, "Hello {{ user.profile.names.0 }}!");
+            let template_string = PyString::new(py, "Hello {{ user.profile.names.0 }}!");
             let template = Template::from_string(template_string).unwrap();
-            let locals = PyDict::new_bound(py);
-            py.run_bound(
-                r#"
+            let locals = PyDict::new(py);
+            py.run(
+                cr#"
 class User:
     def __init__(self, names):
         self.profile = {"names": names}
@@ -332,7 +332,7 @@ user = User(["Lily"])
             )
             .unwrap();
             let user = locals.get_item("user").unwrap().unwrap();
-            let context = PyDict::new_bound(py);
+            let context = PyDict::new(py);
             context.set_item("user", user.into_any()).unwrap();
 
             assert_eq!(
@@ -361,9 +361,9 @@ user = User(["Lily"])
                 false,
             )
             .unwrap();
-            let template_string = PyString::new_bound(py, "Hello {{ user }}!");
+            let template_string = PyString::new(py, "Hello {{ user }}!");
             let template = engine.from_string(template_string).unwrap();
-            let context = PyDict::new_bound(py);
+            let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
         })
