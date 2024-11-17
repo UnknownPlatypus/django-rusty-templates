@@ -15,5 +15,6 @@ num-bigint = "0.4.6"
 pyo3 = { version = "0.23.1", features = ["num-bigint"] }
 quickcheck = "1.0.3"
 sugar_path = "1.2.0"
+temp-env = "0.3.6"
 thiserror = "1.0.64"
 unicode-xid = "0.2.6"
