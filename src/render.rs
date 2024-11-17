@@ -17,7 +17,7 @@ impl Variable {
         let first = parts.next().expect("Variable names cannot be empty");
         let mut variable = match context.get(first) {
             Some(variable) => variable.clone(),
-            None => PyString::new_bound(py, "").into_any(),
+            None => PyString::new(py, "").into_any(),
         };
         for part in parts {
             variable = match variable.get_item(part) {
