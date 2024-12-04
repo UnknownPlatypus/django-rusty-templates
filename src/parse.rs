@@ -48,6 +48,11 @@ impl<'t> Text {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Filter {
+    Default {
+        at: (usize, usize),
+        left: TokenTree,
+        right: TokenTree,
+    },
     External {
         at: (usize, usize),
         left: TokenTree,
@@ -56,8 +61,20 @@ pub enum Filter {
 }
 
 impl Filter {
-    fn new(_template: &str, at: (usize, usize), left: TokenTree, right: Option<TokenTree>) -> Self {
-        Self::External { at, left, right }
+    fn new(
+        template: &str,
+        at: (usize, usize),
+        left: TokenTree,
+        right: Option<TokenTree>,
+    ) -> Result<Self, ParseError> {
+        let (start, len) = at;
+        match &template[start..start + len] {
+            "default" => match right {
+                Some(right) => Ok(Self::Default { at, left, right }),
+                None => Err(ParseError::MissingArgument { at: at.into() }),
+            },
+            _ => Ok(Self::External { at, left, right }),
+        }
     }
 }
 
@@ -76,6 +93,11 @@ pub enum TokenTree {
 pub enum ParseError {
     #[error("Empty variable tag")]
     EmptyVariable {
+        #[label("here")]
+        at: SourceSpan,
+    },
+    #[error("Expected an argument")]
+    MissingArgument {
         #[label("here")]
         at: SourceSpan,
     },
@@ -133,7 +155,7 @@ impl<'t> Parser<'t> {
                 None => None,
                 Some(ref a) => Some(a.parse(self.template)?),
             };
-            let filter = Filter::new(self.template, filter_token.at, var, argument);
+            let filter = Filter::new(self.template, filter_token.at, var, argument)?;
             var = TokenTree::Filter(Box::new(filter));
         }
         Ok(var)
@@ -355,6 +377,31 @@ mod tests {
             right: Some(num),
         }));
         assert_eq!(nodes, vec![bar]);
+    }
+
+    #[test]
+    fn test_filter_default() {
+        let template = "{{ foo|default:baz }}";
+        let mut parser = Parser::new(template);
+        let nodes = parser.parse().unwrap();
+
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let baz = Variable { at: (15, 3) };
+        let bar = TokenTree::Filter(Box::new(Filter::Default {
+            at: (7, 7),
+            left: foo,
+            right: TokenTree::Variable(baz),
+        }));
+        assert_eq!(nodes, vec![bar]);
+        assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);
+    }
+
+    #[test]
+    fn test_filter_default_missing_argument() {
+        let template = "{{ foo|default|baz }}";
+        let mut parser = Parser::new(template);
+        let error = parser.parse().unwrap_err();
+        assert_eq!(error, ParseError::MissingArgument { at: (7, 7).into() });
     }
 
     #[test]
