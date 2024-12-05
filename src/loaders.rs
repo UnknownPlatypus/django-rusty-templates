@@ -266,7 +266,7 @@ mod tests {
             let template = cached_loader
                 .get_template(py, "basic.txt")
                 .expect("Failed to load template")
-                .expect("Template is None");
+                .expect("Template file could not be read");
 
             // Verify the template filename
             let mut expected_path = std::env::current_dir().expect("Failed to get current directory");
@@ -281,7 +281,7 @@ mod tests {
             let template = cached_loader
                 .get_template(py, "basic.txt")
                 .expect("Failed to load template")
-                .expect("Template is None");
+                .expect("Template file could not be read");
 
             // Verify the template filename again
             assert_eq!(template.filename.unwrap(), expected_path);
