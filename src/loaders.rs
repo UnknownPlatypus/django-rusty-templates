@@ -123,7 +123,10 @@ impl CachedLoader {
                         Err(mut e) => tried.append(&mut e.tried),
                     }
                 }
-                Err(LoaderError { tried })
+                let error = LoaderError { tried };
+                self.cache
+                    .insert(template_name.to_string(), Err(error.clone()));
+                Err(error)
             }
         }
     }
@@ -269,7 +272,8 @@ mod tests {
                 .expect("Template file could not be read");
 
             // Verify the template filename
-            let mut expected_path = std::env::current_dir().expect("Failed to get current directory");
+            let mut expected_path =
+                std::env::current_dir().expect("Failed to get current directory");
             expected_path.push("tests/templates/basic.txt");
             assert_eq!(template.filename.unwrap(), expected_path);
 
@@ -299,21 +303,28 @@ mod tests {
         Python::with_gil(|py| {
             let filesystem_loader =
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
-            
+
             let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
             let error = cached_loader.get_template(py, "missing.txt").unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
             expected.push("tests/templates/missing.txt");
+            let expected_err = LoaderError {
+                tried: vec![(
+                    expected.display().to_string(),
+                    "Source does not exist".to_string(),
+                )],
+            };
+            assert_eq!(error, expected_err);
+
+            let cache = &cached_loader.cache;
             assert_eq!(
-                error,
-                LoaderError {
-                    tried: vec![(
-                        expected.display().to_string(),
-                        "Source does not exist".to_string(),
-                    )],
-                },
+                cache.get("missing.txt").unwrap().as_ref().unwrap_err(),
+                &expected_err
             );
+
+            let error = cached_loader.get_template(py, "missing.txt").unwrap_err();
+            assert_eq!(error, expected_err);
         })
     }
 
@@ -324,9 +335,12 @@ mod tests {
         Python::with_gil(|py| {
             let filesystem_loader =
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
-            
+
             let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
-            let error = cached_loader.get_template(py, "invalid.txt").unwrap().unwrap_err();
+            let error = cached_loader
+                .get_template(py, "invalid.txt")
+                .unwrap()
+                .unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
             expected.push("tests/templates/invalid.txt");
