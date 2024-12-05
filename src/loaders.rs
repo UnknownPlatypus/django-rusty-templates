@@ -240,6 +240,104 @@ mod tests {
     }
 
     #[test]
+    fn test_cached_loader() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Helper to check cache contents
+            let verify_cache = |cache: &HashMap<String, Result<Template, LoaderError>>,
+                                key: &str,
+                                expected_path: &Path| {
+                if let Some(Ok(cached_template)) = cache.get(key) {
+                    assert_eq!(cached_template.filename.as_ref().unwrap(), expected_path);
+                } else {
+                    panic!("Expected '{}' to be in cache.", key);
+                }
+            };
+
+            // Create a FileSystemLoader for the CachedLoader
+            let filesystem_loader =
+                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+
+            // Wrap the FileSystemLoader in a CachedLoader
+            let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
+
+            // Load a template via the CachedLoader
+            let template = cached_loader
+                .get_template(py, "basic.txt")
+                .expect("Failed to load template")
+                .expect("Template file could not be read");
+
+            // Verify the template filename
+            let mut expected_path = std::env::current_dir().expect("Failed to get current directory");
+            expected_path.push("tests/templates/basic.txt");
+            assert_eq!(template.filename.unwrap(), expected_path);
+
+            // Verify the cache state after first load
+            assert_eq!(cached_loader.cache.len(), 1);
+            verify_cache(&cached_loader.cache, "basic.txt", &expected_path);
+
+            // Load the same template again via the CachedLoader
+            let template = cached_loader
+                .get_template(py, "basic.txt")
+                .expect("Failed to load template")
+                .expect("Template file could not be read");
+
+            // Verify the template filename again
+            assert_eq!(template.filename.unwrap(), expected_path);
+
+            // Verify the cache state remains consistent
+            assert_eq!(cached_loader.cache.len(), 1);
+            verify_cache(&cached_loader.cache, "basic.txt", &expected_path);
+        });
+    }
+
+    #[test]
+    fn test_cached_loader_missing_template() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let filesystem_loader =
+                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+            
+            let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
+            let error = cached_loader.get_template(py, "missing.txt").unwrap_err();
+
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/missing.txt");
+            assert_eq!(
+                error,
+                LoaderError {
+                    tried: vec![(
+                        expected.display().to_string(),
+                        "Source does not exist".to_string(),
+                    )],
+                },
+            );
+        })
+    }
+
+    #[test]
+    fn test_cached_loader_invalid_encoding() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let filesystem_loader =
+                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+            
+            let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
+            let error = cached_loader.get_template(py, "invalid.txt").unwrap().unwrap_err();
+
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/invalid.txt");
+            assert_eq!(
+                error.to_string(),
+                format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
+            );
+        })
+    }
+
+    #[test]
     fn test_safe_join_absolute() {
         let path = PathBuf::from("/abc/");
         let joined = safe_join(&path, "def").unwrap();
