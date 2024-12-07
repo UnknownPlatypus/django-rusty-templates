@@ -40,12 +40,7 @@ pub trait Render {
         context: &HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Cow<'t, str>> {
         let content = match self.resolve(py, template, context) {
-            Ok(Some(content)) => match content {
-                Content::Py(content) => content.str()?.extract::<String>()?,
-                Content::String(content) => return Ok(content),
-                Content::Float(content) => return Ok(Cow::Owned(content.to_string())),
-                Content::Int(content) => return Ok(Cow::Owned(content.to_string())),
-            },
+            Ok(Some(content)) => return content.render(),
             Ok(None) => "".to_string(),
             Err(_) => "".to_string(),
         };
