@@ -3,7 +3,8 @@ use num_bigint::BigInt;
 use thiserror::Error;
 
 use crate::lex::{
-    lex_variable, Argument, ArgumentType, Lexer, TokenType, VariableLexerError, START_TAG_LEN,
+    lex_variable, Argument as ArgumentToken, ArgumentType as ArgumentTokenType, Lexer, TokenType,
+    VariableLexerError, START_TAG_LEN,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -15,7 +16,7 @@ pub struct Variable {
 }
 
 impl<'t> Variable {
-    fn new(at: (usize, usize)) -> Self {
+    pub fn new(at: (usize, usize)) -> Self {
         Self { at }
     }
 
@@ -36,7 +37,7 @@ pub struct Text {
 }
 
 impl<'t> Text {
-    fn new(at: (usize, usize)) -> Self {
+    pub fn new(at: (usize, usize)) -> Self {
         Self { at }
     }
 
@@ -47,17 +48,43 @@ impl<'t> Text {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Filter {
-    External {
-        at: (usize, usize),
-        left: TokenTree,
-        right: Option<TokenTree>,
-    },
+pub enum FilterType {
+    Default(Argument),
+    External(Option<Argument>),
+    Lower,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Filter {
+    at: (usize, usize),
+    pub left: TokenTree,
+    pub filter: FilterType,
 }
 
 impl Filter {
-    fn new(_template: &str, at: (usize, usize), left: TokenTree, right: Option<TokenTree>) -> Self {
-        Self::External { at, left, right }
+    pub fn new(
+        template: &str,
+        at: (usize, usize),
+        left: TokenTree,
+        right: Option<Argument>,
+    ) -> Result<Self, ParseError> {
+        let (start, len) = at;
+        let filter = match &template[start..start + len] {
+            "default" => match right {
+                Some(right) => FilterType::Default(right),
+                None => return Err(ParseError::MissingArgument { at: at.into() }),
+            },
+            "lower" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::Lower,
+            },
+            _ => FilterType::External(right),
+        };
+        Ok(Self { at, left, filter })
     }
 }
 
@@ -68,8 +95,6 @@ pub enum TokenTree {
     Tag(Tag),
     Variable(Variable),
     Filter(Box<Filter>),
-    Float(f64),
-    Int(BigInt),
 }
 
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
@@ -79,11 +104,21 @@ pub enum ParseError {
         #[label("here")]
         at: SourceSpan,
     },
+    #[error("Expected an argument")]
+    MissingArgument {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     LexerError(#[from] VariableLexerError),
     #[error("Invalid numeric literal")]
     InvalidNumber {
+        #[label("here")]
+        at: SourceSpan,
+    },
+    #[error("Expected an argument")]
+    UnexpectedArgument {
         #[label("here")]
         at: SourceSpan,
     },
@@ -133,7 +168,7 @@ impl<'t> Parser<'t> {
                 None => None,
                 Some(ref a) => Some(a.parse(self.template)?),
             };
-            let filter = Filter::new(self.template, filter_token.at, var, argument);
+            let filter = Filter::new(self.template, filter_token.at, var, argument)?;
             var = TokenTree::Filter(Box::new(filter));
         }
         Ok(var)
@@ -144,19 +179,39 @@ impl<'t> Parser<'t> {
     }
 }
 
-impl Argument {
-    fn parse(&self, template: &'_ str) -> Result<TokenTree, ParseError> {
-        Ok(match self.argument_type {
-            ArgumentType::Variable => TokenTree::Variable(Variable::new(self.at)),
-            ArgumentType::Text => TokenTree::Text(Text::new(self.content_at())),
-            ArgumentType::Numeric => match self.content(template).parse::<BigInt>() {
-                Ok(n) => TokenTree::Int(n),
-                Err(_) => match self.content(template).parse::<f64>() {
-                    Ok(f) => TokenTree::Float(f),
-                    Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
+#[derive(Clone, Debug, PartialEq)]
+pub enum ArgumentType {
+    Variable(Variable),
+    Text(Text),
+    TranslatedText(Text),
+    Int(BigInt),
+    Float(f64),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Argument {
+    pub at: (usize, usize),
+    pub argument_type: ArgumentType,
+}
+
+impl ArgumentToken {
+    fn parse(&self, template: &'_ str) -> Result<Argument, ParseError> {
+        Ok(Argument {
+            at: self.at,
+            argument_type: match self.argument_type {
+                ArgumentTokenType::Variable => ArgumentType::Variable(Variable::new(self.at)),
+                ArgumentTokenType::Text => ArgumentType::Text(Text::new(self.content_at())),
+                ArgumentTokenType::Numeric => match self.content(template).parse::<BigInt>() {
+                    Ok(n) => ArgumentType::Int(n),
+                    Err(_) => match self.content(template).parse::<f64>() {
+                        Ok(f) => ArgumentType::Float(f),
+                        Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
+                    },
                 },
+                ArgumentTokenType::TranslatedText => {
+                    ArgumentType::TranslatedText(Text::new(self.content_at()))
+                }
             },
-            ArgumentType::TranslatedText => TokenTree::TranslatedText(Text::new(self.content_at())),
         })
     }
 }
@@ -229,10 +284,10 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = Variable { at: (3, 3) };
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: TokenTree::Variable(foo),
-            right: None,
+            filter: FilterType::External(None),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(foo.parts(template).collect::<Vec<_>>(), vec!["foo"]);
@@ -245,15 +300,15 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: None,
+            filter: FilterType::External(None),
         }));
-        let baz = TokenTree::Filter(Box::new(Filter::External {
+        let baz = TokenTree::Filter(Box::new(Filter {
             at: (11, 3),
             left: bar,
-            right: None,
+            filter: FilterType::External(None),
         }));
         assert_eq!(nodes, vec![baz]);
     }
@@ -266,10 +321,13 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Variable { at: (11, 3) };
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(TokenTree::Variable(baz)),
+            filter: FilterType::External(Some(Argument {
+                at: (11, 3),
+                argument_type: ArgumentType::Variable(baz),
+            })),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);
@@ -283,10 +341,13 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Text::new((12, 3));
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(TokenTree::Text(baz)),
+            filter: FilterType::External(Some(Argument {
+                at: (11, 5),
+                argument_type: ArgumentType::Text(baz),
+            })),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(baz.content(template), "baz");
@@ -300,10 +361,13 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Text::new((14, 3));
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(TokenTree::TranslatedText(baz)),
+            filter: FilterType::External(Some(Argument {
+                at: (11, 8),
+                argument_type: ArgumentType::TranslatedText(baz),
+            })),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(baz.content(template), "baz");
@@ -316,11 +380,14 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let num = TokenTree::Float(5.2e3);
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let num = Argument {
+            at: (11, 5),
+            argument_type: ArgumentType::Float(5.2e3),
+        };
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(num),
+            filter: FilterType::External(Some(num)),
         }));
         assert_eq!(nodes, vec![bar]);
     }
@@ -332,11 +399,14 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let num = TokenTree::Int(99.into());
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let num = Argument {
+            at: (11, 2),
+            argument_type: ArgumentType::Int(99.into()),
+        };
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(num),
+            filter: FilterType::External(Some(num)),
         }));
         assert_eq!(nodes, vec![bar]);
     }
@@ -348,13 +418,60 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let num = TokenTree::Int("99999999999999999".parse::<BigInt>().unwrap());
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let num = Argument {
+            at: (11, 17),
+            argument_type: ArgumentType::Int("99999999999999999".parse::<BigInt>().unwrap()),
+        };
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(num),
+            filter: FilterType::External(Some(num)),
         }));
         assert_eq!(nodes, vec![bar]);
+    }
+
+    #[test]
+    fn test_filter_argument_invalid_number() {
+        let template = "{{ foo|bar:9.9.9 }}";
+        let mut parser = Parser::new(template);
+        let error = parser.parse().unwrap_err();
+        assert_eq!(error, ParseError::InvalidNumber { at: (11, 5).into() });
+    }
+
+    #[test]
+    fn test_filter_default() {
+        let template = "{{ foo|default:baz }}";
+        let mut parser = Parser::new(template);
+        let nodes = parser.parse().unwrap();
+
+        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let baz = Variable { at: (15, 3) };
+        let bar = TokenTree::Filter(Box::new(Filter {
+            at: (7, 7),
+            left: foo,
+            filter: FilterType::Default(Argument {
+                at: (15, 3),
+                argument_type: ArgumentType::Variable(baz),
+            }),
+        }));
+        assert_eq!(nodes, vec![bar]);
+        assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);
+    }
+
+    #[test]
+    fn test_filter_default_missing_argument() {
+        let template = "{{ foo|default|baz }}";
+        let mut parser = Parser::new(template);
+        let error = parser.parse().unwrap_err();
+        assert_eq!(error, ParseError::MissingArgument { at: (7, 7).into() });
+    }
+
+    #[test]
+    fn test_filter_lower_unexpected_argument() {
+        let template = "{{ foo|lower:baz }}";
+        let mut parser = Parser::new(template);
+        let error = parser.parse().unwrap_err();
+        assert_eq!(error, ParseError::UnexpectedArgument { at: (13, 3).into() });
     }
 
     #[test]

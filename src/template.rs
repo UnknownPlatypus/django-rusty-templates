@@ -12,6 +12,7 @@ pub mod django_rusty_templates {
 
     use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader};
     use crate::parse::{Parser, TokenTree};
+    use crate::render::Render;
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
