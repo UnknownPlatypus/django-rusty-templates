@@ -47,17 +47,16 @@ impl<'t> Text {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum Filter {
-    Default {
-        at: (usize, usize),
-        left: TokenTree,
-        right: TokenTree,
-    },
-    External {
-        at: (usize, usize),
-        left: TokenTree,
-        right: Option<TokenTree>,
-    },
+pub enum FilterType {
+    Default(TokenTree),
+    External(Option<TokenTree>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Filter {
+    at: (usize, usize),
+    pub left: TokenTree,
+    pub filter: FilterType,
 }
 
 impl Filter {
@@ -68,13 +67,14 @@ impl Filter {
         right: Option<TokenTree>,
     ) -> Result<Self, ParseError> {
         let (start, len) = at;
-        match &template[start..start + len] {
+        let filter = match &template[start..start + len] {
             "default" => match right {
-                Some(right) => Ok(Self::Default { at, left, right }),
-                None => Err(ParseError::MissingArgument { at: at.into() }),
+                Some(right) => FilterType::Default(right),
+                None => return Err(ParseError::MissingArgument { at: at.into() }),
             },
-            _ => Ok(Self::External { at, left, right }),
-        }
+            _ => FilterType::External(right),
+        };
+        Ok(Self { at, left, filter })
     }
 }
 
@@ -251,10 +251,10 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = Variable { at: (3, 3) };
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: TokenTree::Variable(foo),
-            right: None,
+            filter: FilterType::External(None),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(foo.parts(template).collect::<Vec<_>>(), vec!["foo"]);
@@ -267,15 +267,15 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: None,
+            filter: FilterType::External(None),
         }));
-        let baz = TokenTree::Filter(Box::new(Filter::External {
+        let baz = TokenTree::Filter(Box::new(Filter {
             at: (11, 3),
             left: bar,
-            right: None,
+            filter: FilterType::External(None),
         }));
         assert_eq!(nodes, vec![baz]);
     }
@@ -288,10 +288,10 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Variable { at: (11, 3) };
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(TokenTree::Variable(baz)),
+            filter: FilterType::External(Some(TokenTree::Variable(baz))),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);
@@ -305,10 +305,10 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Text::new((12, 3));
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(TokenTree::Text(baz)),
+            filter: FilterType::External(Some(TokenTree::Text(baz))),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(baz.content(template), "baz");
@@ -322,10 +322,10 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Text::new((14, 3));
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(TokenTree::TranslatedText(baz)),
+            filter: FilterType::External(Some(TokenTree::TranslatedText(baz))),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(baz.content(template), "baz");
@@ -339,10 +339,10 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Float(5.2e3);
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(num),
+            filter: FilterType::External(Some(num)),
         }));
         assert_eq!(nodes, vec![bar]);
     }
@@ -355,10 +355,10 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Int(99.into());
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(num),
+            filter: FilterType::External(Some(num)),
         }));
         assert_eq!(nodes, vec![bar]);
     }
@@ -371,10 +371,10 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let num = TokenTree::Int("99999999999999999".parse::<BigInt>().unwrap());
-        let bar = TokenTree::Filter(Box::new(Filter::External {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
-            right: Some(num),
+            filter: FilterType::External(Some(num)),
         }));
         assert_eq!(nodes, vec![bar]);
     }
@@ -387,10 +387,10 @@ mod tests {
 
         let foo = TokenTree::Variable(Variable { at: (3, 3) });
         let baz = Variable { at: (15, 3) };
-        let bar = TokenTree::Filter(Box::new(Filter::Default {
+        let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 7),
             left: foo,
-            right: TokenTree::Variable(baz),
+            filter: FilterType::Default(TokenTree::Variable(baz)),
         }));
         assert_eq!(nodes, vec![bar]);
         assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);

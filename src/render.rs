@@ -1,23 +1,58 @@
 use std::borrow::Cow;
 use std::collections::HashMap;
 
+use num_bigint::BigInt;
 use pyo3::prelude::*;
-use pyo3::types::PyString;
 
-use crate::parse::{TokenTree, Variable};
+use crate::parse::{Filter, FilterType, TokenTree, Variable};
 
-impl Variable {
-    fn resolve<'py>(
+pub enum Content<'t, 'py> {
+    Py(Bound<'py, PyAny>),
+    String(Cow<'t, str>),
+    Float(f64),
+    Int(BigInt),
+}
+
+pub trait Render {
+    fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
-        template: &str,
+        template: &'t str,
         context: &HashMap<String, Bound<'py, PyAny>>,
-    ) -> PyResult<Bound<'py, PyAny>> {
+    ) -> PyResult<Option<Content<'t, 'py>>>;
+
+    fn render<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        template: &'t str,
+        context: &HashMap<String, Bound<'py, PyAny>>,
+    ) -> PyResult<Cow<'t, str>> {
+        let content = match self.resolve(py, template, context) {
+            Ok(Some(content)) => match content {
+                Content::Py(content) => content.str()?.extract::<String>()?,
+                Content::String(content) => return Ok(content),
+                Content::Float(content) => return Ok(Cow::Owned(content.to_string())),
+                Content::Int(content) => return Ok(Cow::Owned(content.to_string())),
+            },
+            Ok(None) => "".to_string(),
+            Err(_) => "".to_string(),
+        };
+        Ok(Cow::Owned(content))
+    }
+}
+
+impl Render for Variable {
+    fn resolve<'t, 'py>(
+        &self,
+        _py: Python<'py>,
+        template: &'t str,
+        context: &HashMap<String, Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Content<'t, 'py>>> {
         let mut parts = self.parts(template);
         let first = parts.next().expect("Variable names cannot be empty");
         let mut variable = match context.get(first) {
             Some(variable) => variable.clone(),
-            None => PyString::new(py, "").into_any(),
+            None => return Ok(None),
         };
         for part in parts {
             variable = match variable.get_item(part) {
@@ -37,38 +72,45 @@ impl Variable {
                 },
             }
         }
-        Ok(variable)
+        Ok(Some(Content::Py(variable)))
     }
+}
 
-    fn render<'t, 'py>(
+impl Render for Filter {
+    fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: &'t str,
         context: &HashMap<String, Bound<'py, PyAny>>,
-    ) -> PyResult<Cow<'t, str>> {
-        let variable = match self.resolve(py, template, context) {
-            Ok(variable) => variable.str()?.extract::<String>()?,
-            Err(_) => "".to_string(),
-        };
-        Ok(Cow::Owned(variable))
+    ) -> PyResult<Option<Content<'t, 'py>>> {
+        let left = self.left.resolve(py, template, context)?;
+        match &self.filter {
+            FilterType::Default(right) => match left {
+                Some(left) => Ok(Some(left)),
+                None => Ok(right.resolve(py, template, context)?),
+            },
+            FilterType::External(_filter) => todo!(),
+        }
     }
 }
 
-impl TokenTree {
-    pub fn render<'t>(
+impl Render for TokenTree {
+    fn resolve<'t, 'py>(
         &self,
-        py: Python<'_>,
+        py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'_, PyAny>>,
-    ) -> PyResult<Cow<'t, str>> {
+        context: &HashMap<String, Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
-            TokenTree::Text(text) => Ok(Cow::Borrowed(text.content(template))),
+            TokenTree::Text(text) => {
+                Ok(Some(Content::String(Cow::Borrowed(text.content(template)))))
+            }
             TokenTree::TranslatedText(_text) => todo!(),
             TokenTree::Tag(_tag) => todo!(),
-            TokenTree::Variable(variable) => variable.render(py, template, context),
-            TokenTree::Filter(_filter) => todo!(),
-            TokenTree::Float(number) => Ok(Cow::Owned(number.to_string())),
-            TokenTree::Int(number) => Ok(Cow::Owned(number.to_string())),
+            TokenTree::Variable(variable) => variable.resolve(py, template, context),
+            TokenTree::Filter(filter) => filter.resolve(py, template, context),
+            TokenTree::Float(number) => Ok(Some(Content::Float(*number))),
+            TokenTree::Int(number) => Ok(Some(Content::Int(number.clone()))),
         }
     }
 }
