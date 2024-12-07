@@ -368,4 +368,30 @@ user = User('Lily')
             assert_eq!(rendered, "");
         })
     }
+
+    #[test]
+    fn test_render_chained_filters() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let template = "{{ name|default:'Bryony'|lower }}";
+            let variable = Variable::new((3, 4));
+            let default = Filter::new(
+                template,
+                (8, 7),
+                TokenTree::Variable(variable),
+                Some(Argument { at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
+            ).unwrap();
+            let lower = Filter::new(
+                template,
+                (25, 5),
+                TokenTree::Filter(Box::new(default)),
+                None,
+            ).unwrap();
+
+            let rendered = lower.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "bryony");
+        })
+    }
 }
