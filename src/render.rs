@@ -329,4 +329,24 @@ user = User('Lily')
             assert_eq!(rendered, "lily");
         })
     }
+
+    #[test]
+    fn test_render_filter_lower_missing_left() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let template = "{{ name|lower }}";
+            let variable = Variable::new((3, 4));
+            let filter = Filter::new(
+                template,
+                (8, 5),
+                TokenTree::Variable(variable),
+                None,
+            ).unwrap();
+
+            let rendered = filter.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "");
+        })
+    }
 }
