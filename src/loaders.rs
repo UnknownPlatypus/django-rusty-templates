@@ -45,7 +45,7 @@ impl FileSystemLoader {
 
     fn get_template(
         &self,
-        py: Python<'_>,
+        _py: Python<'_>,
         template_name: &str,
     ) -> Result<PyResult<Template>, LoaderError> {
         let mut tried = Vec::new();
@@ -82,8 +82,8 @@ pub struct AppDirsLoader {}
 impl AppDirsLoader {
     fn get_template(
         &self,
-        py: Python<'_>,
-        template_name: &str,
+        _py: Python<'_>,
+        _template_name: &str,
     ) -> Result<PyResult<Template>, LoaderError> {
         todo!()
     }
@@ -143,16 +143,17 @@ impl LocMemLoader {
 
     fn get_template(
         &self,
-        py: Python<'_>,
+        _py: Python<'_>,
         template_name: &str,
     ) -> Result<PyResult<Template>, LoaderError> {
         if let Some(contents) = self.templates.get(template_name) {
-            Ok(
-                Template::new(&contents, PathBuf::from(template_name))
-            )
+            Ok(Template::new(contents, PathBuf::from(template_name)))
         } else {
             Err(LoaderError {
-                tried: vec![(template_name.to_string(), "Source does not exist".to_string())],
+                tried: vec![(
+                    template_name.to_string(),
+                    "Source does not exist".to_string(),
+                )],
             })
         }
     }
@@ -163,8 +164,8 @@ pub struct ExternalLoader {}
 impl ExternalLoader {
     fn get_template(
         &self,
-        py: Python<'_>,
-        template_name: &str,
+        _py: Python<'_>,
+        _template_name: &str,
     ) -> Result<PyResult<Template>, LoaderError> {
         todo!()
     }

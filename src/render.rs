@@ -63,10 +63,10 @@ impl TokenTree {
     ) -> PyResult<Cow<'t, str>> {
         match self {
             TokenTree::Text(text) => Ok(Cow::Borrowed(text.content(template))),
-            TokenTree::TranslatedText(text) => todo!(),
-            TokenTree::Tag(tag) => todo!(),
+            TokenTree::TranslatedText(_text) => todo!(),
+            TokenTree::Tag(_tag) => todo!(),
             TokenTree::Variable(variable) => variable.render(py, template, context),
-            TokenTree::Filter(filter) => todo!(),
+            TokenTree::Filter(_filter) => todo!(),
             TokenTree::Float(number) => Ok(Cow::Owned(number.to_string())),
             TokenTree::Int(number) => Ok(Cow::Owned(number.to_string())),
         }

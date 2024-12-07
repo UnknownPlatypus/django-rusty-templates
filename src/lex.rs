@@ -195,7 +195,7 @@ impl<'t> Lexer<'t> {
     }
 }
 
-impl<'t> Iterator for Lexer<'t> {
+impl Iterator for Lexer<'_> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -605,7 +605,7 @@ impl<'t> FilterLexer<'t> {
     }
 }
 
-impl<'t> Iterator for FilterLexer<'t> {
+impl Iterator for FilterLexer<'_> {
     type Item = Result<FilterToken, VariableLexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
