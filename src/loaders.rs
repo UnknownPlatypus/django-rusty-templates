@@ -132,15 +132,29 @@ impl CachedLoader {
     }
 }
 
-pub struct LocMemLoader {}
+pub struct LocMemLoader {
+    templates: HashMap<String, String>,
+}
 
 impl LocMemLoader {
+    pub fn new(templates: HashMap<String, String>) -> Self {
+        Self { templates }
+    }
+
     fn get_template(
         &self,
         py: Python<'_>,
         template_name: &str,
     ) -> Result<PyResult<Template>, LoaderError> {
-        todo!()
+        if let Some(contents) = self.templates.get(template_name) {
+            Ok(
+                Template::new(&contents, PathBuf::from(template_name))
+            )
+        } else {
+            Err(LoaderError {
+                tried: vec![(template_name.to_string(), "Source does not exist".to_string())],
+            })
+        }
     }
 }
 
@@ -347,6 +361,44 @@ mod tests {
             assert_eq!(
                 error.to_string(),
                 format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
+            );
+        })
+    }
+
+    #[test]
+    fn test_locmem_loader() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let mut templates: HashMap<String, String> = HashMap::new();
+            templates.insert("index.html".to_string(), "index".to_string());
+
+            let loader = LocMemLoader::new(templates);
+
+            let template = loader.get_template(py, "index.html").unwrap().unwrap();
+            assert_eq!(template.template, "index".to_string());
+            assert_eq!(template.filename.unwrap(), PathBuf::from("index.html"));
+        });
+    }
+
+    #[test]
+    fn test_locmem_loader_missing_template() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let templates: HashMap<String, String> = HashMap::new();
+
+            let loader = LocMemLoader::new(templates);
+
+            let error = loader.get_template(py, "index.html").unwrap_err();
+            assert_eq!(
+                error,
+                LoaderError {
+                    tried: vec![(
+                        "index.html".to_string(),
+                        "Source does not exist".to_string(),
+                    )],
+                },
             );
         })
     }
