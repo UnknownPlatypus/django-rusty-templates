@@ -433,6 +433,14 @@ mod tests {
     }
 
     #[test]
+    fn test_filter_argument_invalid_number() {
+        let template = "{{ foo|bar:9.9.9 }}";
+        let mut parser = Parser::new(template);
+        let error = parser.parse().unwrap_err();
+        assert_eq!(error, ParseError::InvalidNumber { at: (11, 5).into() });
+    }
+
+    #[test]
     fn test_filter_default() {
         let template = "{{ foo|default:baz }}";
         let mut parser = Parser::new(template);
