@@ -114,3 +114,168 @@ impl Render for TokenTree {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use pyo3::types::{PyDict, PyList, PyString};
+
+    use crate::parse::Text;
+
+    #[test]
+    fn test_render_variable() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let name = PyString::new(py, "Lily").into_any();
+            let context = HashMap::from([("name".to_string(), name)]);
+            let template = "{{ name }}";
+            let variable = Variable::new((3, 4));
+
+            let rendered = variable.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_dict_lookup() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let data = PyDict::new(py);
+            let name = PyString::new(py, "Lily");
+            data.set_item("name", name).unwrap();
+            let context = HashMap::from([("data".to_string(), data.into_any())]);
+            let template = "{{ data.name }}";
+            let variable = Variable::new((3, 9));
+
+            let rendered = variable.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_list_lookup() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let name = PyString::new(py, "Lily");
+            let names = PyList::new(py, [name]).unwrap();
+            let context = HashMap::from([("names".to_string(), names.into_any())]);
+            let template = "{{ names.0 }}";
+            let variable = Variable::new((3, 7));
+
+            let rendered = variable.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_attribute_lookup() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let locals = PyDict::new(py);
+            py.run(
+                c"
+class User:
+    def __init__(self, name):
+        self.name = name
+
+user = User('Lily')
+",
+                None,
+                Some(&locals),
+            ).unwrap();
+
+            let context = locals.extract().unwrap();
+            let template = "{{ user.name }}";
+            let variable = Variable::new((3, 9));
+
+            let rendered = variable.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let name = PyString::new(py, "Lily").into_any();
+            let context = HashMap::from([("name".to_string(), name)]);
+            let template = "{{ name|default:'Bryony' }}";
+            let variable = Variable::new((3, 4));
+            let filter = Filter::new(
+                template,
+                (8, 7),
+                TokenTree::Variable(variable),
+                Some(TokenTree::Text(Text::new((17, 6)))),
+            ).unwrap();
+
+            let rendered = filter.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_default() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let template = "{{ name|default:'Bryony' }}";
+            let variable = Variable::new((3, 4));
+            let filter = Filter::new(
+                template,
+                (8, 7),
+                TokenTree::Variable(variable),
+                Some(TokenTree::Text(Text::new((17, 6)))),
+            ).unwrap();
+
+            let rendered = filter.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "Bryony");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_default_integer() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let template = "{{ count|default:12}}";
+            let variable = Variable::new((3, 5));
+            let filter = Filter::new(
+                template,
+                (9, 7),
+                TokenTree::Variable(variable),
+                Some(TokenTree::Int(12.into())),
+            ).unwrap();
+
+            let rendered = filter.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "12");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_default_float() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let template = "{{ count|default:3.5}}";
+            let variable = Variable::new((3, 5));
+            let filter = Filter::new(
+                template,
+                (9, 7),
+                TokenTree::Variable(variable),
+                Some(TokenTree::Float(3.5)),
+            ).unwrap();
+
+            let rendered = filter.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "3.5");
+        })
+    }
+}

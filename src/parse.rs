@@ -15,7 +15,7 @@ pub struct Variable {
 }
 
 impl<'t> Variable {
-    fn new(at: (usize, usize)) -> Self {
+    pub fn new(at: (usize, usize)) -> Self {
         Self { at }
     }
 
@@ -36,7 +36,7 @@ pub struct Text {
 }
 
 impl<'t> Text {
-    fn new(at: (usize, usize)) -> Self {
+    pub fn new(at: (usize, usize)) -> Self {
         Self { at }
     }
 
@@ -60,7 +60,7 @@ pub struct Filter {
 }
 
 impl Filter {
-    fn new(
+    pub fn new(
         template: &str,
         at: (usize, usize),
         left: TokenTree,
