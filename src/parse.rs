@@ -55,13 +55,8 @@ pub enum Filter {
     },
 }
 
-impl<'t> Filter {
-    fn new(
-        _template: &'t str,
-        at: (usize, usize),
-        left: TokenTree,
-        right: Option<TokenTree>,
-    ) -> Self {
+impl Filter {
+    fn new(_template: &str, at: (usize, usize), left: TokenTree, right: Option<TokenTree>) -> Self {
         Self::External { at, left, right }
     }
 }
@@ -144,13 +139,13 @@ impl<'t> Parser<'t> {
         Ok(var)
     }
 
-    fn parse_tag(&mut self, tag: &'t str, at: (usize, usize)) -> Result<TokenTree, ParseError> {
+    fn parse_tag(&mut self, _tag: &'t str, _at: (usize, usize)) -> Result<TokenTree, ParseError> {
         todo!()
     }
 }
 
-impl<'t> Argument {
-    fn parse(&self, template: &'t str) -> Result<TokenTree, ParseError> {
+impl Argument {
+    fn parse(&self, template: &'_ str) -> Result<TokenTree, ParseError> {
         Ok(match self.argument_type {
             ArgumentType::Variable => TokenTree::Variable(Variable::new(self.at)),
             ArgumentType::Text => TokenTree::Text(Text::new(self.content_at())),

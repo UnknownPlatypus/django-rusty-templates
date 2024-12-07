@@ -43,9 +43,9 @@ pub mod django_rusty_templates {
 
     impl Engine {
         fn find_template_loader<'py>(
-            py: Python<'py>,
-            loader: &str,
-            args: Option<Bound<'py, PyAny>>,
+            _py: Python<'py>,
+            _loader: &str,
+            _args: Option<Bound<'py, PyAny>>,
         ) -> PyResult<Bound<'py, PyAny>> {
             todo!()
         }
@@ -57,7 +57,7 @@ pub mod django_rusty_templates {
         #[pyo3(signature = (dirs=None, app_dirs=false, context_processors=None, debug=false, loaders=None, string_if_invalid="".to_string(), file_charset="utf-8".to_string(), libraries=None, builtins=None, autoescape=true))]
         #[allow(clippy::too_many_arguments)] // We're matching Django's Engine __init__ signature
         pub fn new(
-            py: Python<'_>,
+            _py: Python<'_>,
             dirs: Option<Bound<'_, PyAny>>,
             app_dirs: bool,
             context_processors: Option<Bound<'_, PyAny>>,
@@ -88,7 +88,7 @@ pub mod django_rusty_templates {
                     );
                     return Err(err);
                 }
-                Some(loaders) => todo!(),
+                Some(_loaders) => todo!(),
                 None => {
                     let filesystem_loader =
                         Loader::FileSystem(FileSystemLoader::new(dirs.clone(), encoding));
@@ -207,7 +207,7 @@ pub mod django_rusty_templates {
                 Some(context) => context.extract()?,
                 None => HashMap::new(),
             };
-            if let Some(request) = request {
+            if let Some(_request) = request {
                 todo!()
             }
             self._render(py, &context)
