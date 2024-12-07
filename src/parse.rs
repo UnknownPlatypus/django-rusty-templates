@@ -95,8 +95,6 @@ pub enum TokenTree {
     Tag(Tag),
     Variable(Variable),
     Filter(Box<Filter>),
-    Float(f64),
-    Int(BigInt),
 }
 
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq)]

@@ -120,8 +120,6 @@ impl Render for TokenTree {
             TokenTree::Tag(_tag) => todo!(),
             TokenTree::Variable(variable) => variable.resolve(py, template, context),
             TokenTree::Filter(filter) => filter.resolve(py, template, context),
-            TokenTree::Float(number) => Ok(Some(Content::Float(*number))),
-            TokenTree::Int(number) => Ok(Some(Content::Int(number.clone()))),
         }
     }
 }
