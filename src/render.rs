@@ -310,6 +310,27 @@ user = User('Lily')
     }
 
     #[test]
+    fn test_render_filter_default_variable() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let me = PyString::new(py, "Lily").into_any();
+            let context = HashMap::from([("me".to_string(), me)]);
+            let template = "{{ name|default:me}}";
+            let variable = Variable::new((3, 4));
+            let filter = Filter::new(
+                template,
+                (8, 7),
+                TokenTree::Variable(variable),
+                Some(Argument{ at: (16, 2), argument_type: ArgumentType::Variable(Variable::new((16, 2)))}),
+            ).unwrap();
+
+            let rendered = filter.render(py, template, &context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
     fn test_render_filter_lower() {
         pyo3::prepare_freethreaded_python();
 
