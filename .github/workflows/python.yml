@@ -29,18 +29,18 @@ jobs:
 
     - name: Install dependencies
       run: |
-        python -m venv venv
-        venv/bin/python -m pip install --upgrade pip
-        venv/bin/pip install -r requirements.txt
-        venv/bin/pip install pytest-cov
+        python -m venv .venv
+        .venv/bin/python -m pip install --upgrade pip
+        .venv/bin/pip install -r requirements.txt
+        .venv/bin/pip install pytest-cov
     - name: Install Django Rusty Templates
       run: |
         source <(cargo llvm-cov show-env --export-prefix)
-        venv/bin/maturin develop
+        .venv/bin/maturin develop
     - name: Test with pytest
       run: |
         source <(cargo llvm-cov show-env --export-prefix)
-        venv/bin/pytest --cov --cov-report=xml
+        .venv/bin/pytest --cov --cov-report=xml
     - name: Get rust coverage report
       run: |
         source <(cargo llvm-cov show-env --export-prefix)
