@@ -35,7 +35,7 @@ jobs:
     - name: Install Django Rusty Templates
       run: |
         source <(cargo llvm-cov show-env --export-prefix)
-        pip install -e .
+        maturin develop
     - name: Test with pytest
       run: |
         source <(cargo llvm-cov show-env --export-prefix)
