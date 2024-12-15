@@ -111,7 +111,7 @@ pub enum ParseError {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
-    LexerError(#[from] VariableLexerError),
+    VariableError(#[from] VariableLexerError),
     #[error("Invalid numeric literal")]
     InvalidNumber {
         #[label("here")]
@@ -219,6 +219,8 @@ impl ArgumentToken {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::lex::common::LexerError;
 
     #[test]
     fn test_empty_template() {
@@ -481,7 +483,7 @@ mod tests {
         let error = parser.parse().unwrap_err();
         assert_eq!(
             error,
-            ParseError::LexerError(VariableLexerError::InvalidVariableName { at: (3, 4).into() })
+            ParseError::VariableError(LexerError::InvalidVariableName { at: (3, 4).into() }.into())
         );
     }
 }
