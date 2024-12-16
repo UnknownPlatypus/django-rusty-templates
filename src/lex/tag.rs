@@ -25,13 +25,10 @@ impl<'t> TagToken {
 
 #[derive(Debug, PartialEq)]
 pub struct TagParts {
-    at: (usize, usize),
+    pub at: (usize, usize),
 }
 
-pub fn lex_tag(
-    tag: &str,
-    start: usize,
-) -> Result<Option<(TagToken, Option<TagParts>)>, TagLexerError> {
+pub fn lex_tag(tag: &str, start: usize) -> Result<Option<(TagToken, TagParts)>, TagLexerError> {
     let rest = tag.trim_start();
     if rest.trim().is_empty() {
         return Ok(None);
@@ -44,7 +41,8 @@ pub fn lex_tag(
         None => {
             let at = (start, tag.len());
             let token = TagToken { at };
-            return Ok(Some((token, None)));
+            let parts = TagParts { at: (tag.len(), 0) };
+            return Ok(Some((token, parts)));
         }
     };
     let index = match tag.find(char::is_whitespace) {
@@ -62,7 +60,7 @@ pub fn lex_tag(
     let start = start + tag_len + rest.len() - trimmed.len();
     let at = (start, trimmed.len());
     let parts = TagParts { at };
-    Ok(Some((token, Some(parts))))
+    Ok(Some((token, parts)))
 }
 
 #[cfg(test)]
@@ -89,7 +87,7 @@ mod tests {
         let (token, rest) = lex_tag(tag, START_TAG_LEN).unwrap().unwrap();
         assert_eq!(token, TagToken { at: (3, 9) });
         assert_eq!(token.content(template), "csrftoken");
-        assert!(rest.is_none())
+        assert_eq!(rest, TagParts { at: (9, 0) })
     }
 
     #[test]
@@ -115,6 +113,6 @@ mod tests {
         let (token, rest) = lex_tag(tag, START_TAG_LEN).unwrap().unwrap();
         assert_eq!(token, TagToken { at: (3, 3) });
         assert_eq!(token.content(template), "url");
-        assert_eq!(rest.unwrap(), TagParts { at: (7, 8) })
+        assert_eq!(rest, TagParts { at: (7, 8) })
     }
 }
