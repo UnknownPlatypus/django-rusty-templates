@@ -22,6 +22,11 @@ pub enum LexerError {
         #[label("here")]
         at: SourceSpan,
     },
+    #[error("Could not parse the remainder")]
+    InvalidRemainder {
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error("Expected a string literal within translation")]
     MissingTranslatedString {
         #[label("here")]

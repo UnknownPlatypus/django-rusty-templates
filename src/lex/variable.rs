@@ -86,11 +86,6 @@ pub enum VariableLexerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LexerError(#[from] LexerError),
-    #[error("Could not parse the remainder")]
-    InvalidRemainder {
-        #[label("here")]
-        at: SourceSpan,
-    },
     #[error("Expected a valid filter name")]
     InvalidFilterName {
         #[label("here")]
@@ -297,7 +292,7 @@ impl<'t> FilterLexer<'t> {
             Some(n) => {
                 let at = (self.byte + n, remainder.trim().len());
                 self.rest = "";
-                Err(VariableLexerError::InvalidRemainder { at: at.into() })
+                Err(LexerError::InvalidRemainder { at: at.into() }.into())
             }
         }
     }
@@ -484,9 +479,9 @@ mod tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![Err(VariableLexerError::InvalidRemainder {
-                at: (16, 5).into()
-            })]
+            vec![Err(
+                LexerError::InvalidRemainder { at: (16, 5).into() }.into()
+            )]
         );
     }
 
@@ -670,7 +665,7 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Err(VariableLexerError::InvalidRemainder { at: (23, 2).into() }),
+                Err(LexerError::InvalidRemainder { at: (23, 2).into() }.into()),
                 /* When fixed we can do:
                 Ok(FilterToken {
                     argument: Some(Argument {
@@ -856,9 +851,9 @@ mod tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![Err(VariableLexerError::InvalidRemainder {
-                at: (25, 5).into()
-            })]
+            vec![Err(
+                LexerError::InvalidRemainder { at: (25, 5).into() }.into()
+            )]
         );
     }
 
@@ -870,9 +865,9 @@ mod tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(
             tokens,
-            vec![Err(VariableLexerError::InvalidRemainder {
-                at: (25, 5).into()
-            })]
+            vec![Err(
+                LexerError::InvalidRemainder { at: (25, 5).into() }.into()
+            )]
         );
     }
 }
