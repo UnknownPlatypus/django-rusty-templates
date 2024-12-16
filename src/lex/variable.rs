@@ -6,10 +6,7 @@ use crate::lex::common::{
     check_variable_attrs, lex_numeric, lex_text, lex_translated, lex_variable_argument,
     trim_variable, LexerError,
 };
-
-const START_TRANSLATE_LEN: usize = 2;
-const END_TRANSLATE_LEN: usize = 1;
-const QUOTE_LEN: usize = 1;
+use crate::lex::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ArgumentType {
