@@ -1,6 +1,7 @@
 pub mod common;
 pub mod core;
 pub mod tag;
+pub mod url;
 pub mod variable;
 
 pub const START_TAG_LEN: usize = 2;
