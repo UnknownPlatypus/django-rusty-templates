@@ -2,10 +2,11 @@ use miette::{Diagnostic, SourceSpan};
 use num_bigint::BigInt;
 use thiserror::Error;
 
-use crate::lex::{
-    lex_variable, Argument as ArgumentToken, ArgumentType as ArgumentTokenType, Lexer, TokenType,
-    VariableLexerError, START_TAG_LEN,
+use crate::lex::core::{Lexer, TokenType};
+use crate::lex::variable::{
+    lex_variable, Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError,
 };
+use crate::lex::START_TAG_LEN;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Tag {}
