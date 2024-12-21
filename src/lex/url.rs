@@ -141,22 +141,39 @@ impl<'t> UrlLexer<'t> {
         Some(at)
     }
 
-    fn lex_variable(&mut self, kwarg: Option<(usize, usize)>) -> Result<UrlToken, UrlLexerError> {
-        match lex_variable_argument(self.byte, self.rest) {
-            Ok((at, byte, rest)) => {
-                self.byte = byte;
-                self.rest = rest;
-                Ok(UrlToken {
-                    token_type: UrlTokenType::Variable,
-                    at,
-                    kwarg,
-                })
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e.into())
+    fn lex_variable_or_filter(
+        &mut self,
+        kwarg: Option<(usize, usize)>,
+    ) -> Result<UrlToken, UrlLexerError> {
+        let mut chars = self.rest.chars();
+        let mut in_text = None;
+        let mut end = 0;
+        while let Some(c) = chars.next() {
+            end += 1;
+            match c {
+                '"' => match in_text {
+                    None => in_text = Some('"'),
+                    Some('"') => in_text = None,
+                    _ => {}
+                },
+                '\'' => match in_text {
+                    None => in_text = Some('\''),
+                    Some('\'') => in_text = None,
+                    _ => {}
+                },
+                _ if in_text.is_some() => {}
+                c if c.is_whitespace() => break,
+                _ => {}
             }
         }
+        let at = (self.byte, end);
+        self.rest = &self.rest[end..];
+        self.byte += end;
+        Ok(UrlToken {
+            token_type: UrlTokenType::Variable,
+            at,
+            kwarg,
+        })
     }
 
     fn lex_remainder(
@@ -204,13 +221,13 @@ impl Iterator for UrlLexer<'_> {
                 if let Some('(') = chars.next() {
                     self.lex_translated(&mut chars, kwarg)
                 } else {
-                    self.lex_variable(kwarg)
+                    self.lex_variable_or_filter(kwarg)
                 }
             }
             '"' => self.lex_text(&mut chars, '"', kwarg),
             '\'' => self.lex_text(&mut chars, '\'', kwarg),
             '0'..='9' | '-' => Ok(self.lex_numeric(kwarg)),
-            _ => self.lex_variable(kwarg),
+            _ => self.lex_variable_or_filter(kwarg),
         };
         Some(self.lex_remainder(token))
     }
@@ -275,15 +292,73 @@ mod tests {
     }
 
     #[test]
-    fn test_lex_url_name_invalid_variable() {
+    fn test_lex_url_name_filter() {
+        let template = "{% url foo|default:'home' %}";
+        let parts = TagParts { at: (7, 18) };
+        let mut lexer = UrlLexer::new(template, parts);
+        let tokens: Vec<_> = lexer.collect();
+        let name = UrlToken {
+            at: (7, 18),
+            token_type: UrlTokenType::Variable,
+            kwarg: None,
+        };
+        assert_eq!(tokens, vec![Ok(name)]);
+    }
+
+    #[test]
+    fn test_lex_url_name_filter_inner_double_quote() {
+        let template = "{% url foo|default:'home\"' %}";
+        let parts = TagParts { at: (7, 19) };
+        let mut lexer = UrlLexer::new(template, parts);
+        let tokens: Vec<_> = lexer.collect();
+        let name = UrlToken {
+            at: (7, 19),
+            token_type: UrlTokenType::Variable,
+            kwarg: None,
+        };
+        assert_eq!(tokens, vec![Ok(name)]);
+    }
+
+    #[test]
+    fn test_lex_url_name_filter_inner_single_quote() {
+        let template = "{% url foo|default:\"home'\" %}";
+        let parts = TagParts { at: (7, 19) };
+        let mut lexer = UrlLexer::new(template, parts);
+        let tokens: Vec<_> = lexer.collect();
+        let name = UrlToken {
+            at: (7, 19),
+            token_type: UrlTokenType::Variable,
+            kwarg: None,
+        };
+        assert_eq!(tokens, vec![Ok(name)]);
+    }
+
+    #[test]
+    fn test_lex_url_name_filter_inner_whitespace() {
+        let template = "{% url foo|default:'home url' %}";
+        let parts = TagParts { at: (7, 22) };
+        let mut lexer = UrlLexer::new(template, parts);
+        let tokens: Vec<_> = lexer.collect();
+        let name = UrlToken {
+            at: (7, 22),
+            token_type: UrlTokenType::Variable,
+            kwarg: None,
+        };
+        assert_eq!(tokens, vec![Ok(name)]);
+    }
+
+    #[test]
+    fn test_lex_url_name_leading_underscore() {
         let template = "{% url _foo %}";
         let parts = TagParts { at: (7, 4) };
         let mut lexer = UrlLexer::new(template, parts);
-        let error = lexer.next().unwrap().unwrap_err();
-        assert_eq!(
-            error,
-            LexerError::InvalidVariableName { at: (7, 4).into() }.into()
-        );
+        let tokens: Vec<_> = lexer.collect();
+        let name = UrlToken {
+            at: (7, 4),
+            token_type: UrlTokenType::Variable,
+            kwarg: None,
+        };
+        assert_eq!(tokens, vec![Ok(name)]);
     }
 
     #[test]
@@ -369,15 +444,17 @@ mod tests {
     }
 
     #[test]
-    fn test_lex_url_name_invalid_variable_kwarg() {
+    fn test_lex_url_name_leading_underscore_kwarg() {
         let template = "{% url name=_foo %}";
         let parts = TagParts { at: (7, 9) };
         let mut lexer = UrlLexer::new(template, parts);
-        let error = lexer.next().unwrap().unwrap_err();
-        assert_eq!(
-            error,
-            LexerError::InvalidVariableName { at: (12, 4).into() }.into()
-        );
+        let tokens: Vec<_> = lexer.collect();
+        let name = UrlToken {
+            at: (12, 4),
+            token_type: UrlTokenType::Variable,
+            kwarg: Some((7, 4)),
+        };
+        assert_eq!(tokens, vec![Ok(name)]);
     }
 
     #[test]
@@ -434,29 +511,26 @@ mod tests {
 
     #[test]
     fn test_lex_url_invalid_remainder() {
-        let template = "{% url foo'remainder %}";
-        let parts = TagParts { at: (7, 13) };
+        let template = "{% url 'foo'remainder %}";
+        let parts = TagParts { at: (7, 14) };
         let mut lexer = UrlLexer::new(template, parts);
         let error = lexer.next().unwrap().unwrap_err();
         assert_eq!(
             error,
-            LexerError::InvalidRemainder {
-                at: (10, 10).into()
-            }
-            .into()
+            LexerError::InvalidRemainder { at: (12, 9).into() }.into()
         );
     }
 
     #[test]
     fn test_lex_url_kwarg_invalid_remainder() {
-        let template = "{% url name=foo=remainder %}";
-        let parts = TagParts { at: (7, 18) };
+        let template = "{% url name='foo'=remainder %}";
+        let parts = TagParts { at: (7, 20) };
         let mut lexer = UrlLexer::new(template, parts);
         let error = lexer.next().unwrap().unwrap_err();
         assert_eq!(
             error,
             LexerError::InvalidRemainder {
-                at: (15, 10).into()
+                at: (17, 10).into()
             }
             .into()
         );
