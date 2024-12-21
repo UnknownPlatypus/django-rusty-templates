@@ -1,5 +1,6 @@
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
+use unicode_xid::UnicodeXID;
 
 use crate::lex::common::{
     lex_numeric, lex_text, lex_translated, lex_variable_argument, LexerError,
@@ -125,57 +126,36 @@ impl<'t> UrlLexer<'t> {
         }
     }
 
+    fn lex_kwarg(&mut self) -> Option<(usize, usize)> {
+        let index = match self.rest.find('=') {
+            Some(index) => index,
+            None => return None,
+        };
+        match self.rest.find(|c: char| !c.is_xid_continue()) {
+            Some(n) if n < index => return None,
+            _ => {}
+        }
+        let at = (self.byte, index);
+        self.rest = &self.rest[index + 1..];
+        self.byte += index + 1;
+        Some(at)
+    }
+
     fn lex_variable(&mut self, kwarg: Option<(usize, usize)>) -> Result<UrlToken, UrlLexerError> {
-        let at = match lex_variable_argument(self.byte, self.rest) {
+        match lex_variable_argument(self.byte, self.rest) {
             Ok((at, byte, rest)) => {
                 self.byte = byte;
                 self.rest = rest;
-                at
+                Ok(UrlToken {
+                    token_type: UrlTokenType::Variable,
+                    at,
+                    kwarg,
+                })
             }
             Err(e) => {
                 self.rest = "";
-                return Err(e.into());
+                Err(e.into())
             }
-        };
-        if kwarg.is_some() {
-            return Ok(UrlToken {
-                token_type: UrlTokenType::Variable,
-                at,
-                kwarg,
-            });
-        }
-        let mut chars = self.rest.chars();
-        match chars.next() {
-            Some('=') => {
-                let next = match chars.next() {
-                    None => {
-                        self.rest = "";
-                        let at = (at.0, at.1 + 1).into();
-                        return Err(UrlLexerError::IncompleteKeywordArgument { at });
-                    }
-                    Some(next) => next,
-                };
-                self.byte += 1;
-                self.rest = &self.rest[1..];
-                match next {
-                    '_' => {
-                        if let Some('(') = chars.next() {
-                            self.lex_translated(&mut chars, Some(at))
-                        } else {
-                            self.lex_variable(Some(at))
-                        }
-                    }
-                    '"' => self.lex_text(&mut chars, '"', Some(at)),
-                    '\'' => self.lex_text(&mut chars, '\'', Some(at)),
-                    '0'..='9' | '-' => Ok(self.lex_numeric(Some(at))),
-                    _ => self.lex_variable(Some(at)),
-                }
-            }
-            _ => Ok(UrlToken {
-                token_type: UrlTokenType::Variable,
-                at,
-                kwarg: None,
-            }),
         }
     }
 
@@ -207,19 +187,30 @@ impl Iterator for UrlLexer<'_> {
             return None;
         }
 
+        let kwarg = self.lex_kwarg();
+
         let mut chars = self.rest.chars();
-        let token = match chars.next().unwrap() {
+        let next = match chars.next() {
+            Some(next) if !next.is_whitespace() => next,
+            _ => {
+                self.rest = "";
+                let at = kwarg.expect("kwarg is Some or we'd already have exited");
+                let at = (at.0, at.1 + 1).into();
+                return Some(Err(UrlLexerError::IncompleteKeywordArgument { at }));
+            }
+        };
+        let token = match next {
             '_' => {
                 if let Some('(') = chars.next() {
-                    self.lex_translated(&mut chars, None)
+                    self.lex_translated(&mut chars, kwarg)
                 } else {
-                    self.lex_variable(None)
+                    self.lex_variable(kwarg)
                 }
             }
-            '"' => self.lex_text(&mut chars, '"', None),
-            '\'' => self.lex_text(&mut chars, '\'', None),
-            '0'..='9' | '-' => Ok(self.lex_numeric(None)),
-            _ => self.lex_variable(None),
+            '"' => self.lex_text(&mut chars, '"', kwarg),
+            '\'' => self.lex_text(&mut chars, '\'', kwarg),
+            '0'..='9' | '-' => Ok(self.lex_numeric(kwarg)),
+            _ => self.lex_variable(kwarg),
         };
         Some(self.lex_remainder(token))
     }
@@ -421,6 +412,18 @@ mod tests {
     fn test_lex_url_incomplete_kwarg() {
         let template = "{% url name= %}";
         let parts = TagParts { at: (7, 5) };
+        let mut lexer = UrlLexer::new(template, parts);
+        let error = lexer.next().unwrap().unwrap_err();
+        assert_eq!(
+            error,
+            UrlLexerError::IncompleteKeywordArgument { at: (7, 5).into() }
+        );
+    }
+
+    #[test]
+    fn test_lex_url_incomplete_kwarg_args() {
+        let template = "{% url name= foo %}";
+        let parts = TagParts { at: (7, 9) };
         let mut lexer = UrlLexer::new(template, parts);
         let error = lexer.next().unwrap().unwrap_err();
         assert_eq!(
