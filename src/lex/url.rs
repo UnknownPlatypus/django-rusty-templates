@@ -2,9 +2,7 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
-use crate::lex::common::{
-    lex_numeric, lex_text, lex_translated, lex_variable_argument, LexerError,
-};
+use crate::lex::common::{lex_numeric, lex_text, lex_translated, LexerError};
 use crate::lex::tag::TagParts;
 use crate::lex::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 
@@ -23,7 +21,7 @@ pub struct UrlToken {
     pub kwarg: Option<(usize, usize)>,
 }
 
-impl<'t> UrlToken {
+impl UrlToken {
     pub fn content_at(&self) -> (usize, usize) {
         match self.token_type {
             UrlTokenType::Variable => self.at,
@@ -145,10 +143,9 @@ impl<'t> UrlLexer<'t> {
         &mut self,
         kwarg: Option<(usize, usize)>,
     ) -> Result<UrlToken, UrlLexerError> {
-        let mut chars = self.rest.chars();
         let mut in_text = None;
         let mut end = 0;
-        while let Some(c) = chars.next() {
+        for c in self.rest.chars() {
             end += 1;
             match c {
                 '"' => match in_text {
@@ -241,7 +238,7 @@ mod tests {
     fn test_lex_url_name_text() {
         let template = "{% url 'foo' %}";
         let parts = TagParts { at: (7, 5) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 5),
@@ -255,7 +252,7 @@ mod tests {
     fn test_lex_url_name_text_double_quotes() {
         let template = "{% url \"foo\" %}";
         let parts = TagParts { at: (7, 5) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 5),
@@ -281,7 +278,7 @@ mod tests {
     fn test_lex_url_name_variable() {
         let template = "{% url foo %}";
         let parts = TagParts { at: (7, 3) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 3),
@@ -295,7 +292,7 @@ mod tests {
     fn test_lex_url_name_filter() {
         let template = "{% url foo|default:'home' %}";
         let parts = TagParts { at: (7, 18) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 18),
@@ -309,7 +306,7 @@ mod tests {
     fn test_lex_url_name_filter_inner_double_quote() {
         let template = "{% url foo|default:'home\"' %}";
         let parts = TagParts { at: (7, 19) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 19),
@@ -323,7 +320,7 @@ mod tests {
     fn test_lex_url_name_filter_inner_single_quote() {
         let template = "{% url foo|default:\"home'\" %}";
         let parts = TagParts { at: (7, 19) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 19),
@@ -337,7 +334,7 @@ mod tests {
     fn test_lex_url_name_filter_inner_whitespace() {
         let template = "{% url foo|default:'home url' %}";
         let parts = TagParts { at: (7, 22) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 22),
@@ -351,7 +348,7 @@ mod tests {
     fn test_lex_url_name_leading_underscore() {
         let template = "{% url _foo %}";
         let parts = TagParts { at: (7, 4) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 4),
@@ -365,7 +362,7 @@ mod tests {
     fn test_lex_url_name_translated() {
         let template = "{% url _('foo') %}";
         let parts = TagParts { at: (7, 8) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 8),
@@ -391,7 +388,7 @@ mod tests {
     fn test_lex_url_name_numeric() {
         let template = "{% url 5 %}";
         let parts = TagParts { at: (7, 1) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (7, 1),
@@ -405,7 +402,7 @@ mod tests {
     fn test_lex_url_name_text_kwarg() {
         let template = "{% url name='foo' %}";
         let parts = TagParts { at: (7, 10) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (12, 5),
@@ -419,7 +416,7 @@ mod tests {
     fn test_lex_url_name_text_kwarg_double_quotes() {
         let template = "{% url name=\"foo\" %}";
         let parts = TagParts { at: (7, 10) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (12, 5),
@@ -433,7 +430,7 @@ mod tests {
     fn test_lex_url_name_variable_kwarg() {
         let template = "{% url name=foo %}";
         let parts = TagParts { at: (7, 8) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (12, 3),
@@ -447,7 +444,7 @@ mod tests {
     fn test_lex_url_name_leading_underscore_kwarg() {
         let template = "{% url name=_foo %}";
         let parts = TagParts { at: (7, 9) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (12, 4),
@@ -461,7 +458,7 @@ mod tests {
     fn test_lex_url_name_translated_kwarg() {
         let template = "{% url name=_('foo') %}";
         let parts = TagParts { at: (7, 13) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (12, 8),
@@ -475,7 +472,7 @@ mod tests {
     fn test_lex_url_name_numeric_kwarg() {
         let template = "{% url name=5 %}";
         let parts = TagParts { at: (7, 6) };
-        let mut lexer = UrlLexer::new(template, parts);
+        let lexer = UrlLexer::new(template, parts);
         let tokens: Vec<_> = lexer.collect();
         let name = UrlToken {
             at: (12, 1),
