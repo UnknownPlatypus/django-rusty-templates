@@ -230,8 +230,18 @@ impl<'t> FilterLexer<'t> {
                 let at = (self.byte, end);
                 self.byte += end;
                 self.rest = &self.rest[end..];
-                let argument = self.lex_argument()?;
-                Ok(FilterToken { at, argument })
+                let (remainder, _start_next) = self.remainder_to_filter_or_argument();
+                match remainder {
+                    "" => {
+                        let argument = self.lex_argument()?;
+                        Ok(FilterToken { at, argument })
+                    }
+                    _ => {
+                        let at = (self.byte, remainder.trim().len());
+                        self.rest = "";
+                        Err(LexerError::InvalidRemainder { at: at.into() }.into())
+                    }
+                }
             }
             _ => {
                 let next = self.rest.find("|").unwrap_or(self.rest.len());
@@ -852,6 +862,34 @@ mod tests {
         let tokens: Vec<_> = lexer.collect();
         let error = LexerError::MissingTranslatedString { at: (19, 6).into() };
         assert_eq!(tokens, vec![Err(error.into())]);
+    }
+
+    #[test]
+    fn test_lex_filter_remainder_before_argument() {
+        let template = "{{ foo.bar|default'spam':title }}";
+        let variable = trim_variable(template);
+        let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![Err(
+                LexerError::InvalidRemainder { at: (18, 6).into() }.into()
+            )]
+        );
+    }
+
+    #[test]
+    fn test_lex_filter_remainder_before_filter() {
+        let template = "{{ foo.bar|title'spam'|title }}";
+        let variable = trim_variable(template);
+        let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![Err(
+                LexerError::InvalidRemainder { at: (16, 6).into() }.into()
+            )]
+        );
     }
 
     #[test]
