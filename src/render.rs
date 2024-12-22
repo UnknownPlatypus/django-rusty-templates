@@ -39,12 +39,10 @@ pub trait Render {
         template: &'t str,
         context: &HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Cow<'t, str>> {
-        let content = match self.resolve(py, template, context) {
-            Ok(Some(content)) => return content.render(),
-            Ok(None) => "".to_string(),
-            Err(_) => "".to_string(),
-        };
-        Ok(Cow::Owned(content))
+        match self.resolve(py, template, context)? {
+            Some(content) => content.render(),
+            None => Ok(Cow::Borrowed("")),
+        }
     }
 }
 
