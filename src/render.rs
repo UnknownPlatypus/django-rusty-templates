@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use num_bigint::BigInt;
 use pyo3::prelude::*;
 
-use crate::parse::{Argument, ArgumentType, Filter, FilterType, TagElement, TokenTree, Variable};
+use crate::parse::{Argument, ArgumentType, Filter, FilterType, TagElement, Text, TokenTree, Variable};
 
 pub enum Content<'t, 'py> {
     Py(Bound<'py, PyAny>),
@@ -105,6 +105,17 @@ impl Render for Filter {
     }
 }
 
+impl Render for Text {
+    fn resolve<'t, 'py>(
+        &self,
+        _py: Python<'py>,
+        template: &'t str,
+        _context: &HashMap<String, Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Content<'t, 'py>>> {
+        Ok(Some(Content::String(Cow::Borrowed(self.content(template)))))
+    }
+}
+
 impl Render for TagElement {
     fn resolve<'t, 'py>(
         &self,
@@ -113,9 +124,7 @@ impl Render for TagElement {
         context: &HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
-            Self::Text(text) => {
-                Ok(Some(Content::String(Cow::Borrowed(text.content(template)))))
-            }
+            Self::Text(text) => text.resolve(py, template, context),
             Self::TranslatedText(_text) => todo!(),
             Self::Variable(variable) => variable.resolve(py, template, context),
             Self::Filter(filter) => filter.resolve(py, template, context),
@@ -131,9 +140,7 @@ impl Render for TokenTree {
         context: &HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
-            Self::Text(text) => {
-                Ok(Some(Content::String(Cow::Borrowed(text.content(template)))))
-            }
+            Self::Text(text) => text.resolve(py, template, context),
             Self::TranslatedText(_text) => todo!(),
             Self::Tag(_tag) => todo!(),
             Self::Variable(variable) => variable.resolve(py, template, context),
@@ -150,9 +157,7 @@ impl Render for Argument {
         context: &HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         Ok(Some(match &self.argument_type {
-            ArgumentType::Text(text) => {
-                Content::String(Cow::Borrowed(text.content(template)))
-            }
+            ArgumentType::Text(text) => return text.resolve(py, template, context),
             ArgumentType::TranslatedText(_text) => todo!(),
             ArgumentType::Variable(variable) => return variable.resolve(py, template, context),
             ArgumentType::Float(number) => Content::Float(*number),
