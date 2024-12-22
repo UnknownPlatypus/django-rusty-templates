@@ -10,29 +10,6 @@ use crate::lex::variable::{
 };
 use crate::lex::START_TAG_LEN;
 
-#[derive(Clone, Debug, PartialEq)]
-pub enum TagElement {
-    Int(BigInt),
-    Float(f64),
-    Text(Text),
-    TranslatedText(Text),
-    Variable(Variable),
-    Filter(Box<Filter>),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Url {
-    view_name: TagElement,
-    args: Vec<TagElement>,
-    kwargs: Vec<(String, TagElement)>,
-    variable: Option<String>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Tag {
-    Url(Url),
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Variable {
     at: (usize, usize),
@@ -68,6 +45,53 @@ impl<'t> Text {
         let (start, len) = self.at;
         &template[start..start + len]
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ArgumentType {
+    Variable(Variable),
+    Text(Text),
+    TranslatedText(Text),
+    Int(BigInt),
+    Float(f64),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Argument {
+    pub at: (usize, usize),
+    pub argument_type: ArgumentType,
+}
+
+impl ArgumentToken {
+    fn parse(&self, template: &'_ str) -> Result<Argument, ParseError> {
+        Ok(Argument {
+            at: self.at,
+            argument_type: match self.argument_type {
+                ArgumentTokenType::Variable => ArgumentType::Variable(Variable::new(self.at)),
+                ArgumentTokenType::Text => ArgumentType::Text(Text::new(self.content_at())),
+                ArgumentTokenType::Numeric => match self.content(template).parse::<BigInt>() {
+                    Ok(n) => ArgumentType::Int(n),
+                    Err(_) => match self.content(template).parse::<f64>() {
+                        Ok(f) => ArgumentType::Float(f),
+                        Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
+                    },
+                },
+                ArgumentTokenType::TranslatedText => {
+                    ArgumentType::TranslatedText(Text::new(self.content_at()))
+                }
+            },
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TagElement {
+    Int(BigInt),
+    Float(f64),
+    Text(Text),
+    TranslatedText(Text),
+    Variable(Variable),
+    Filter(Box<Filter>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -109,6 +133,19 @@ impl Filter {
         };
         Ok(Self { at, left, filter })
     }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Url {
+    view_name: TagElement,
+    args: Vec<TagElement>,
+    kwargs: Vec<(String, TagElement)>,
+    variable: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Tag {
+    Url(Url),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -351,43 +388,6 @@ impl<'t> Parser<'t> {
             variable,
         };
         Ok(TokenTree::Tag(Tag::Url(url)))
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ArgumentType {
-    Variable(Variable),
-    Text(Text),
-    TranslatedText(Text),
-    Int(BigInt),
-    Float(f64),
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Argument {
-    pub at: (usize, usize),
-    pub argument_type: ArgumentType,
-}
-
-impl ArgumentToken {
-    fn parse(&self, template: &'_ str) -> Result<Argument, ParseError> {
-        Ok(Argument {
-            at: self.at,
-            argument_type: match self.argument_type {
-                ArgumentTokenType::Variable => ArgumentType::Variable(Variable::new(self.at)),
-                ArgumentTokenType::Text => ArgumentType::Text(Text::new(self.content_at())),
-                ArgumentTokenType::Numeric => match self.content(template).parse::<BigInt>() {
-                    Ok(n) => ArgumentType::Int(n),
-                    Err(_) => match self.content(template).parse::<f64>() {
-                        Ok(f) => ArgumentType::Float(f),
-                        Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
-                    },
-                },
-                ArgumentTokenType::TranslatedText => {
-                    ArgumentType::TranslatedText(Text::new(self.content_at()))
-                }
-            },
-        })
     }
 }
 
