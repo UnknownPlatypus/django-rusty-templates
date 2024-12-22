@@ -128,6 +128,8 @@ impl Render for TagElement {
             Self::TranslatedText(_text) => todo!(),
             Self::Variable(variable) => variable.resolve(py, template, context),
             Self::Filter(filter) => filter.resolve(py, template, context),
+            Self::Int(int) => Ok(Some(Content::Int(int.clone()))),
+            Self::Float(float) => Ok(Some(Content::Float(*float))),
         }
     }
 }
