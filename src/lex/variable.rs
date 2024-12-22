@@ -767,6 +767,20 @@ mod tests {
     }
 
     #[test]
+    fn test_lex_argument_with_attribute_underscore() {
+        let template = "{{ foo.bar|default:spam._eggs }}";
+        let variable = trim_variable(template);
+        let (_token, lexer) = lex_variable(variable, START_TAG_LEN).unwrap().unwrap();
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![Err(
+                LexerError::InvalidVariableName { at: (24, 5).into() }.into()
+            )]
+        );
+    }
+
+    #[test]
     fn test_lex_argument_with_only_underscore() {
         let template = "{{ foo.bar|default:_ }}";
         let variable = trim_variable(template);
