@@ -135,6 +135,26 @@ impl Filter {
     }
 }
 
+impl UrlToken {
+    fn parse(&self, template: &str) -> Result<TagElement, ParseError> {
+        let content_at = self.content_at();
+        let (start, len) = content_at;
+        let content = &template[start..start + len];
+        match self.token_type {
+            UrlTokenType::Numeric => match content.parse::<BigInt>() {
+                Ok(n) => Ok(TagElement::Int(n)),
+                Err(_) => match content.parse::<f64>() {
+                    Ok(f) => Ok(TagElement::Float(f)),
+                    Err(_) => Err(ParseError::InvalidNumber { at: self.at.into() }),
+                },
+            },
+            UrlTokenType::Text => Ok(TagElement::Text(Text::new(content_at))),
+            UrlTokenType::TranslatedText => Ok(TagElement::TranslatedText(Text::new(content_at))),
+            UrlTokenType::Variable => parse_variable(template, content, content_at, start),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Url {
     view_name: TagElement,
@@ -292,24 +312,7 @@ impl<'t> Parser<'t> {
     fn parse_url(&mut self, at: (usize, usize), parts: TagParts) -> Result<TokenTree, ParseError> {
         let mut lexer = UrlLexer::new(self.template, parts);
         let view_name = match lexer.next() {
-            Some(view_token) => {
-                let view_token = view_token?;
-                let content_at = view_token.content_at();
-                let at = view_token.at;
-                match view_token.token_type {
-                    UrlTokenType::Numeric => {
-                        return Err(ParseError::NumericUrlName { at: at.into() })
-                    }
-                    UrlTokenType::Text => TagElement::Text(Text::new(content_at)),
-                    UrlTokenType::TranslatedText => {
-                        TagElement::TranslatedText(Text::new(content_at))
-                    }
-                    UrlTokenType::Variable => {
-                        let content = &self.template[content_at.0..content_at.0 + content_at.1];
-                        parse_variable(self.template, content, content_at, content_at.0)?
-                    }
-                }
-            }
+            Some(view_token) => view_token?.parse(self.template)?,
             None => return Err(ParseError::UrlTagNoArguments { at: at.into() }),
         };
 
@@ -346,30 +349,7 @@ impl<'t> Parser<'t> {
         let mut args = vec![];
         let mut kwargs = vec![];
         for token in tokens {
-            let content_at = token.content_at();
-            let element = match token.token_type {
-                UrlTokenType::Numeric => {
-                    let (start, len) = content_at;
-                    let content = &self.template[start..start + len];
-                    match content.parse::<BigInt>() {
-                        Ok(n) => TagElement::Int(n),
-                        Err(_) => match content.parse::<f64>() {
-                            Ok(f) => TagElement::Float(f),
-                            Err(_) => {
-                                return Err(ParseError::InvalidNumber {
-                                    at: token.at.into(),
-                                })
-                            }
-                        },
-                    }
-                }
-                UrlTokenType::Text => TagElement::Text(Text::new(content_at)),
-                UrlTokenType::TranslatedText => TagElement::TranslatedText(Text::new(content_at)),
-                UrlTokenType::Variable => {
-                    let content = &self.template[content_at.0..content_at.0 + content_at.1];
-                    parse_variable(self.template, content, content_at, content_at.0)?
-                }
-            };
+            let element = token.parse(self.template)?;
             match token.kwarg {
                 None => args.push(element),
                 Some((start, len)) => {
@@ -767,8 +747,16 @@ mod tests {
     fn test_parse_url_view_name_integer() {
         let template = "{% url 64 %}";
         let mut parser = Parser::new(template);
-        let error = parser.parse().unwrap_err();
-        assert_eq!(error, ParseError::NumericUrlName { at: (7, 2).into() });
+        let nodes = parser.parse().unwrap();
+
+        let url = TokenTree::Tag(Tag::Url(Url {
+            view_name: TagElement::Int(64.into()),
+            args: vec![],
+            kwargs: vec![],
+            variable: None,
+        }));
+
+        assert_eq!(nodes, vec![url]);
     }
 
     #[test]
