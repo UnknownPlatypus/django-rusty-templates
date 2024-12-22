@@ -146,7 +146,6 @@ impl<'t> UrlLexer<'t> {
         let mut in_text = None;
         let mut end = 0;
         for c in self.rest.chars() {
-            end += 1;
             match c {
                 '"' => match in_text {
                     None => in_text = Some('"'),
@@ -162,6 +161,7 @@ impl<'t> UrlLexer<'t> {
                 c if c.is_whitespace() => break,
                 _ => {}
             }
+            end += 1;
         }
         let at = (self.byte, end);
         self.rest = &self.rest[end..];
@@ -182,7 +182,12 @@ impl<'t> UrlLexer<'t> {
             .find(char::is_whitespace)
             .unwrap_or(self.rest.len());
         match remainder {
-            0 => token,
+            0 => {
+                let rest = self.rest.trim_start();
+                self.byte += self.rest.len() - rest.len();
+                self.rest = rest;
+                token
+            }
             n => {
                 self.rest = "";
                 let at = (self.byte, n).into();
@@ -480,6 +485,25 @@ mod tests {
             kwarg: Some((7, 4)),
         };
         assert_eq!(tokens, vec![Ok(name)]);
+    }
+
+    #[test]
+    fn test_lex_url() {
+        let template = "{% url 'home' next %}";
+        let parts = TagParts { at: (7, 11) };
+        let lexer = UrlLexer::new(template, parts);
+        let tokens: Vec<_> = lexer.collect();
+        let home = UrlToken {
+            at: (7, 6),
+            token_type: UrlTokenType::Text,
+            kwarg: None,
+        };
+        let next = UrlToken {
+            at: (14, 4),
+            token_type: UrlTokenType::Variable,
+            kwarg: None,
+        };
+        assert_eq!(tokens, vec![Ok(home), Ok(next)]);
     }
 
     #[test]
