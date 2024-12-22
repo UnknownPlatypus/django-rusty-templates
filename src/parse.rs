@@ -157,10 +157,10 @@ impl UrlToken {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Url {
-    view_name: TagElement,
-    args: Vec<TagElement>,
-    kwargs: Vec<(String, TagElement)>,
-    variable: Option<String>,
+    pub view_name: TagElement,
+    pub args: Vec<TagElement>,
+    pub kwargs: Vec<(String, TagElement)>,
+    pub variable: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

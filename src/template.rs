@@ -180,7 +180,7 @@ pub mod django_rusty_templates {
         fn _render<'py>(
             &self,
             py: Python<'py>,
-            context: &HashMap<String, Bound<'py, PyAny>>,
+            context: &mut HashMap<String, Bound<'py, PyAny>>,
         ) -> PyResult<String> {
             let mut rendered = String::with_capacity(self.template.len());
             for node in &self.nodes {
@@ -204,14 +204,14 @@ pub mod django_rusty_templates {
             context: Option<Bound<'_, PyDict>>,
             request: Option<Bound<'_, PyAny>>,
         ) -> PyResult<String> {
-            let context = match context {
+            let mut context = match context {
                 Some(context) => context.extract()?,
                 None => HashMap::new(),
             };
             if let Some(_request) = request {
                 todo!()
             }
-            self._render(py, &context)
+            self._render(py, &mut context)
         }
     }
 }

@@ -3,9 +3,11 @@ use std::collections::HashMap;
 
 use num_bigint::BigInt;
 use pyo3::prelude::*;
+use pyo3::types::{PyDict, PyList};
 
-use crate::parse::{Argument, ArgumentType, Filter, FilterType, TagElement, Text, TokenTree, Variable};
+use crate::parse::{Argument, ArgumentType, Filter, FilterType, Tag, TagElement, Text, TokenTree, Url, Variable};
 
+#[derive(Debug, IntoPyObject)]
 pub enum Content<'t, 'py> {
     Py(Bound<'py, PyAny>),
     String(Cow<'t, str>),
@@ -30,14 +32,14 @@ pub trait Render {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'py, PyAny>>,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>>;
 
     fn render<'t, 'py>(
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'py, PyAny>>,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Cow<'t, str>> {
         match self.resolve(py, template, context)? {
             Some(content) => content.render(),
@@ -51,7 +53,7 @@ impl Render for Variable {
         &self,
         _py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'py, PyAny>>,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         let mut parts = self.parts(template);
         let first = parts.next().expect("Variable names cannot be empty");
@@ -86,7 +88,7 @@ impl Render for Filter {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'py, PyAny>>,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         let left = self.left.resolve(py, template, context)?;
         Ok(match &self.filter {
@@ -103,12 +105,61 @@ impl Render for Filter {
     }
 }
 
+impl Render for Url {
+    fn resolve<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        template: &'t str,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Content<'t, 'py>>> {
+        let view_name = match self.view_name.resolve(py, template, context)? {
+            Some(view_name) => view_name,
+            None => Content::String(Cow::Borrowed("")),
+        };
+        let urls = py.import("django.urls")?;
+        let reverse = urls.getattr("reverse")?;
+        let url = if self.kwargs.is_empty() {
+            let py_args = PyList::empty(py);
+            for arg in &self.args {
+                py_args.append(arg.resolve(py, template, context)?)?;
+            }
+            reverse.call1((view_name, py.None(), py_args.to_tuple()))?
+        } else {
+            let kwargs = PyDict::new(py);
+            for (key, value) in &self.kwargs {
+                kwargs.set_item(key, value.resolve(py, template, context)?)?;
+            }
+            reverse.call1((view_name, py.None(), py.None(), kwargs))?
+        };
+        match &self.variable {
+            None => Ok(Some(Content::Py(url))),
+            Some(variable) => {
+                context.insert(variable.clone(), url);
+                Ok(None)
+            }
+        }
+    }
+}
+
+impl Render for Tag {
+    fn resolve<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        template: &'t str,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Content<'t, 'py>>> {
+        match self {
+            Self::Url(url) => url.resolve(py, template, context)
+        }
+    }
+}
+
 impl Render for Text {
     fn resolve<'t, 'py>(
         &self,
         _py: Python<'py>,
         template: &'t str,
-        _context: &HashMap<String, Bound<'py, PyAny>>,
+        _context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         Ok(Some(Content::String(Cow::Borrowed(self.content(template)))))
     }
@@ -119,7 +170,7 @@ impl Render for TagElement {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'py, PyAny>>,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
@@ -137,12 +188,12 @@ impl Render for TokenTree {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'py, PyAny>>,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
             Self::TranslatedText(_text) => todo!(),
-            Self::Tag(_tag) => todo!(),
+            Self::Tag(tag) => tag.resolve(py, template, context),
             Self::Variable(variable) => variable.resolve(py, template, context),
             Self::Filter(filter) => filter.resolve(py, template, context),
         }
@@ -154,7 +205,7 @@ impl Render for Argument {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &HashMap<String, Bound<'py, PyAny>>,
+        context: &mut HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         Ok(Some(match &self.argument_type {
             ArgumentType::Text(text) => return text.resolve(py, template, context),
@@ -180,11 +231,11 @@ mod tests {
 
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
-            let context = HashMap::from([("name".to_string(), name)]);
+            let mut context = HashMap::from([("name".to_string(), name)]);
             let template = "{{ name }}";
             let variable = Variable::new((3, 4));
 
-            let rendered = variable.render(py, template, &context).unwrap();
+            let rendered = variable.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
         })
     }
@@ -197,11 +248,11 @@ mod tests {
             let data = PyDict::new(py);
             let name = PyString::new(py, "Lily");
             data.set_item("name", name).unwrap();
-            let context = HashMap::from([("data".to_string(), data.into_any())]);
+            let mut context = HashMap::from([("data".to_string(), data.into_any())]);
             let template = "{{ data.name }}";
             let variable = Variable::new((3, 9));
 
-            let rendered = variable.render(py, template, &context).unwrap();
+            let rendered = variable.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
         })
     }
@@ -213,11 +264,11 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily");
             let names = PyList::new(py, [name]).unwrap();
-            let context = HashMap::from([("names".to_string(), names.into_any())]);
+            let mut context = HashMap::from([("names".to_string(), names.into_any())]);
             let template = "{{ names.0 }}";
             let variable = Variable::new((3, 7));
 
-            let rendered = variable.render(py, template, &context).unwrap();
+            let rendered = variable.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
         })
     }
@@ -240,11 +291,11 @@ user = User('Lily')
                 Some(&locals),
             ).unwrap();
 
-            let context = locals.extract().unwrap();
+            let mut context = locals.extract().unwrap();
             let template = "{{ user.name }}";
             let variable = Variable::new((3, 9));
 
-            let rendered = variable.render(py, template, &context).unwrap();
+            let rendered = variable.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
         })
     }
@@ -255,7 +306,7 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
-            let context = HashMap::from([("name".to_string(), name)]);
+            let mut context = HashMap::from([("name".to_string(), name)]);
             let template = "{{ name|default:'Bryony' }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -265,7 +316,7 @@ user = User('Lily')
                 Some(Argument { at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
             ).unwrap();
 
-            let rendered = filter.render(py, template, &context).unwrap();
+            let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
         })
     }
@@ -275,7 +326,7 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let context = HashMap::new();
+            let mut context = HashMap::new();
             let template = "{{ name|default:'Bryony' }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -285,7 +336,7 @@ user = User('Lily')
                 Some(Argument{ at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
             ).unwrap();
 
-            let rendered = filter.render(py, template, &context).unwrap();
+            let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Bryony");
         })
     }
@@ -295,7 +346,7 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let context = HashMap::new();
+            let mut context = HashMap::new();
             let template = "{{ count|default:12}}";
             let variable = Variable::new((3, 5));
             let filter = Filter::new(
@@ -305,7 +356,7 @@ user = User('Lily')
                 Some(Argument { at: (17, 2), argument_type: ArgumentType::Int(12.into())}),
             ).unwrap();
 
-            let rendered = filter.render(py, template, &context).unwrap();
+            let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "12");
         })
     }
@@ -315,7 +366,7 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let context = HashMap::new();
+            let mut context = HashMap::new();
             let template = "{{ count|default:3.5}}";
             let variable = Variable::new((3, 5));
             let filter = Filter::new(
@@ -325,7 +376,7 @@ user = User('Lily')
                 Some(Argument{ at: (17, 3), argument_type: ArgumentType::Float(3.5)}),
             ).unwrap();
 
-            let rendered = filter.render(py, template, &context).unwrap();
+            let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "3.5");
         })
     }
@@ -336,7 +387,7 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let me = PyString::new(py, "Lily").into_any();
-            let context = HashMap::from([("me".to_string(), me)]);
+            let mut context = HashMap::from([("me".to_string(), me)]);
             let template = "{{ name|default:me}}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -346,7 +397,7 @@ user = User('Lily')
                 Some(Argument{ at: (16, 2), argument_type: ArgumentType::Variable(Variable::new((16, 2)))}),
             ).unwrap();
 
-            let rendered = filter.render(py, template, &context).unwrap();
+            let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
         })
     }
@@ -357,7 +408,7 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
-            let context = HashMap::from([("name".to_string(), name)]);
+            let mut context = HashMap::from([("name".to_string(), name)]);
             let template = "{{ name|lower }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -367,7 +418,7 @@ user = User('Lily')
                 None,
             ).unwrap();
 
-            let rendered = filter.render(py, template, &context).unwrap();
+            let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "lily");
         })
     }
@@ -377,7 +428,7 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let context = HashMap::new();
+            let mut context = HashMap::new();
             let template = "{{ name|lower }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -387,7 +438,7 @@ user = User('Lily')
                 None,
             ).unwrap();
 
-            let rendered = filter.render(py, template, &context).unwrap();
+            let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "");
         })
     }
@@ -397,7 +448,7 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let context = HashMap::new();
+            let mut context = HashMap::new();
             let template = "{{ name|default:'Bryony'|lower }}";
             let variable = Variable::new((3, 4));
             let default = Filter::new(
@@ -413,7 +464,7 @@ user = User('Lily')
                 None,
             ).unwrap();
 
-            let rendered = lower.render(py, template, &context).unwrap();
+            let rendered = lower.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "bryony");
         })
     }
