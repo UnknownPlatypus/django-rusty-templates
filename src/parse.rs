@@ -223,6 +223,29 @@ pub enum ParseError {
     },
 }
 
+fn parse_variable(
+    template: &str,
+    variable: &str,
+    at: (usize, usize),
+    start: usize,
+) -> Result<TagElement, ParseError> {
+    let (variable_token, filter_lexer) = match lex_variable(variable, start)? {
+        None => return Err(ParseError::EmptyVariable { at: at.into() }),
+        Some(t) => t,
+    };
+    let mut var = TagElement::Variable(Variable::new(variable_token.at));
+    for filter_token in filter_lexer {
+        let filter_token = filter_token?;
+        let argument = match filter_token.argument {
+            None => None,
+            Some(ref a) => Some(a.parse(template)?),
+        };
+        let filter = Filter::new(template, filter_token.at, var, argument)?;
+        var = TagElement::Filter(Box::new(filter));
+    }
+    Ok(var)
+}
+
 pub struct Parser<'t> {
     template: &'t str,
     lexer: Lexer<'t>,
@@ -242,40 +265,17 @@ impl<'t> Parser<'t> {
             nodes.push(match token.token_type {
                 TokenType::Text => TokenTree::Text(Text::new(token.at)),
                 TokenType::Comment => continue,
-                TokenType::Variable => self
-                    .parse_variable(
-                        token.content(self.template),
-                        token.at,
-                        token.at.0 + START_TAG_LEN,
-                    )?
-                    .into(),
+                TokenType::Variable => parse_variable(
+                    self.template,
+                    token.content(self.template),
+                    token.at,
+                    token.at.0 + START_TAG_LEN,
+                )?
+                .into(),
                 TokenType::Tag => self.parse_tag(token.content(self.template), token.at)?,
             })
         }
         Ok(nodes)
-    }
-
-    fn parse_variable(
-        &self,
-        variable: &'t str,
-        at: (usize, usize),
-        start: usize,
-    ) -> Result<TagElement, ParseError> {
-        let (variable_token, filter_lexer) = match lex_variable(variable, start)? {
-            None => return Err(ParseError::EmptyVariable { at: at.into() }),
-            Some(t) => t,
-        };
-        let mut var = TagElement::Variable(Variable::new(variable_token.at));
-        for filter_token in filter_lexer {
-            let filter_token = filter_token?;
-            let argument = match filter_token.argument {
-                None => None,
-                Some(ref a) => Some(a.parse(self.template)?),
-            };
-            let filter = Filter::new(self.template, filter_token.at, var, argument)?;
-            var = TagElement::Filter(Box::new(filter));
-        }
-        Ok(var)
     }
 
     fn parse_tag(&mut self, tag: &'t str, at: (usize, usize)) -> Result<TokenTree, ParseError> {
@@ -306,7 +306,7 @@ impl<'t> Parser<'t> {
                     }
                     UrlTokenType::Variable => {
                         let content = &self.template[content_at.0..content_at.0 + content_at.1];
-                        self.parse_variable(content, content_at, content_at.0)?
+                        parse_variable(self.template, content, content_at, content_at.0)?
                     }
                 }
             }
@@ -367,7 +367,7 @@ impl<'t> Parser<'t> {
                 UrlTokenType::TranslatedText => TagElement::TranslatedText(Text::new(content_at)),
                 UrlTokenType::Variable => {
                     let content = &self.template[content_at.0..content_at.0 + content_at.1];
-                    self.parse_variable(content, content_at, content_at.0)?
+                    parse_variable(self.template, content, content_at, content_at.0)?
                 }
             };
             match token.kwarg {
