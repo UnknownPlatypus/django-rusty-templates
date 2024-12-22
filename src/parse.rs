@@ -20,7 +20,7 @@ pub enum TagElement {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Url {
-    view_name: Argument,
+    view_name: TagElement,
     args: Vec<TagElement>,
     kwargs: Vec<(String, TagElement)>,
 }
@@ -77,7 +77,7 @@ pub enum FilterType {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Filter {
     at: (usize, usize),
-    pub left: TokenTree,
+    pub left: TagElement,
     pub filter: FilterType,
 }
 
@@ -85,7 +85,7 @@ impl Filter {
     pub fn new(
         template: &str,
         at: (usize, usize),
-        left: TokenTree,
+        left: TagElement,
         right: Option<Argument>,
     ) -> Result<Self, ParseError> {
         let (start, len) = at;
@@ -115,6 +115,17 @@ pub enum TokenTree {
     Tag(Tag),
     Variable(Variable),
     Filter(Box<Filter>),
+}
+
+impl From<TagElement> for TokenTree {
+    fn from(tag_element: TagElement) -> Self {
+        match tag_element {
+            TagElement::Text(text) => Self::Text(text),
+            TagElement::TranslatedText(text) => Self::TranslatedText(text),
+            TagElement::Variable(variable) => Self::Variable(variable),
+            TagElement::Filter(filter) => Self::Filter(filter),
+        }
+    }
 }
 
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
@@ -184,9 +195,13 @@ impl<'t> Parser<'t> {
             nodes.push(match token.token_type {
                 TokenType::Text => TokenTree::Text(Text::new(token.at)),
                 TokenType::Comment => continue,
-                TokenType::Variable => {
-                    self.parse_variable(token.content(self.template), token.at)?
-                }
+                TokenType::Variable => self
+                    .parse_variable(
+                        token.content(self.template),
+                        token.at,
+                        token.at.0 + START_TAG_LEN,
+                    )?
+                    .into(),
                 TokenType::Tag => self.parse_tag(token.content(self.template), token.at)?,
             })
         }
@@ -197,12 +212,13 @@ impl<'t> Parser<'t> {
         &self,
         variable: &'t str,
         at: (usize, usize),
-    ) -> Result<TokenTree, ParseError> {
-        let (variable_token, filter_lexer) = match lex_variable(variable, at.0 + START_TAG_LEN)? {
+        start: usize,
+    ) -> Result<TagElement, ParseError> {
+        let (variable_token, filter_lexer) = match lex_variable(variable, start)? {
             None => return Err(ParseError::EmptyVariable { at: at.into() }),
             Some(t) => t,
         };
-        let mut var = TokenTree::Variable(Variable::new(variable_token.at));
+        let mut var = TagElement::Variable(Variable::new(variable_token.at));
         for filter_token in filter_lexer {
             let filter_token = filter_token?;
             let argument = match filter_token.argument {
@@ -210,7 +226,7 @@ impl<'t> Parser<'t> {
                 Some(ref a) => Some(a.parse(self.template)?),
             };
             let filter = Filter::new(self.template, filter_token.at, var, argument)?;
-            var = TokenTree::Filter(Box::new(filter));
+            var = TagElement::Filter(Box::new(filter));
         }
         Ok(var)
     }
@@ -237,18 +253,14 @@ impl<'t> Parser<'t> {
                     UrlTokenType::Numeric => {
                         return Err(ParseError::NumericUrlName { at: at.into() })
                     }
-                    UrlTokenType::Text => Argument {
-                        argument_type: ArgumentType::Text(Text::new(content_at)),
-                        at,
-                    },
-                    UrlTokenType::TranslatedText => Argument {
-                        argument_type: ArgumentType::TranslatedText(Text::new(content_at)),
-                        at,
-                    },
-                    UrlTokenType::Variable => Argument {
-                        argument_type: ArgumentType::Variable(Variable::new(content_at)),
-                        at,
-                    },
+                    UrlTokenType::Text => TagElement::Text(Text::new(content_at)),
+                    UrlTokenType::TranslatedText => {
+                        TagElement::TranslatedText(Text::new(content_at))
+                    }
+                    UrlTokenType::Variable => {
+                        let content = &self.template[content_at.0..content_at.0 + content_at.1];
+                        self.parse_variable(content, content_at, content_at.0)?
+                    }
                 }
             }
             None => return Err(ParseError::UrlTagNoArguments { at: at.into() }),
@@ -373,7 +385,7 @@ mod tests {
         let foo = Variable { at: (3, 3) };
         let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
-            left: TokenTree::Variable(foo),
+            left: TagElement::Variable(foo),
             filter: FilterType::External(None),
         }));
         assert_eq!(nodes, vec![bar]);
@@ -386,8 +398,8 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
-        let bar = TokenTree::Filter(Box::new(Filter {
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
+        let bar = TagElement::Filter(Box::new(Filter {
             at: (7, 3),
             left: foo,
             filter: FilterType::External(None),
@@ -406,7 +418,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
         let baz = Variable { at: (11, 3) };
         let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
@@ -426,7 +438,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
         let baz = Text::new((12, 3));
         let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
@@ -446,7 +458,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
         let baz = Text::new((14, 3));
         let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 3),
@@ -466,7 +478,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
         let num = Argument {
             at: (11, 5),
             argument_type: ArgumentType::Float(5.2e3),
@@ -485,7 +497,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
         let num = Argument {
             at: (11, 2),
             argument_type: ArgumentType::Int(99.into()),
@@ -504,7 +516,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
         let num = Argument {
             at: (11, 17),
             argument_type: ArgumentType::Int("99999999999999999".parse::<BigInt>().unwrap()),
@@ -531,7 +543,7 @@ mod tests {
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
-        let foo = TokenTree::Variable(Variable { at: (3, 3) });
+        let foo = TagElement::Variable(Variable { at: (3, 3) });
         let baz = Variable { at: (15, 3) };
         let bar = TokenTree::Filter(Box::new(Filter {
             at: (7, 7),
@@ -598,10 +610,7 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
-            view_name: Argument {
-                at: (7, 15),
-                argument_type: ArgumentType::Text(Text { at: (8, 13) }),
-            },
+            view_name: TagElement::Text(Text { at: (8, 13) }),
             args: vec![],
             kwargs: vec![],
         }));
@@ -616,10 +625,7 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
-            view_name: Argument {
-                at: (7, 18),
-                argument_type: ArgumentType::TranslatedText(Text { at: (10, 13) }),
-            },
+            view_name: TagElement::TranslatedText(Text { at: (10, 13) }),
             args: vec![],
             kwargs: vec![],
         }));
@@ -634,10 +640,32 @@ mod tests {
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
-            view_name: Argument {
-                at: (7, 14),
-                argument_type: ArgumentType::Variable(Variable { at: (7, 14) }),
-            },
+            view_name: TagElement::Variable(Variable { at: (7, 14) }),
+            args: vec![],
+            kwargs: vec![],
+        }));
+
+        assert_eq!(nodes, vec![url]);
+    }
+
+    #[test]
+    fn test_parse_url_tag_view_name_filter() {
+        let template = "{% url some_view_name|default:'home' %}";
+        let mut parser = Parser::new(template);
+        let nodes = parser.parse().unwrap();
+
+        let some_view_name = TagElement::Variable(Variable { at: (7, 14) });
+        let home = Text { at: (31, 4) };
+        let default = Box::new(Filter {
+            at: (22, 7),
+            left: some_view_name,
+            filter: FilterType::Default(Argument {
+                at: (30, 6),
+                argument_type: ArgumentType::Text(home),
+            }),
+        });
+        let url = TokenTree::Tag(Tag::Url(Url {
+            view_name: TagElement::Filter(default),
             args: vec![],
             kwargs: vec![],
         }));

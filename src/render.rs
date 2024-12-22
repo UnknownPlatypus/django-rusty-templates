@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use num_bigint::BigInt;
 use pyo3::prelude::*;
 
-use crate::parse::{Argument, ArgumentType, Filter, FilterType, TokenTree, Variable};
+use crate::parse::{Argument, ArgumentType, Filter, FilterType, TagElement, TokenTree, Variable};
 
 pub enum Content<'t, 'py> {
     Py(Bound<'py, PyAny>),
@@ -105,6 +105,24 @@ impl Render for Filter {
     }
 }
 
+impl Render for TagElement {
+    fn resolve<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        template: &'t str,
+        context: &HashMap<String, Bound<'py, PyAny>>,
+    ) -> PyResult<Option<Content<'t, 'py>>> {
+        match self {
+            Self::Text(text) => {
+                Ok(Some(Content::String(Cow::Borrowed(text.content(template)))))
+            }
+            Self::TranslatedText(_text) => todo!(),
+            Self::Variable(variable) => variable.resolve(py, template, context),
+            Self::Filter(filter) => filter.resolve(py, template, context),
+        }
+    }
+}
+
 impl Render for TokenTree {
     fn resolve<'t, 'py>(
         &self,
@@ -113,13 +131,13 @@ impl Render for TokenTree {
         context: &HashMap<String, Bound<'py, PyAny>>,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
-            TokenTree::Text(text) => {
+            Self::Text(text) => {
                 Ok(Some(Content::String(Cow::Borrowed(text.content(template)))))
             }
-            TokenTree::TranslatedText(_text) => todo!(),
-            TokenTree::Tag(_tag) => todo!(),
-            TokenTree::Variable(variable) => variable.resolve(py, template, context),
-            TokenTree::Filter(filter) => filter.resolve(py, template, context),
+            Self::TranslatedText(_text) => todo!(),
+            Self::Tag(_tag) => todo!(),
+            Self::Variable(variable) => variable.resolve(py, template, context),
+            Self::Filter(filter) => filter.resolve(py, template, context),
         }
     }
 }
@@ -238,7 +256,7 @@ user = User('Lily')
             let filter = Filter::new(
                 template,
                 (8, 7),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 Some(Argument { at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
             ).unwrap();
 
@@ -258,7 +276,7 @@ user = User('Lily')
             let filter = Filter::new(
                 template,
                 (8, 7),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 Some(Argument{ at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
             ).unwrap();
 
@@ -278,7 +296,7 @@ user = User('Lily')
             let filter = Filter::new(
                 template,
                 (9, 7),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 Some(Argument { at: (17, 2), argument_type: ArgumentType::Int(12.into())}),
             ).unwrap();
 
@@ -298,7 +316,7 @@ user = User('Lily')
             let filter = Filter::new(
                 template,
                 (9, 7),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 Some(Argument{ at: (17, 3), argument_type: ArgumentType::Float(3.5)}),
             ).unwrap();
 
@@ -319,7 +337,7 @@ user = User('Lily')
             let filter = Filter::new(
                 template,
                 (8, 7),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 Some(Argument{ at: (16, 2), argument_type: ArgumentType::Variable(Variable::new((16, 2)))}),
             ).unwrap();
 
@@ -340,7 +358,7 @@ user = User('Lily')
             let filter = Filter::new(
                 template,
                 (8, 5),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 None,
             ).unwrap();
 
@@ -360,7 +378,7 @@ user = User('Lily')
             let filter = Filter::new(
                 template,
                 (8, 5),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 None,
             ).unwrap();
 
@@ -380,13 +398,13 @@ user = User('Lily')
             let default = Filter::new(
                 template,
                 (8, 7),
-                TokenTree::Variable(variable),
+                TagElement::Variable(variable),
                 Some(Argument { at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
             ).unwrap();
             let lower = Filter::new(
                 template,
                 (25, 5),
-                TokenTree::Filter(Box::new(default)),
+                TagElement::Filter(Box::new(default)),
                 None,
             ).unwrap();
 
