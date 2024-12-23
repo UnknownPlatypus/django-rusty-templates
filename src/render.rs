@@ -8,6 +8,7 @@ use pyo3::types::{PyDict, PyList};
 
 use crate::parse::{Argument, ArgumentType, Filter, FilterType, Tag, TagElement, Text, TokenTree, Url, Variable};
 use crate::template::django_rusty_templates::NoReverseMatch;
+use crate::utils::PyResultMethods;
 
 pub struct Context {
     pub request: Option<Py<PyAny>>,
@@ -118,15 +119,12 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         None => return Ok(none),
         Some(request) => request,
     };
-    match request.getattr(py, "current_app") {
-        Ok(current_app) => return Ok(current_app),
-        Err(e) if e.is_instance_of::<PyAttributeError>(py) => {}
-        Err(e) => return Err(e),
-    };
-    let resolver_match = match request.getattr(py, "resolver_match") {
+    if let Ok(current_app) = request.getattr(py, "current_app").ok_or_isinstance_of::<PyAttributeError>(py)? {
+         return Ok(current_app);
+    }
+    let resolver_match = match request.getattr(py, "resolver_match").ok_or_isinstance_of::<PyAttributeError>(py)? {
         Ok(resolver_match) => resolver_match,
-        Err(e) if e.is_instance_of::<PyAttributeError>(py) => return Ok(none),
-        Err(e) => return Err(e),
+        Err(_) => return Ok(none),
     };
     resolver_match.getattr(py, "namespace")
 }
@@ -162,13 +160,12 @@ impl Render for Url {
         match &self.variable {
             None => Ok(Some(Content::Py(url?))),
             Some(variable) => {
-                match url {
+                match url.ok_or_isinstance_of::<NoReverseMatch>(py)? {
                     Ok(url) => {
                         context.context.insert(variable.clone(), url.unbind());
                         Ok(None)
                     }
-                    Err(e) if e.is_instance_of::<NoReverseMatch>(py) => Ok(None),
-                    Err(e) => Err(e),
+                    Err(_) => Ok(None),
                 }
             }
         }
