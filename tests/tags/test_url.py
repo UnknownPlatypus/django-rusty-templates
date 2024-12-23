@@ -40,6 +40,16 @@ def test_render_url_variable_missing():
     assert rust_error.value.args[0] == msg
 
 
+def test_render_url_view_missing_as():
+    template = "{% url 'missing' as missing %}{{ missing }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    expected = ""
+    assert django_template.render({}) == expected
+    assert rust_template.render({}) == expected
+
+
 def test_render_url_arg():
     template = "{% url 'bio' 'lily' %}"
     django_template = engines["django"].from_string(template)

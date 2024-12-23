@@ -7,6 +7,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 use crate::parse::{Argument, ArgumentType, Filter, FilterType, Tag, TagElement, Text, TokenTree, Url, Variable};
+use crate::template::django_rusty_templates::NoReverseMatch;
 
 pub struct Context {
     pub request: Option<Py<PyAny>>,
@@ -140,19 +141,25 @@ impl Render for Url {
             for arg in &self.args {
                 py_args.append(arg.resolve(py, template, context)?)?;
             }
-            reverse.call1((view_name, py.None(), py_args.to_tuple(), py.None(), current_app))?
+            reverse.call1((view_name, py.None(), py_args.to_tuple(), py.None(), current_app))
         } else {
             let kwargs = PyDict::new(py);
             for (key, value) in &self.kwargs {
                 kwargs.set_item(key, value.resolve(py, template, context)?)?;
             }
-            reverse.call1((view_name, py.None(), py.None(), kwargs, current_app))?
+            reverse.call1((view_name, py.None(), py.None(), kwargs, current_app))
         };
         match &self.variable {
-            None => Ok(Some(Content::Py(url))),
+            None => Ok(Some(Content::Py(url?))),
             Some(variable) => {
-                context.context.insert(variable.clone(), url.unbind());
-                Ok(None)
+                match url {
+                    Ok(url) => {
+                        context.context.insert(variable.clone(), url.unbind());
+                        Ok(None)
+                    }
+                    Err(e) if e.is_instance_of::<NoReverseMatch>(py) => Ok(None),
+                    Err(e) => Err(e),
+                }
             }
         }
     }

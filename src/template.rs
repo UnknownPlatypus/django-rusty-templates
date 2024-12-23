@@ -17,6 +17,7 @@ pub mod django_rusty_templates {
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
     import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
+    import_exception_bound!(django.urls, NoReverseMatch);
 
     impl TemplateSyntaxError {
         fn with_source_code(
