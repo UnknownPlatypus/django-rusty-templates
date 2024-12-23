@@ -2,10 +2,16 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use num_bigint::BigInt;
+use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 use crate::parse::{Argument, ArgumentType, Filter, FilterType, Tag, TagElement, Text, TokenTree, Url, Variable};
+
+pub struct Context {
+    pub request: Option<Py<PyAny>>,
+    pub context: HashMap<String, Py<PyAny>>,
+}
 
 #[derive(Debug, IntoPyObject)]
 pub enum Content<'t, 'py> {
@@ -32,14 +38,14 @@ pub trait Render {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>>;
 
-    fn render<'t, 'py>(
+    fn render<'t>(
         &self,
-        py: Python<'py>,
+        py: Python<'_>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Cow<'t, str>> {
         match self.resolve(py, template, context)? {
             Some(content) => content.render(),
@@ -51,14 +57,14 @@ pub trait Render {
 impl Render for Variable {
     fn resolve<'t, 'py>(
         &self,
-        _py: Python<'py>,
+        py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         let mut parts = self.parts(template);
         let first = parts.next().expect("Variable names cannot be empty");
-        let mut variable = match context.get(first) {
-            Some(variable) => variable.clone(),
+        let mut variable = match context.context.get(first) {
+            Some(variable) => variable.bind(py).clone(),
             None => return Ok(None),
         };
         for part in parts {
@@ -88,7 +94,7 @@ impl Render for Filter {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         let left = self.left.resolve(py, template, context)?;
         Ok(match &self.filter {
@@ -110,7 +116,7 @@ impl Render for Url {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         let view_name = match self.view_name.resolve(py, template, context)? {
             Some(view_name) => view_name,
@@ -118,23 +124,34 @@ impl Render for Url {
         };
         let urls = py.import("django.urls")?;
         let reverse = urls.getattr("reverse")?;
+
+        let current_app = match &context.request {
+            Some(request) => {
+                match request.getattr(py, "current_app") {
+                    Ok(current_app) => current_app,
+                    Err(e) if e.is_instance_of::<PyAttributeError>(py) => py.None(),
+                    Err(e) => return Err(e),
+                }
+            }
+            None => py.None()
+        };
         let url = if self.kwargs.is_empty() {
             let py_args = PyList::empty(py);
             for arg in &self.args {
                 py_args.append(arg.resolve(py, template, context)?)?;
             }
-            reverse.call1((view_name, py.None(), py_args.to_tuple()))?
+            reverse.call1((view_name, py.None(), py_args.to_tuple(), py.None(), current_app))?
         } else {
             let kwargs = PyDict::new(py);
             for (key, value) in &self.kwargs {
                 kwargs.set_item(key, value.resolve(py, template, context)?)?;
             }
-            reverse.call1((view_name, py.None(), py.None(), kwargs))?
+            reverse.call1((view_name, py.None(), py.None(), kwargs, current_app))?
         };
         match &self.variable {
             None => Ok(Some(Content::Py(url))),
             Some(variable) => {
-                context.insert(variable.clone(), url);
+                context.context.insert(variable.clone(), url.unbind());
                 Ok(None)
             }
         }
@@ -146,7 +163,7 @@ impl Render for Tag {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
             Self::Url(url) => url.resolve(py, template, context)
@@ -159,7 +176,7 @@ impl Render for Text {
         &self,
         _py: Python<'py>,
         template: &'t str,
-        _context: &mut HashMap<String, Bound<'py, PyAny>>,
+        _context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         Ok(Some(Content::String(Cow::Borrowed(self.content(template)))))
     }
@@ -170,7 +187,7 @@ impl Render for TagElement {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
@@ -188,7 +205,7 @@ impl Render for TokenTree {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
@@ -205,7 +222,7 @@ impl Render for Argument {
         &self,
         py: Python<'py>,
         template: &'t str,
-        context: &mut HashMap<String, Bound<'py, PyAny>>,
+        context: &mut Context,
     ) -> PyResult<Option<Content<'t, 'py>>> {
         Ok(Some(match &self.argument_type {
             ArgumentType::Text(text) => return text.resolve(py, template, context),
@@ -231,7 +248,8 @@ mod tests {
 
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
-            let mut context = HashMap::from([("name".to_string(), name)]);
+            let context = HashMap::from([("name".to_string(), name.unbind())]);
+            let mut context = Context { context, request: None };
             let template = "{{ name }}";
             let variable = Variable::new((3, 4));
 
@@ -248,7 +266,8 @@ mod tests {
             let data = PyDict::new(py);
             let name = PyString::new(py, "Lily");
             data.set_item("name", name).unwrap();
-            let mut context = HashMap::from([("data".to_string(), data.into_any())]);
+            let context = HashMap::from([("data".to_string(), data.into_any().unbind())]);
+            let mut context = Context { context, request: None };
             let template = "{{ data.name }}";
             let variable = Variable::new((3, 9));
 
@@ -264,7 +283,8 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily");
             let names = PyList::new(py, [name]).unwrap();
-            let mut context = HashMap::from([("names".to_string(), names.into_any())]);
+            let context = HashMap::from([("names".to_string(), names.into_any().unbind())]);
+            let mut context = Context { context, request: None };
             let template = "{{ names.0 }}";
             let variable = Variable::new((3, 7));
 
@@ -291,7 +311,8 @@ user = User('Lily')
                 Some(&locals),
             ).unwrap();
 
-            let mut context = locals.extract().unwrap();
+            let context = locals.extract().unwrap();
+            let mut context = Context { context, request: None };
             let template = "{{ user.name }}";
             let variable = Variable::new((3, 9));
 
@@ -306,7 +327,8 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
-            let mut context = HashMap::from([("name".to_string(), name)]);
+            let context = HashMap::from([("name".to_string(), name.unbind())]);
+            let mut context = Context { context, request: None };
             let template = "{{ name|default:'Bryony' }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -326,7 +348,8 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let mut context = HashMap::new();
+            let context = HashMap::new();
+            let mut context = Context { context, request: None };
             let template = "{{ name|default:'Bryony' }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -346,7 +369,8 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let mut context = HashMap::new();
+            let context = HashMap::new();
+            let mut context = Context { context, request: None };
             let template = "{{ count|default:12}}";
             let variable = Variable::new((3, 5));
             let filter = Filter::new(
@@ -366,7 +390,8 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let mut context = HashMap::new();
+            let context = HashMap::new();
+            let mut context = Context { context, request: None };
             let template = "{{ count|default:3.5}}";
             let variable = Variable::new((3, 5));
             let filter = Filter::new(
@@ -387,7 +412,8 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let me = PyString::new(py, "Lily").into_any();
-            let mut context = HashMap::from([("me".to_string(), me)]);
+            let context = HashMap::from([("me".to_string(), me.unbind())]);
+            let mut context = Context { context, request: None };
             let template = "{{ name|default:me}}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -408,7 +434,8 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
-            let mut context = HashMap::from([("name".to_string(), name)]);
+            let context = HashMap::from([("name".to_string(), name.unbind())]);
+            let mut context = Context { context, request: None };
             let template = "{{ name|lower }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -428,7 +455,8 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let mut context = HashMap::new();
+            let context = HashMap::new();
+            let mut context = Context { context, request: None };
             let template = "{{ name|lower }}";
             let variable = Variable::new((3, 4));
             let filter = Filter::new(
@@ -448,7 +476,8 @@ user = User('Lily')
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let mut context = HashMap::new();
+            let context = HashMap::new();
+            let mut context = Context { context, request: None };
             let template = "{{ name|default:'Bryony'|lower }}";
             let variable = Variable::new((3, 4));
             let default = Filter::new(

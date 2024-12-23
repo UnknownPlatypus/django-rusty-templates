@@ -1,5 +1,6 @@
 import pytest
 from django.template import engines
+from django.test import RequestFactory
 from django.urls import NoReverseMatch
 
 
@@ -77,3 +78,29 @@ def test_render_url_kwarg_as_variable():
     expected = "https://example.com/bio/lily/"
     assert django_template.render({}) == expected
     assert rust_template.render({}) == expected
+
+
+def test_render_url_current_app():
+    template = "{% url 'users:user' 'lily' %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    request = RequestFactory()
+    request.current_app = "members"
+
+    expected = "/members/lily/"
+    assert django_template.render({}, request) == expected
+    assert rust_template.render({}, request) == expected
+
+
+def test_render_url_current_app_kwargs():
+    template = "{% url 'users:user' username='lily' %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    request = RequestFactory()
+    request.current_app = "members"
+
+    expected = "/members/lily/"
+    assert django_template.render({}, request) == expected
+    assert rust_template.render({}, request) == expected
