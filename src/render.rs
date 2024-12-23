@@ -128,11 +128,7 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         Err(e) if e.is_instance_of::<PyAttributeError>(py) => return Ok(none),
         Err(e) => return Err(e),
     };
-    match resolver_match.getattr(py, "namespace") {
-        Ok(namespace) => Ok(namespace),
-        Err(e) if e.is_instance_of::<PyAttributeError>(py) => Ok(none),
-        Err(e) => Err(e),
-    }
+    resolver_match.getattr(py, "namespace")
 }
 
 impl Render for Url {
