@@ -122,11 +122,10 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
     if let Ok(current_app) = request.getattr(py, "current_app").ok_or_isinstance_of::<PyAttributeError>(py)? {
          return Ok(current_app);
     }
-    let resolver_match = match request.getattr(py, "resolver_match").ok_or_isinstance_of::<PyAttributeError>(py)? {
-        Ok(resolver_match) => resolver_match,
-        Err(_) => return Ok(none),
-    };
-    resolver_match.getattr(py, "namespace")
+    match request.getattr(py, "resolver_match").ok_or_isinstance_of::<PyAttributeError>(py)? {
+        Ok(resolver_match) => resolver_match.getattr(py, "namespace"),
+        Err(_) => Ok(none),
+    }
 }
 
 impl Render for Url {
