@@ -1,7 +1,7 @@
 import pytest
 from django.template import engines
 from django.test import RequestFactory
-from django.urls import NoReverseMatch
+from django.urls import resolve, NoReverseMatch
 
 
 def test_render_url():
@@ -122,6 +122,19 @@ def test_render_url_current_app_kwargs():
 
     request = RequestFactory()
     request.current_app = "members"
+
+    expected = "/members/lily/"
+    assert django_template.render({}, request) == expected
+    assert rust_template.render({}, request) == expected
+
+
+def test_render_url_current_app_resolver_match():
+    template = "{% url 'users:user' username='lily' %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    request = RequestFactory()
+    request.resolver_match = resolve("/members/bryony/")
 
     expected = "/members/lily/"
     assert django_template.render({}, request) == expected

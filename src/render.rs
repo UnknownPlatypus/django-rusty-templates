@@ -112,6 +112,29 @@ impl Render for Filter {
     }
 }
 
+fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
+    let none = py.None();
+    let request = match request {
+        None => return Ok(none),
+        Some(request) => request,
+    };
+    match request.getattr(py, "current_app") {
+        Ok(current_app) => return Ok(current_app),
+        Err(e) if e.is_instance_of::<PyAttributeError>(py) => {}
+        Err(e) => return Err(e),
+    };
+    let resolver_match = match request.getattr(py, "resolver_match") {
+        Ok(resolver_match) => resolver_match,
+        Err(e) if e.is_instance_of::<PyAttributeError>(py) => return Ok(none),
+        Err(e) => return Err(e),
+    };
+    match resolver_match.getattr(py, "namespace") {
+        Ok(namespace) => Ok(namespace),
+        Err(e) if e.is_instance_of::<PyAttributeError>(py) => Ok(none),
+        Err(e) => Err(e),
+    }
+}
+
 impl Render for Url {
     fn resolve<'t, 'py>(
         &self,
@@ -126,16 +149,7 @@ impl Render for Url {
         let urls = py.import("django.urls")?;
         let reverse = urls.getattr("reverse")?;
 
-        let current_app = match &context.request {
-            Some(request) => {
-                match request.getattr(py, "current_app") {
-                    Ok(current_app) => current_app,
-                    Err(e) if e.is_instance_of::<PyAttributeError>(py) => py.None(),
-                    Err(e) => return Err(e),
-                }
-            }
-            None => py.None()
-        };
+        let current_app = current_app(py, &context.request)?;
         let url = if self.kwargs.is_empty() {
             let py_args = PyList::empty(py);
             for arg in &self.args {
