@@ -9,3 +9,5 @@ TEMPLATES = [
         "NAME": "rusty",
     },
 ]
+
+ROOT_URLCONF = "tests.urls"

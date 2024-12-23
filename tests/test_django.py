@@ -14,7 +14,9 @@ def render(template, context, *, using):
 
 def test_render_template():
     context = {"user": "Lily"}
-    assert render("basic.txt", context, using="rusty") == render("basic.txt", context, using="django")
+    expected = "Hello Lily!\n"
+    assert render("basic.txt", context, using="rusty") == expected
+    assert render("basic.txt", context, using="django") == expected
 
 
 def test_parse_error():
@@ -29,8 +31,8 @@ def test_parse_error():
    ·                            ──┬──
    ·                              ╰── here
    ╰────
-""" % template_dir
-    assert str(excinfo.value) == expected
+"""
+    assert str(excinfo.value) == expected % template_dir
 
 
 def test_parse_error_from_string():

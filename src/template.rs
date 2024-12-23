@@ -12,11 +12,12 @@ pub mod django_rusty_templates {
 
     use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader};
     use crate::parse::{Parser, TokenTree};
-    use crate::render::Render;
+    use crate::render::{Context, Render};
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
     import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
+    import_exception_bound!(django.urls, NoReverseMatch);
 
     impl TemplateSyntaxError {
         fn with_source_code(
@@ -177,10 +178,10 @@ pub mod django_rusty_templates {
             })
         }
 
-        fn _render<'py>(
+        fn _render(
             &self,
-            py: Python<'py>,
-            context: &HashMap<String, Bound<'py, PyAny>>,
+            py: Python<'_>,
+            context: &mut Context,
         ) -> PyResult<String> {
             let mut rendered = String::with_capacity(self.template.len());
             for node in &self.nodes {
@@ -208,10 +209,9 @@ pub mod django_rusty_templates {
                 Some(context) => context.extract()?,
                 None => HashMap::new(),
             };
-            if let Some(_request) = request {
-                todo!()
-            }
-            self._render(py, &context)
+            let request = request.map(|request| request.unbind());
+            let mut context = Context {request, context};
+            self._render(py, &mut context)
         }
     }
 }
