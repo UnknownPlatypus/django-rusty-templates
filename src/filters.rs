@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Render, TemplateResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
@@ -191,7 +193,11 @@ impl ResolveFilter for LowerFilter {
         context: &mut Context,
     ) -> TemplateResult<'t, 'py> {
         let content = match variable {
-            Some(content) => content.render(context)?.to_lowercase().into_content(),
+            Some(content) => Some(
+                content
+                    .resolve_string(context)?
+                    .map_content(|content| Cow::Owned(content.to_lowercase())),
+            ),
             None => "".into_content(),
         };
         Ok(content)
