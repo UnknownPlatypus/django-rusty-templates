@@ -29,6 +29,21 @@ pub mod django_rusty_templates {
         }
     }
 
+    pub struct EngineData {
+        autoescape: bool,
+        libraries: HashMap<String, HashMap<String, String>>,
+    }
+
+    impl EngineData {
+        #[cfg(test)]
+        pub fn empty() -> Self {
+            Self {
+                autoescape: false,
+                libraries: HashMap::new(),
+            }
+        }
+    }
+
     #[pyclass]
     pub struct Engine {
         dirs: Vec<String>,
@@ -37,10 +52,9 @@ pub mod django_rusty_templates {
         debug: bool,
         string_if_invalid: String,
         encoding: &'static Encoding,
-        libraries: HashMap<String, Py<PyAny>>,
         builtins: Vec<String>,
-        autoescape: bool,
         template_loaders: Vec<Loader>,
+        data: EngineData,
     }
 
     impl Engine {
@@ -106,6 +120,7 @@ pub mod django_rusty_templates {
             };
             let libraries = HashMap::new();
             let builtins = vec![];
+            let data = EngineData { autoescape, libraries};
             Ok(Self {
                 dirs,
                 app_dirs,
@@ -114,16 +129,15 @@ pub mod django_rusty_templates {
                 template_loaders,
                 string_if_invalid,
                 encoding,
-                libraries,
                 builtins,
-                autoescape,
+                data,
             })
         }
 
         fn get_template(&mut self, py: Python<'_>, template_name: String) -> PyResult<Template> {
             let mut tried = Vec::new();
             for loader in &mut self.template_loaders {
-                match loader.get_template(py, &template_name, self.autoescape) {
+                match loader.get_template(py, &template_name, &self.data) {
                     Ok(template) => return template,
                     Err(e) => tried.push(e.tried),
                 }
@@ -133,7 +147,7 @@ pub mod django_rusty_templates {
 
         #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
         pub fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
-            Template::new_from_string(template_code.extract()?, self.autoescape)
+            Template::new_from_string(template_code.extract()?, &self.data)
         }
     }
 
@@ -147,7 +161,7 @@ pub mod django_rusty_templates {
     }
 
     impl Template {
-        pub fn new(template: &str, filename: PathBuf, autoescape: bool) -> PyResult<Self> {
+        pub fn new(template: &str, filename: PathBuf, engine_data: &EngineData) -> PyResult<Self> {
             let mut parser = Parser::new(template);
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
@@ -161,11 +175,11 @@ pub mod django_rusty_templates {
                 template: template.to_string(),
                 filename: Some(filename),
                 nodes,
-                autoescape,
+                autoescape: engine_data.autoescape,
             })
         }
 
-        pub fn new_from_string(template: String, autoescape: bool) -> PyResult<Self> {
+        pub fn new_from_string(template: String, engine_data: &EngineData) -> PyResult<Self> {
             let mut parser = Parser::new(&template);
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
@@ -177,7 +191,7 @@ pub mod django_rusty_templates {
                 template,
                 filename: None,
                 nodes,
-                autoescape,
+                autoescape: engine_data.autoescape,
             })
         }
 
@@ -196,12 +210,6 @@ pub mod django_rusty_templates {
 
     #[pymethods]
     impl Template {
-        #[staticmethod]
-        #[pyo3(signature = (template, autoescape=true))]
-        pub fn from_string(template: Bound<'_, PyString>, autoescape: bool) -> PyResult<Self> {
-            Self::new_from_string(template.extract()?, autoescape)
-        }
-
         #[pyo3(signature = (context=None, request=None))]
         pub fn render(
             &self,
@@ -247,9 +255,10 @@ mod tests {
             filename.display(),
         );
 
+        let engine = EngineData::empty();
         let template_string = std::fs::read_to_string(&filename).unwrap();
         let error = temp_env::with_var("NO_COLOR", Some("1"), || {
-            Template::new(&template_string, filename, true).unwrap_err()
+            Template::new(&template_string, filename, &engine).unwrap_err()
         });
 
         let error_string = format!("{error}");
@@ -260,9 +269,10 @@ mod tests {
     fn test_syntax_error_from_string() {
         pyo3::prepare_freethreaded_python();
 
+        let engine = EngineData::empty();
         let template_string = "{{ foo.bar|title'foo' }}".to_string();
         let error = temp_env::with_var("NO_COLOR", Some("1"), || {
-            Template::new_from_string(template_string, true).unwrap_err()
+            Template::new_from_string(template_string, &engine).unwrap_err()
         });
 
         let expected = "TemplateSyntaxError: \n  × Could not parse the remainder
@@ -282,8 +292,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new(py, "");
-            let template = Template::from_string(template_string, true).unwrap();
+            let engine = EngineData::empty();
+            let template_string = "".to_string();
+            let template = Template::new_from_string(template_string, &engine).unwrap();
             let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "");
@@ -295,8 +306,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new(py, "Hello {{ user }}!");
-            let template = Template::from_string(template_string, true).unwrap();
+            let engine = EngineData::empty();
+            let template_string = "Hello {{ user }}!".to_string();
+            let template = Template::new_from_string(template_string, &engine).unwrap();
             let context = PyDict::new(py);
             context.set_item("user", "Lily").unwrap();
 
@@ -312,8 +324,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new(py, "Hello {{ user }}!");
-            let template = Template::from_string(template_string, true).unwrap();
+            let engine = EngineData::empty();
+            let template_string = "Hello {{ user }}!".to_string();
+            let template = Template::new_from_string(template_string, &engine).unwrap();
             let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
@@ -325,8 +338,9 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            let template_string = PyString::new(py, "Hello {{ user.profile.names.0 }}!");
-            let template = Template::from_string(template_string, true).unwrap();
+            let engine = EngineData::empty();
+            let template_string = "Hello {{ user.profile.names.0 }}!".to_string();
+            let template = Template::new_from_string(template_string, &engine).unwrap();
             let locals = PyDict::new(py);
             py.run(
                 cr#"
