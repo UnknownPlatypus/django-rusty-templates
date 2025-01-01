@@ -25,6 +25,7 @@ def test_parse_error():
 
     template_dir = Path("tests/templates").absolute()
     expected = """\
+
   × Empty variable tag
    ╭─[%s/parse_error.txt:1:28]
  1 │ This is an empty variable: {{ }}
@@ -46,6 +47,7 @@ This is an invalid filter name: {{ variable|'invalid'|title }}
         rusty_engine.from_string(template)
 
     expected = """\
+
   × Expected a valid filter name
    ╭─[2:45]
  1 │\x20
