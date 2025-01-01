@@ -123,7 +123,7 @@ pub mod django_rusty_templates {
         fn get_template(&mut self, py: Python<'_>, template_name: String) -> PyResult<Template> {
             let mut tried = Vec::new();
             for loader in &mut self.template_loaders {
-                match loader.get_template(py, &template_name) {
+                match loader.get_template(py, &template_name, self.autoescape) {
                     Ok(template) => return template,
                     Err(e) => tried.push(e.tried),
                 }
@@ -133,7 +133,7 @@ pub mod django_rusty_templates {
 
         #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
         pub fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
-            Template::new_from_string(template_code.extract()?)
+            Template::new_from_string(template_code.extract()?, self.autoescape)
         }
     }
 
@@ -143,10 +143,11 @@ pub mod django_rusty_templates {
         pub filename: Option<PathBuf>,
         pub template: String,
         pub nodes: Vec<TokenTree>,
+        pub autoescape: bool,
     }
 
     impl Template {
-        pub fn new(template: &str, filename: PathBuf) -> PyResult<Self> {
+        pub fn new(template: &str, filename: PathBuf, autoescape: bool) -> PyResult<Self> {
             let mut parser = Parser::new(template);
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
@@ -160,10 +161,11 @@ pub mod django_rusty_templates {
                 template: template.to_string(),
                 filename: Some(filename),
                 nodes,
+                autoescape,
             })
         }
 
-        pub fn new_from_string(template: String) -> PyResult<Self> {
+        pub fn new_from_string(template: String, autoescape: bool) -> PyResult<Self> {
             let mut parser = Parser::new(&template);
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
@@ -175,6 +177,7 @@ pub mod django_rusty_templates {
                 template,
                 filename: None,
                 nodes,
+                autoescape,
             })
         }
 
@@ -194,8 +197,9 @@ pub mod django_rusty_templates {
     #[pymethods]
     impl Template {
         #[staticmethod]
-        pub fn from_string(template: Bound<'_, PyString>) -> PyResult<Self> {
-            Self::new_from_string(template.extract()?)
+        #[pyo3(signature = (template, autoescape=true))]
+        pub fn from_string(template: Bound<'_, PyString>, autoescape: bool) -> PyResult<Self> {
+            Self::new_from_string(template.extract()?, autoescape)
         }
 
         #[pyo3(signature = (context=None, request=None))]
@@ -210,7 +214,7 @@ pub mod django_rusty_templates {
                 None => HashMap::new(),
             };
             let request = request.map(|request| request.unbind());
-            let mut context = Context {request, context};
+            let mut context = Context {request, context, autoescape: self.autoescape};
             self._render(py, &mut context)
         }
     }
@@ -245,7 +249,7 @@ mod tests {
 
         let template_string = std::fs::read_to_string(&filename).unwrap();
         let error = temp_env::with_var("NO_COLOR", Some("1"), || {
-            Template::new(&template_string, filename).unwrap_err()
+            Template::new(&template_string, filename, true).unwrap_err()
         });
 
         let error_string = format!("{error}");
@@ -258,7 +262,7 @@ mod tests {
 
         let template_string = "{{ foo.bar|title'foo' }}".to_string();
         let error = temp_env::with_var("NO_COLOR", Some("1"), || {
-            Template::new_from_string(template_string).unwrap_err()
+            Template::new_from_string(template_string, true).unwrap_err()
         });
 
         let expected = "TemplateSyntaxError: \n  × Could not parse the remainder
@@ -279,7 +283,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let template_string = PyString::new(py, "");
-            let template = Template::from_string(template_string).unwrap();
+            let template = Template::from_string(template_string, true).unwrap();
             let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "");
@@ -292,7 +296,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let template_string = PyString::new(py, "Hello {{ user }}!");
-            let template = Template::from_string(template_string).unwrap();
+            let template = Template::from_string(template_string, true).unwrap();
             let context = PyDict::new(py);
             context.set_item("user", "Lily").unwrap();
 
@@ -309,7 +313,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let template_string = PyString::new(py, "Hello {{ user }}!");
-            let template = Template::from_string(template_string).unwrap();
+            let template = Template::from_string(template_string, true).unwrap();
             let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
@@ -322,7 +326,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let template_string = PyString::new(py, "Hello {{ user.profile.names.0 }}!");
-            let template = Template::from_string(template_string).unwrap();
+            let template = Template::from_string(template_string, true).unwrap();
             let locals = PyDict::new(py);
             py.run(
                 cr#"

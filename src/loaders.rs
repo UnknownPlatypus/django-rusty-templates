@@ -47,6 +47,7 @@ impl FileSystemLoader {
         &self,
         _py: Python<'_>,
         template_name: &str,
+        autoescape: bool,
     ) -> Result<PyResult<Template>, LoaderError> {
         let mut tried = Vec::new();
         for template_dir in &self.dirs {
@@ -71,7 +72,7 @@ impl FileSystemLoader {
                     encoding.name()
                 ))));
             }
-            return Ok(Template::new(&contents, path));
+            return Ok(Template::new(&contents, path, autoescape));
         }
         Err(LoaderError { tried })
     }
@@ -84,6 +85,7 @@ impl AppDirsLoader {
         &self,
         _py: Python<'_>,
         _template_name: &str,
+        _autoescape: bool,
     ) -> Result<PyResult<Template>, LoaderError> {
         todo!()
     }
@@ -106,6 +108,7 @@ impl CachedLoader {
         &mut self,
         py: Python<'_>,
         template_name: &str,
+        autoescape: bool,
     ) -> Result<PyResult<Template>, LoaderError> {
         match self.cache.get(template_name) {
             Some(Ok(template)) => Ok(Ok(template.clone())),
@@ -113,7 +116,7 @@ impl CachedLoader {
             None => {
                 let mut tried = Vec::new();
                 for loader in &mut self.loaders {
-                    match loader.get_template(py, template_name) {
+                    match loader.get_template(py, template_name, autoescape) {
                         Ok(Ok(template)) => {
                             self.cache
                                 .insert(template_name.to_string(), Ok(template.clone()));
@@ -145,9 +148,14 @@ impl LocMemLoader {
         &self,
         _py: Python<'_>,
         template_name: &str,
+        autoescape: bool,
     ) -> Result<PyResult<Template>, LoaderError> {
         if let Some(contents) = self.templates.get(template_name) {
-            Ok(Template::new(contents, PathBuf::from(template_name)))
+            Ok(Template::new(
+                contents,
+                PathBuf::from(template_name),
+                autoescape,
+            ))
         } else {
             Err(LoaderError {
                 tried: vec![(
@@ -166,6 +174,7 @@ impl ExternalLoader {
         &self,
         _py: Python<'_>,
         _template_name: &str,
+        _autoescape: bool,
     ) -> Result<PyResult<Template>, LoaderError> {
         todo!()
     }
@@ -184,13 +193,14 @@ impl Loader {
         &mut self,
         py: Python<'_>,
         template_name: &str,
+        autoescape: bool,
     ) -> Result<PyResult<Template>, LoaderError> {
         match self {
-            Self::FileSystem(loader) => loader.get_template(py, template_name),
-            Self::AppDirs(loader) => loader.get_template(py, template_name),
-            Self::Cached(loader) => loader.get_template(py, template_name),
-            Self::LocMem(loader) => loader.get_template(py, template_name),
-            Self::External(loader) => loader.get_template(py, template_name),
+            Self::FileSystem(loader) => loader.get_template(py, template_name, autoescape),
+            Self::AppDirs(loader) => loader.get_template(py, template_name, autoescape),
+            Self::Cached(loader) => loader.get_template(py, template_name, autoescape),
+            Self::LocMem(loader) => loader.get_template(py, template_name, autoescape),
+            Self::External(loader) => loader.get_template(py, template_name, autoescape),
         }
     }
 }
@@ -208,7 +218,10 @@ mod tests {
         Python::with_gil(|py| {
             let loader =
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
-            let template = loader.get_template(py, "basic.txt").unwrap().unwrap();
+            let template = loader
+                .get_template(py, "basic.txt", false)
+                .unwrap()
+                .unwrap();
 
             let mut expected = std::env::current_dir().unwrap();
             expected.push("tests/templates/basic.txt");
@@ -223,7 +236,7 @@ mod tests {
         Python::with_gil(|py| {
             let loader =
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
-            let error = loader.get_template(py, "missing.txt").unwrap_err();
+            let error = loader.get_template(py, "missing.txt", false).unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
             expected.push("tests/templates/missing.txt");
@@ -246,7 +259,10 @@ mod tests {
         Python::with_gil(|py| {
             let loader =
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
-            let error = loader.get_template(py, "invalid.txt").unwrap().unwrap_err();
+            let error = loader
+                .get_template(py, "invalid.txt", false)
+                .unwrap()
+                .unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
             expected.push("tests/templates/invalid.txt");
@@ -282,7 +298,7 @@ mod tests {
 
             // Load a template via the CachedLoader
             let template = cached_loader
-                .get_template(py, "basic.txt")
+                .get_template(py, "basic.txt", false)
                 .expect("Failed to load template")
                 .expect("Template file could not be read");
 
@@ -298,7 +314,7 @@ mod tests {
 
             // Load the same template again via the CachedLoader
             let template = cached_loader
-                .get_template(py, "basic.txt")
+                .get_template(py, "basic.txt", false)
                 .expect("Failed to load template")
                 .expect("Template file could not be read");
 
@@ -320,7 +336,9 @@ mod tests {
                 FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
 
             let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
-            let error = cached_loader.get_template(py, "missing.txt").unwrap_err();
+            let error = cached_loader
+                .get_template(py, "missing.txt", false)
+                .unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
             expected.push("tests/templates/missing.txt");
@@ -338,7 +356,9 @@ mod tests {
                 &expected_err
             );
 
-            let error = cached_loader.get_template(py, "missing.txt").unwrap_err();
+            let error = cached_loader
+                .get_template(py, "missing.txt", false)
+                .unwrap_err();
             assert_eq!(error, expected_err);
         })
     }
@@ -353,7 +373,7 @@ mod tests {
 
             let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
             let error = cached_loader
-                .get_template(py, "invalid.txt")
+                .get_template(py, "invalid.txt", false)
                 .unwrap()
                 .unwrap_err();
 
@@ -376,7 +396,10 @@ mod tests {
 
             let loader = LocMemLoader::new(templates);
 
-            let template = loader.get_template(py, "index.html").unwrap().unwrap();
+            let template = loader
+                .get_template(py, "index.html", true)
+                .unwrap()
+                .unwrap();
             assert_eq!(template.template, "index".to_string());
             assert_eq!(template.filename.unwrap(), PathBuf::from("index.html"));
         });
@@ -391,7 +414,7 @@ mod tests {
 
             let loader = LocMemLoader::new(templates);
 
-            let error = loader.get_template(py, "index.html").unwrap_err();
+            let error = loader.get_template(py, "index.html", true).unwrap_err();
             assert_eq!(
                 error,
                 LoaderError {
