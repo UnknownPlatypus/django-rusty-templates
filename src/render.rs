@@ -27,7 +27,7 @@ pub enum Content<'t, 'py> {
     Int(BigInt),
 }
 
-fn render_python<'t>(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String> {
+fn render_python(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String> {
     if !context.autoescape {
         return value.str()?.extract::<String>();
     };
