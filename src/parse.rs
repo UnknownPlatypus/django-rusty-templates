@@ -9,6 +9,7 @@ use crate::lex::variable::{
     lex_variable, Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError,
 };
 use crate::lex::START_TAG_LEN;
+use crate::types::TemplateString;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Variable {
@@ -20,30 +21,20 @@ impl<'t> Variable {
         Self { at }
     }
 
-    fn content(&self, template: &'t str) -> &'t str {
-        let (start, len) = self.at;
-        &template[start..start + len]
-    }
-
-    pub fn parts(&self, template: &'t str) -> impl Iterator<Item = &'t str> {
-        let variable = self.content(template);
+    pub fn parts(&self, template: TemplateString<'t>) -> impl Iterator<Item = &'t str> {
+        let variable = template.content(self.at);
         variable.split(".")
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Text {
-    at: (usize, usize),
+    pub at: (usize, usize),
 }
 
-impl<'t> Text {
+impl Text {
     pub fn new(at: (usize, usize)) -> Self {
         Self { at }
-    }
-
-    pub fn content(&self, template: &'t str) -> &'t str {
-        let (start, len) = self.at;
-        &template[start..start + len]
     }
 }
 
@@ -63,15 +54,15 @@ pub struct Argument {
 }
 
 impl ArgumentToken {
-    fn parse(&self, template: &'_ str) -> Result<Argument, ParseError> {
+    fn parse(&self, template: TemplateString<'_>) -> Result<Argument, ParseError> {
         Ok(Argument {
             at: self.at,
             argument_type: match self.argument_type {
                 ArgumentTokenType::Variable => ArgumentType::Variable(Variable::new(self.at)),
                 ArgumentTokenType::Text => ArgumentType::Text(Text::new(self.content_at())),
-                ArgumentTokenType::Numeric => match self.content(template).parse::<BigInt>() {
+                ArgumentTokenType::Numeric => match template.content(self.at).parse::<BigInt>() {
                     Ok(n) => ArgumentType::Int(n),
-                    Err(_) => match self.content(template).parse::<f64>() {
+                    Err(_) => match template.content(self.at).parse::<f64>() {
                         Ok(f) => ArgumentType::Float(f),
                         Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
                     },
@@ -110,13 +101,12 @@ pub struct Filter {
 
 impl Filter {
     pub fn new(
-        template: &str,
+        template: TemplateString<'_>,
         at: (usize, usize),
         left: TagElement,
         right: Option<Argument>,
     ) -> Result<Self, ParseError> {
-        let (start, len) = at;
-        let filter = match &template[start..start + len] {
+        let filter = match template.content(at) {
             "default" => match right {
                 Some(right) => FilterType::Default(right),
                 None => return Err(ParseError::MissingArgument { at: at.into() }),
@@ -136,10 +126,10 @@ impl Filter {
 }
 
 impl UrlToken {
-    fn parse(&self, template: &str) -> Result<TagElement, ParseError> {
+    fn parse(&self, template: TemplateString<'_>) -> Result<TagElement, ParseError> {
         let content_at = self.content_at();
-        let (start, len) = content_at;
-        let content = &template[start..start + len];
+        let (start, _len) = content_at;
+        let content = template.content(content_at);
         match self.token_type {
             UrlTokenType::Numeric => match content.parse::<BigInt>() {
                 Ok(n) => Ok(TagElement::Int(n)),
@@ -244,7 +234,7 @@ pub enum ParseError {
 }
 
 fn parse_variable(
-    template: &str,
+    template: TemplateString<'_>,
     variable: &str,
     at: (usize, usize),
     start: usize,
@@ -267,12 +257,12 @@ fn parse_variable(
 }
 
 pub struct Parser<'t> {
-    template: &'t str,
+    template: TemplateString<'t>,
     lexer: Lexer<'t>,
 }
 
 impl<'t> Parser<'t> {
-    pub fn new(template: &'t str) -> Self {
+    pub fn new(template: TemplateString<'t>) -> Self {
         Self {
             template,
             lexer: Lexer::new(template),
@@ -303,7 +293,7 @@ impl<'t> Parser<'t> {
             None => return Err(ParseError::EmptyTag { at: at.into() }),
             Some(t) => t,
         };
-        match tag.content(self.template) {
+        match self.template.content(tag.at) {
             "url" => self.parse_url(at, parts),
             _ => todo!(),
         }
@@ -334,9 +324,9 @@ impl<'t> Parser<'t> {
                     ..
                 }),
             ) => {
-                let prev = &self.template[prev.0..prev.0 + prev.1];
+                let prev = self.template.content(*prev);
                 if prev == "as" {
-                    Some(self.template[last.0..last.0 + last.1].to_string())
+                    Some(self.template.content(*last).to_string())
                 } else {
                     None
                 }
@@ -352,8 +342,8 @@ impl<'t> Parser<'t> {
             let element = token.parse(self.template)?;
             match token.kwarg {
                 None => args.push(element),
-                Some((start, len)) => {
-                    let kwarg = self.template[start..start + len].to_string();
+                Some(at) => {
+                    let kwarg = self.template.content(at).to_string();
                     kwargs.push((kwarg, element));
                 }
             }
@@ -380,7 +370,7 @@ mod tests {
     #[test]
     fn test_empty_template() {
         let template = "";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
         assert_eq!(nodes, vec![]);
     }
@@ -388,17 +378,18 @@ mod tests {
     #[test]
     fn test_text() {
         let template = "Some text";
-        let mut parser = Parser::new(template);
+        let template_string = TemplateString(template);
+        let mut parser = Parser::new(template_string);
         let nodes = parser.parse().unwrap();
         let text = Text::new((0, template.len()));
         assert_eq!(nodes, vec![TokenTree::Text(text)]);
-        assert_eq!(text.content(template), template);
+        assert_eq!(template_string.content(text.at), template);
     }
 
     #[test]
     fn test_comment() {
         let template = "{# A commment #}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
         assert_eq!(nodes, vec![]);
     }
@@ -406,14 +397,14 @@ mod tests {
     #[test]
     fn test_empty_variable() {
         let template = "{{ }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(error, ParseError::EmptyVariable { at: (0, 5).into() });
     }
 
     #[test]
     fn test_variable() {
-        let template = "{{ foo }}";
+        let template = TemplateString("{{ foo }}");
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
         let variable = Variable { at: (3, 3) };
@@ -423,7 +414,7 @@ mod tests {
 
     #[test]
     fn test_variable_attribute() {
-        let template = "{{ foo.bar.baz }}";
+        let template = TemplateString("{{ foo.bar.baz }}");
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
         let variable = Variable { at: (3, 11) };
@@ -436,7 +427,7 @@ mod tests {
 
     #[test]
     fn test_filter() {
-        let template = "{{ foo|bar }}";
+        let template = TemplateString("{{ foo|bar }}");
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
@@ -453,7 +444,7 @@ mod tests {
     #[test]
     fn test_filter_multiple() {
         let template = "{{ foo|bar|baz }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let foo = TagElement::Variable(Variable { at: (3, 3) });
@@ -472,7 +463,7 @@ mod tests {
 
     #[test]
     fn test_filter_argument() {
-        let template = "{{ foo|bar:baz }}";
+        let template = TemplateString("{{ foo|bar:baz }}");
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
@@ -492,7 +483,7 @@ mod tests {
 
     #[test]
     fn test_filter_argument_text() {
-        let template = "{{ foo|bar:'baz' }}";
+        let template = TemplateString("{{ foo|bar:'baz' }}");
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
@@ -507,12 +498,12 @@ mod tests {
             })),
         }));
         assert_eq!(nodes, vec![bar]);
-        assert_eq!(baz.content(template), "baz");
+        assert_eq!(template.content(baz.at), "baz");
     }
 
     #[test]
     fn test_filter_argument_translated_text() {
-        let template = "{{ foo|bar:_('baz') }}";
+        let template = TemplateString("{{ foo|bar:_('baz') }}");
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
@@ -527,13 +518,13 @@ mod tests {
             })),
         }));
         assert_eq!(nodes, vec![bar]);
-        assert_eq!(baz.content(template), "baz");
+        assert_eq!(template.content(baz.at), "baz");
     }
 
     #[test]
     fn test_filter_argument_float() {
         let template = "{{ foo|bar:5.2e3 }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let foo = TagElement::Variable(Variable { at: (3, 3) });
@@ -552,7 +543,7 @@ mod tests {
     #[test]
     fn test_filter_argument_int() {
         let template = "{{ foo|bar:99 }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let foo = TagElement::Variable(Variable { at: (3, 3) });
@@ -571,7 +562,7 @@ mod tests {
     #[test]
     fn test_filter_argument_bigint() {
         let template = "{{ foo|bar:99999999999999999 }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let foo = TagElement::Variable(Variable { at: (3, 3) });
@@ -590,14 +581,14 @@ mod tests {
     #[test]
     fn test_filter_argument_invalid_number() {
         let template = "{{ foo|bar:9.9.9 }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(error, ParseError::InvalidNumber { at: (11, 5).into() });
     }
 
     #[test]
     fn test_filter_default() {
-        let template = "{{ foo|default:baz }}";
+        let template = TemplateString("{{ foo|default:baz }}");
         let mut parser = Parser::new(template);
         let nodes = parser.parse().unwrap();
 
@@ -618,7 +609,7 @@ mod tests {
     #[test]
     fn test_filter_default_missing_argument() {
         let template = "{{ foo|default|baz }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(error, ParseError::MissingArgument { at: (7, 7).into() });
     }
@@ -626,7 +617,7 @@ mod tests {
     #[test]
     fn test_filter_lower_unexpected_argument() {
         let template = "{{ foo|lower:baz }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(error, ParseError::UnexpectedArgument { at: (13, 3).into() });
     }
@@ -634,7 +625,7 @@ mod tests {
     #[test]
     fn test_variable_lexer_error() {
         let template = "{{ _foo }}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(
             error,
@@ -645,7 +636,7 @@ mod tests {
     #[test]
     fn test_parse_empty_tag() {
         let template = "{%  %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(error, ParseError::EmptyTag { at: (0, 6).into() });
     }
@@ -653,7 +644,7 @@ mod tests {
     #[test]
     fn test_block_error() {
         let template = "{% url'foo' %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(
             error,
@@ -664,7 +655,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag() {
         let template = "{% url 'some-url-name' %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -680,7 +671,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_view_name_translated() {
         let template = "{% url _('some-url-name') %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -696,7 +687,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_view_name_variable() {
         let template = "{% url some_view_name %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -712,7 +703,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_view_name_filter() {
         let template = "{% url some_view_name|default:'home' %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let some_view_name = TagElement::Variable(Variable { at: (7, 14) });
@@ -738,7 +729,7 @@ mod tests {
     #[test]
     fn test_parse_url_no_arguments() {
         let template = "{% url %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(error, ParseError::UrlTagNoArguments { at: (0, 9).into() });
     }
@@ -746,7 +737,7 @@ mod tests {
     #[test]
     fn test_parse_url_view_name_integer() {
         let template = "{% url 64 %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -762,7 +753,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_arguments() {
         let template = "{% url some_view_name 'foo' bar|default:'home' 64 5.7 _(\"spam\") %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -791,7 +782,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_kwargs() {
         let template = "{% url some_view_name foo='foo' extra=-64 %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -810,7 +801,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_arguments_as_variable() {
         let template = "{% url some_view_name 'foo' as some_url %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -826,7 +817,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_kwargs_as_variable() {
         let template = "{% url some_view_name foo='foo' as some_url %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -842,7 +833,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_arguments_last_variables() {
         let template = "{% url some_view_name 'foo' arg arg2 %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let nodes = parser.parse().unwrap();
 
         let url = TokenTree::Tag(Tag::Url(Url {
@@ -862,7 +853,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_mixed_args_kwargs() {
         let template = "{% url some_view_name 'foo' arg name=arg2 %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(
             error,
@@ -875,7 +866,7 @@ mod tests {
     #[test]
     fn test_parse_url_tag_invalid_number() {
         let template = "{% url foo 9.9.9 %}";
-        let mut parser = Parser::new(template);
+        let mut parser = Parser::new(template.into());
         let error = parser.parse().unwrap_err();
         assert_eq!(error, ParseError::InvalidNumber { at: (11, 5).into() });
     }

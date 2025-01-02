@@ -13,6 +13,7 @@ pub mod django_rusty_templates {
     use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader};
     use crate::parse::{Parser, TokenTree};
     use crate::render::{Context, Render};
+    use crate::types::TemplateString;
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
@@ -162,7 +163,7 @@ pub mod django_rusty_templates {
 
     impl Template {
         pub fn new(template: &str, filename: PathBuf, engine_data: &EngineData) -> PyResult<Self> {
-            let mut parser = Parser::new(template);
+            let mut parser = Parser::new(TemplateString(template));
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
                 Err(err) => {
@@ -180,7 +181,7 @@ pub mod django_rusty_templates {
         }
 
         pub fn new_from_string(template: String, engine_data: &EngineData) -> PyResult<Self> {
-            let mut parser = Parser::new(&template);
+            let mut parser = Parser::new(TemplateString(&template));
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
                 Err(err) => {
@@ -201,8 +202,9 @@ pub mod django_rusty_templates {
             context: &mut Context,
         ) -> PyResult<String> {
             let mut rendered = String::with_capacity(self.template.len());
+            let template = TemplateString(&self.template);
             for node in &self.nodes {
-                rendered.push_str(&node.render(py, &self.template, context)?)
+                rendered.push_str(&node.render(py, template, context)?)
             }
             Ok(rendered)
         }

@@ -1,4 +1,5 @@
 use crate::lex::tag::TagParts;
+use crate::types::TemplateString;
 
 #[derive(Debug, PartialEq)]
 pub struct LoadToken {
@@ -11,11 +12,10 @@ pub struct LoadLexer<'t> {
 }
 
 impl<'t> LoadLexer<'t> {
-    pub fn new(template: &'t str, parts: TagParts) -> Self {
-        let (start, len) = parts.at;
+    pub fn new(template: TemplateString<'t>, parts: TagParts) -> Self {
         Self {
-            rest: &template[start..start + len],
-            byte: start,
+            rest: template.content(parts.at),
+            byte: parts.at.0,
         }
     }
 }
@@ -54,7 +54,7 @@ mod tests {
     fn test_lex_library() {
         let template = "{% load foo %}";
         let parts = TagParts { at: (8, 3) };
-        let lexer = LoadLexer::new(template, parts);
+        let lexer = LoadLexer::new(template.into(), parts);
         let tokens: Vec<_> = lexer.collect();
         let foo = LoadToken { at: (8, 3) };
         assert_eq!(tokens, [foo]);
@@ -64,7 +64,7 @@ mod tests {
     fn test_lex_libraries() {
         let template = "{% load foo bar.eggs %}";
         let parts = TagParts { at: (8, 12) };
-        let lexer = LoadLexer::new(template, parts);
+        let lexer = LoadLexer::new(template.into(), parts);
         let tokens: Vec<_> = lexer.collect();
         let foo = LoadToken { at: (8, 3) };
         let bar_eggs = LoadToken { at: (12, 8) };
@@ -75,7 +75,7 @@ mod tests {
     fn test_lex_individual() {
         let template = "{% load foo bar from library %}";
         let parts = TagParts { at: (8, 20) };
-        let lexer = LoadLexer::new(template, parts);
+        let lexer = LoadLexer::new(template.into(), parts);
         let tokens: Vec<_> = lexer.collect();
         let foo = LoadToken { at: (8, 3) };
         let bar = LoadToken { at: (12, 3) };
