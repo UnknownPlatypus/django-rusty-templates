@@ -6,7 +6,9 @@ pub mod django_rusty_templates {
     use std::path::PathBuf;
 
     use encoding_rs::Encoding;
+    use pyo3::exceptions::{PyAttributeError, PyImportError};
     use pyo3::import_exception_bound;
+    use pyo3::intern;
     use pyo3::prelude::*;
     use pyo3::types::{PyDict, PyString};
 
@@ -14,10 +16,12 @@ pub mod django_rusty_templates {
     use crate::parse::{Parser, TokenTree};
     use crate::render::{Context, Render};
     use crate::types::TemplateString;
+    use crate::utils::PyResultMethods;
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
     import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
+    import_exception_bound!(django.template.library, InvalidTemplateLibrary);
     import_exception_bound!(django.urls, NoReverseMatch);
 
     impl TemplateSyntaxError {
@@ -32,7 +36,7 @@ pub mod django_rusty_templates {
 
     pub struct EngineData {
         autoescape: bool,
-        libraries: HashMap<String, HashMap<String, String>>,
+        libraries: HashMap<String, Py<PyAny>>,
     }
 
     impl EngineData {
@@ -43,6 +47,30 @@ pub mod django_rusty_templates {
                 libraries: HashMap::new(),
             }
         }
+    }
+
+    fn import_libraries(libraries: Bound<'_, PyAny>) -> PyResult<HashMap<String, Py<PyAny>>> {
+        let py = libraries.py();
+        let libraries: HashMap<String, String> = libraries.extract()?;
+        let mut libs = HashMap::with_capacity(libraries.len());
+        for (name, path) in libraries {
+            let library = match py.import(&path).ok_or_isinstance_of::<PyImportError>(py)? {
+                Ok(library) => library,
+                Err(e) => {
+                    let error = format!("Invalid template library specified. ImportError raised when trying to load '{}': {}", path, e.value(py));
+                    return Err(InvalidTemplateLibrary::new_err(error));
+                }
+            };
+            let library = match library.getattr(intern!(py, "register")).ok_or_isinstance_of::<PyAttributeError>(py)? {
+                Ok(library) => library,
+                Err(_) => {
+                    let error = format!("Module '{}' does not have a variable named 'register'", path);
+                    return Err(InvalidTemplateLibrary::new_err(error));
+                }
+            };
+            libs.insert(name, library.unbind());
+        }
+        Ok(libs)
     }
 
     #[pyclass]
@@ -119,7 +147,10 @@ pub mod django_rusty_templates {
                     vec![cached_loader]
                 }
             };
-            let libraries = HashMap::new();
+            let libraries = match libraries {
+                None => HashMap::new(),
+                Some(libraries) => import_libraries(libraries)?,
+            };
             let builtins = vec![];
             let data = EngineData { autoescape, libraries};
             Ok(Self {
