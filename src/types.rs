@@ -1,3 +1,5 @@
+use pyo3::prelude::*;
+
 #[derive(Clone, Copy)]
 pub struct TemplateString<'t>(pub &'t str);
 
@@ -11,5 +13,30 @@ impl<'t> TemplateString<'t> {
 impl<'t> From<&'t str> for TemplateString<'t> {
     fn from(value: &'t str) -> Self {
         TemplateString(value)
+    }
+}
+
+pub trait CloneRef {
+    fn clone_ref(&self, py: Python<'_>) -> Self;
+}
+
+impl<T> CloneRef for Vec<T>
+where
+    T: CloneRef,
+{
+    fn clone_ref(&self, py: Python<'_>) -> Self {
+        self.iter().map(|element| element.clone_ref(py)).collect()
+    }
+}
+
+impl<K, V> CloneRef for Vec<(K, V)>
+where
+    K: Clone,
+    V: CloneRef,
+{
+    fn clone_ref(&self, py: Python<'_>) -> Self {
+        self.iter()
+            .map(|(k, v)| (k.clone(), v.clone_ref(py)))
+            .collect()
     }
 }
