@@ -17,3 +17,8 @@ def double(value):
 @register.filter
 def multiply(value, by=3):
     return value * by
+
+
+@register.filter
+def divide_by_zero(value, zero=0):
+    return value / zero

@@ -76,3 +76,29 @@ def test_resolve_filter_arg_error():
    ·                    ╰── 3
    ╰────
 """
+
+
+def test_filter_error():
+    template = "{% load custom_filters %}{{ num|divide_by_zero }}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(ZeroDivisionError):
+        django_template.render({"num": 1})
+
+    with pytest.raises(ZeroDivisionError):
+        rust_template.render({"num": 1})
+
+
+def test_filter_error_with_argument():
+    template = "{% load custom_filters %}{{ num|divide_by_zero:0 }}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(ZeroDivisionError):
+        django_template.render({"num": 1})
+
+    with pytest.raises(ZeroDivisionError):
+        rust_template.render({"num": 1})
