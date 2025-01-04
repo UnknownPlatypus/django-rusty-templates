@@ -390,6 +390,15 @@ pub enum ParseError {
         #[label("here")]
         at: SourceSpan,
     },
+    #[error("'{tag}' is not a valid tag or filter in tag library '{library}'")]
+    MissingFilterTag {
+        tag: String,
+        library: String,
+        #[label("tag or filter")]
+        tag_at: SourceSpan,
+        #[label("library")]
+        library_at: SourceSpan,
+    },
     #[error("'{library}' is not a registered tag library.")]
     MissingTagLibrary {
         library: String,
@@ -578,16 +587,54 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
         parts: TagParts,
     ) -> Result<TokenTree, PyParseError> {
         let tokens: Vec<_> = LoadLexer::new(self.template, parts).collect();
-        for token in tokens {
-            let library = token.load_library(self.py, self.libraries, self.template)?;
-            let filters = library.getattr(intern!(self.py, "filters"))?;
-            let tags = library.getattr(intern!(self.py, "tags"))?;
-            let filters: HashMap<String, Bound<'_, PyAny>> = filters.extract()?;
-            let tags: HashMap<String, Bound<'_, PyAny>> = tags.extract()?;
-            self.external_filters.extend(filters);
-            self.external_tags.extend(tags);
+        let mut rev = tokens.iter().rev();
+        if let (Some(last), Some(prev)) = (rev.next(), rev.next()) {
+            if self.template.content(prev.at) == "from" {
+                let library = last.load_library(self.py, self.libraries, self.template)?;
+                let filters = self.get_filters(library)?;
+                let tags = self.get_tags(library)?;
+                for token in rev {
+                    let content = self.template.content(token.at);
+                    if let Some(filter) = filters.get(content) {
+                        self.external_filters
+                            .insert(content.to_string(), filter.clone());
+                    } else if let Some(tag) = tags.get(content) {
+                        self.external_tags.insert(content.to_string(), tag.clone());
+                    } else {
+                        return Err(ParseError::MissingFilterTag {
+                            library: self.template.content(last.at).to_string(),
+                            library_at: last.at.into(),
+                            tag: content.to_string(),
+                            tag_at: token.at.into(),
+                        }
+                        .into());
+                    }
+                }
+            }
+        } else {
+            for token in tokens {
+                let library = token.load_library(self.py, self.libraries, self.template)?;
+                let filters = self.get_filters(library)?;
+                let tags = self.get_tags(library)?;
+                self.external_filters.extend(filters);
+                self.external_tags.extend(tags);
+            }
         }
         Ok(TokenTree::Tag(Tag::Load))
+    }
+
+    fn get_tags(
+        &mut self,
+        library: &Bound<'py, PyAny>,
+    ) -> Result<HashMap<String, Bound<'py, PyAny>>, PyErr> {
+        library.getattr(intern!(self.py, "tags"))?.extract()
+    }
+
+    fn get_filters(
+        &mut self,
+        library: &Bound<'py, PyAny>,
+    ) -> Result<HashMap<String, Bound<'py, PyAny>>, PyErr> {
+        library.getattr(intern!(self.py, "filters"))?.extract()
     }
 
     fn parse_url(&mut self, at: (usize, usize), parts: TagParts) -> Result<TokenTree, ParseError> {

@@ -38,6 +38,28 @@ tz"""
 """
 
 
+def test_load_missing_filter():
+    template = "{% load missing from custom_filters %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert str(exc_info.value) == "'missing' is not a valid tag or filter in tag library 'custom_filters'"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    assert str(exc_info.value) == """
+  × 'missing' is not a valid tag or filter in tag library 'custom_filters'
+   ╭────
+ 1 │ {% load missing from custom_filters %}
+   ·         ───┬───      ───────┬──────
+   ·            │                ╰── library
+   ·            ╰── tag or filter
+   ╰────
+"""
+
+
 def test_unknown_filter():
     template = "{{ foo|bar }}"
 

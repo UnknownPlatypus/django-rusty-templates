@@ -10,3 +10,14 @@ def test_load_filters():
     expected = "H World!"
     assert django_template.render({"text": text}) == expected
     assert rust_template.render({"text": text}) == expected
+
+
+def test_load_single_filter():
+    template = "{% load cut from custom_filters %}{{ text|cut:'ello' }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    text = "Hello World!"
+    expected = "H World!"
+    assert django_template.render({"text": text}) == expected
+    assert rust_template.render({"text": text}) == expected
