@@ -37,3 +37,12 @@ def test_load_and_render_multiple_filters():
     expected = "\nH World!\n4\n6\n8\n"
     assert django_template.render({"text": text, "num": 2}) == expected
     assert rust_template.render({"text": text, "num": 2}) == expected
+
+
+def test_load_and_render_multiple_filter_libraries():
+    template = "{% load custom_filters more_filters %}{{ num|double|square }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"num": 2}) == "16"
+    assert rust_template.render({"num": 2}) == "16"

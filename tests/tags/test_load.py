@@ -15,6 +15,7 @@ cache
 custom_filters
 i18n
 l10n
+more_filters
 static
 tz"""
 
@@ -33,6 +34,7 @@ tz"""
         custom_filters
         i18n
         l10n
+        more_filters
         static
         tz
 """

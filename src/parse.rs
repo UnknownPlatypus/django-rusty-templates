@@ -610,15 +610,15 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
                         .into());
                     }
                 }
+                return Ok(TokenTree::Tag(Tag::Load));
             }
-        } else {
-            for token in tokens {
-                let library = token.load_library(self.py, self.libraries, self.template)?;
-                let filters = self.get_filters(library)?;
-                let tags = self.get_tags(library)?;
-                self.external_filters.extend(filters);
-                self.external_tags.extend(tags);
-            }
+        }
+        for token in tokens {
+            let library = token.load_library(self.py, self.libraries, self.template)?;
+            let filters = self.get_filters(library)?;
+            let tags = self.get_tags(library)?;
+            self.external_filters.extend(filters);
+            self.external_tags.extend(tags);
         }
         Ok(TokenTree::Tag(Tag::Load))
     }
