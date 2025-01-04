@@ -18,6 +18,9 @@ pub mod django_rusty_templates {
     use crate::types::{CloneRef, TemplateString};
     use crate::utils::PyResultMethods;
 
+    #[cfg(test)]
+    use crate::types::PyEq;
+
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
     import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
@@ -166,7 +169,7 @@ pub mod django_rusty_templates {
             })
         }
 
-        fn get_template(&mut self, py: Python<'_>, template_name: String) -> PyResult<Template> {
+        pub fn get_template(&mut self, py: Python<'_>, template_name: String) -> PyResult<Template> {
             let mut tried = Vec::new();
             for loader in &mut self.template_loaders {
                 match loader.get_template(py, &template_name, &self.data) {
@@ -251,6 +254,13 @@ pub mod django_rusty_templates {
                 nodes: self.nodes.clone_ref(py),
                 autoescape: self.autoescape,
             }
+        }
+    }
+
+    #[cfg(test)]
+    impl PyEq for Template {
+        fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
+            self.filename == other.filename && self.autoescape == other.autoescape && self.template == other.template && self.nodes.py_eq(&other.nodes, py)
         }
     }
 
@@ -439,6 +449,42 @@ user = User(["Lily"])
             let context = PyDict::new(py);
 
             assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
+        })
+    }
+
+    #[test]
+    fn test_clone_template() {
+        use std::collections::HashMap;
+
+        use pyo3::IntoPyObject;
+        use pyo3::types::{PyAnyMethods, PyListMethods};
+
+        use crate::types::{CloneRef, PyEq};
+
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let cwd = std::env::current_dir().unwrap();
+            let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
+            let sys_path = sys_path.downcast().unwrap();
+            sys_path.append(cwd).unwrap();
+            let mut engine = Engine::new(
+                py,
+                Some(vec!["tests/templates"].into_pyobject(py).unwrap()),
+                false,
+                None,
+                false,
+                None,
+                "".to_string(),
+                "utf-8".to_string(),
+                Some(HashMap::from([("custom_filters", "tests.templatetags.custom_filters")]).into_pyobject(py).unwrap().into_any()),
+                None,
+                false,
+            )
+            .unwrap();
+            let template = engine.get_template(py, "full_example.html".to_string()).unwrap();
+            let cloned = template.clone_ref(py);
+            assert!(cloned.py_eq(&template, py));
         })
     }
 }
