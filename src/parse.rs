@@ -1454,4 +1454,30 @@ mod tests {
             ));
         })
     }
+
+    #[test]
+    fn test_tag_py_eq() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let url = Url {
+                view_name: TagElement::Variable(Variable { at: (7, 14) }),
+                args: vec![],
+                kwargs: vec![],
+                variable: None,
+            };
+            assert!(!Tag::Load.py_eq(&Tag::Url(url), py));
+        })
+    }
+
+    #[test]
+    fn test_token_tree_py_eq() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let text = Text { at: (0, 3) };
+            assert!(TokenTree::TranslatedText(text).py_eq(&TokenTree::TranslatedText(text), py));
+            assert!(!TokenTree::Text(text).py_eq(&TokenTree::TranslatedText(text), py));
+        })
+    }
 }
