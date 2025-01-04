@@ -1480,4 +1480,16 @@ mod tests {
             assert!(!TokenTree::Text(text).py_eq(&TokenTree::TranslatedText(text), py));
         })
     }
+
+    #[test]
+    fn test_token_tree_clone_ref() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let text = Text { at: (0, 3) };
+            let translated = TokenTree::TranslatedText(text);
+            let cloned = translated.clone_ref(py);
+            assert!(translated.py_eq(&cloned, py));
+        })
+    }
 }
