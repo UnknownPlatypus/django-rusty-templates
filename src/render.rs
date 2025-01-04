@@ -129,7 +129,11 @@ impl Render for Filter {
                     Some(arg) => arg.resolve(py, template, context)?,
                     None => None,
                 };
-                let value = filter.bind(py).call1((left, arg))?;
+                let filter = filter.bind(py);
+                let value = match arg {
+                    Some(arg) => filter.call1((left, arg))?,
+                    None => filter.call1((left,))?,
+                };
                 Some(Content::Py(value))
             }
             FilterType::Lower => match left {
