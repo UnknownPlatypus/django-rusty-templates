@@ -3,6 +3,16 @@ from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 
 
+def test_load_empty():
+    template = "{% load %}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == ""
+    assert rust_template.render({}) == ""
+
+
 def test_load_missing():
     template = "{% load missing_filters %}"
 
