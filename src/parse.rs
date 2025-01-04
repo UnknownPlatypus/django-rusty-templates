@@ -1439,4 +1439,19 @@ mod tests {
             );
         })
     }
+
+    #[test]
+    fn test_filter_type_py_eq() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            assert!(!FilterType::Lower.py_eq(
+                &FilterType::Default(Argument {
+                    at: (0, 3),
+                    argument_type: ArgumentType::Float(1.0)
+                }),
+                py
+            ));
+        })
+    }
 }
