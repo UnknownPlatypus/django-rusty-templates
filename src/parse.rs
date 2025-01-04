@@ -29,9 +29,43 @@ impl<'t> Variable {
         Self { at }
     }
 
-    pub fn parts(&self, template: TemplateString<'t>) -> impl Iterator<Item = &'t str> {
+    pub fn parts(
+        &self,
+        template: TemplateString<'t>,
+    ) -> impl Iterator<Item = (&'t str, (usize, usize))> {
+        let start = self.at.0;
         let variable = template.content(self.at);
-        variable.split(".")
+        PartsIterator { variable, start }
+    }
+}
+
+struct PartsIterator<'t> {
+    variable: &'t str,
+    start: usize,
+}
+
+impl<'t> Iterator for PartsIterator<'t> {
+    type Item = (&'t str, (usize, usize));
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.variable.is_empty() {
+            return None;
+        }
+
+        match self.variable.find('.') {
+            Some(index) => {
+                let part = &self.variable[..index];
+                let at = (self.start, index);
+                self.start += index + 1;
+                self.variable = &self.variable[index + 1..];
+                Some((part, at))
+            }
+            None => {
+                let part = self.variable;
+                self.variable = "";
+                Some((part, (self.start, part.len())))
+            }
+        }
     }
 }
 
@@ -771,7 +805,10 @@ mod tests {
             let nodes = parser.parse().unwrap();
             let variable = Variable { at: (3, 3) };
             assert_eq!(nodes, vec![TokenTree::Variable(variable)]);
-            assert_eq!(variable.parts(template).collect::<Vec<_>>(), vec!["foo"]);
+            assert_eq!(
+                variable.parts(template).collect::<Vec<_>>(),
+                vec![("foo", (3, 3))]
+            );
         })
     }
 
@@ -788,7 +825,7 @@ mod tests {
             assert_eq!(nodes, vec![TokenTree::Variable(variable)]);
             assert_eq!(
                 variable.parts(template).collect::<Vec<_>>(),
-                vec!["foo", "bar", "baz"]
+                vec![("foo", (3, 3)), ("bar", (7, 3)), ("baz", (11, 3))]
             );
         })
     }
@@ -811,7 +848,10 @@ mod tests {
                 filter: FilterType::External(py.None(), None),
             }));
             assert!(nodes.py_eq(&vec![bar], py));
-            assert_eq!(foo.parts(template).collect::<Vec<_>>(), vec!["foo"]);
+            assert_eq!(
+                foo.parts(template).collect::<Vec<_>>(),
+                vec![("foo", (3, 3))]
+            );
         })
     }
 
@@ -888,7 +928,10 @@ mod tests {
                 ),
             }));
             assert!(nodes.py_eq(&vec![bar], py));
-            assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);
+            assert_eq!(
+                baz.parts(template).collect::<Vec<_>>(),
+                vec![("baz", (11, 3))]
+            );
         })
     }
 
@@ -1059,7 +1102,10 @@ mod tests {
                 }),
             }));
             assert_eq!(nodes, vec![bar]);
-            assert_eq!(baz.parts(template).collect::<Vec<_>>(), vec!["baz"]);
+            assert_eq!(
+                baz.parts(template).collect::<Vec<_>>(),
+                vec![("baz", (15, 3))]
+            );
         })
     }
 

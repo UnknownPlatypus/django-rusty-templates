@@ -22,6 +22,7 @@ pub mod django_rusty_templates {
     use crate::types::PyEq;
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
+    import_exception_bound!(django.template.base, VariableDoesNotExist);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
     import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
     import_exception_bound!(django.template.library, InvalidTemplateLibrary);
@@ -33,7 +34,20 @@ pub mod django_rusty_templates {
             source: impl miette::SourceCode + 'static,
         ) -> PyErr {
             let miette_err = err.with_source_code(source);
-            TemplateSyntaxError::new_err(format!("{miette_err:?}"))
+            Self::new_err(format!("{miette_err:?}"))
+        }
+    }
+
+    impl VariableDoesNotExist {
+        fn with_source_code(
+            err: miette::Report,
+            source: impl miette::SourceCode + 'static,
+        ) -> PyErr {
+            let miette_err = err.with_source_code(source);
+            let report = format!("{miette_err:?}");
+            // Work around old-style Python formatting in VariableDoesNotExist.__str__
+            let report = report.replace("%", "%%");
+            Self::new_err(report)
         }
     }
 
@@ -240,7 +254,13 @@ pub mod django_rusty_templates {
             let mut rendered = String::with_capacity(self.template.len());
             let template = TemplateString(&self.template);
             for node in &self.nodes {
-                rendered.push_str(&node.render(py, template, context)?)
+                match node.render(py, template, context) {
+                    Ok(content) => rendered.push_str(&content),
+                    Err(err) => {
+                        let err = err.try_into_render_error()?;
+                        return Err(VariableDoesNotExist::with_source_code(err.into(), self.template.clone()));
+                    }
+                }
             }
             Ok(rendered)
         }
