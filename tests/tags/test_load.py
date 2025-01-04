@@ -26,6 +26,8 @@ custom_filters
 i18n
 l10n
 more_filters
+no_filters
+no_tags
 static
 tz"""
 
@@ -45,6 +47,8 @@ tz"""
         i18n
         l10n
         more_filters
+        no_filters
+        no_tags
         static
         tz
 """
@@ -91,3 +95,23 @@ def test_unknown_filter():
    ·         ╰── here
    ╰────
 """
+
+
+def test_load_no_filters():
+    template = "{% load no_filters %}"
+
+    with pytest.raises(AttributeError):
+        engines["django"].from_string(template)
+
+    with pytest.raises(AttributeError):
+        engines["rusty"].from_string(template)
+
+
+def test_load_no_tags():
+    template = "{% load no_tags %}"
+
+    with pytest.raises(AttributeError):
+        engines["django"].from_string(template)
+
+    with pytest.raises(AttributeError):
+        engines["rusty"].from_string(template)
