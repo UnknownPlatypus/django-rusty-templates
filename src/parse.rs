@@ -1419,4 +1419,24 @@ mod tests {
             assert_eq!(error, ParseError::InvalidNumber { at: (11, 5).into() });
         })
     }
+
+    #[test]
+    fn test_filter_type_partial_eq() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            assert_eq!(FilterType::Lower, FilterType::Lower);
+            assert_ne!(
+                FilterType::External(py.None(), None),
+                FilterType::External(py.None(), None)
+            );
+            assert_ne!(
+                FilterType::Lower,
+                FilterType::Default(Argument {
+                    at: (0, 3),
+                    argument_type: ArgumentType::Float(1.0)
+                })
+            );
+        })
+    }
 }
