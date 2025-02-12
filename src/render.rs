@@ -7,7 +7,7 @@ use num_bigint::{BigInt, ToBigInt};
 use pyo3::exceptions::PyAttributeError;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyList, PyString};
+use pyo3::types::{PyDict, PyInt, PyList, PyString, PyType};
 use thiserror::Error;
 
 use crate::parse::{
@@ -104,7 +104,16 @@ impl<'t> Content<'t, '_> {
             },
             Self::Py(left) => match left.extract::<BigInt>() {
                 Ok(left) => Some(left),
-                Err(_) => None,
+                Err(_) => {
+                    let int = PyType::new::<PyInt>(left.py());
+                    match int.call1((left,)) {
+                        Ok(left) => Some(
+                            left.extract::<BigInt>()
+                                .expect("Python integers are BigInt compatible"),
+                        ),
+                        Err(_) => todo!(),
+                    }
+                }
             },
         }
     }
