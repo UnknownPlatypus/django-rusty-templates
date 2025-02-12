@@ -157,6 +157,7 @@ impl PyEq for TagElement {
 
 #[derive(Debug)]
 pub enum FilterType {
+    Add(Argument),
     Default(Argument),
     External(Py<PyAny>, Option<Argument>),
     Lower,
@@ -165,6 +166,7 @@ pub enum FilterType {
 impl PartialEq for FilterType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
+            (Self::Add(a), Self::Add(b)) => a == b,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::Lower, Self::Lower) => true,
             (Self::External(_, _), Self::External(_, _)) => false, // Can't compare PyAny to PyAny
@@ -176,6 +178,7 @@ impl PartialEq for FilterType {
 impl CloneRef for FilterType {
     fn clone_ref(&self, py: Python<'_>) -> Self {
         match self {
+            Self::Add(arg) => Self::Add(arg.clone()),
             Self::Default(arg) => Self::Default(arg.clone()),
             Self::External(filter, arg) => Self::External(filter.clone_ref(py), arg.clone()),
             Self::Lower => Self::Lower,
@@ -187,6 +190,7 @@ impl CloneRef for FilterType {
 impl PyEq for FilterType {
     fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
         match (self, other) {
+            (Self::Add(a), Self::Add(b)) => a == b,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::External(a1, a2), Self::External(b1, b2)) => {
                 a2 == b2
@@ -216,6 +220,10 @@ impl Filter {
         right: Option<Argument>,
     ) -> Result<Self, ParseError> {
         let filter = match parser.template.content(at) {
+            "add" => match right {
+                Some(right) => FilterType::Add(right),
+                None => return Err(ParseError::MissingArgument { at: at.into() }),
+            },
             "default" => match right {
                 Some(right) => FilterType::Default(right),
                 None => return Err(ParseError::MissingArgument { at: at.into() }),

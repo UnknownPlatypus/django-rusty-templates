@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 use html_escape::encode_quoted_attribute;
 use miette::{Diagnostic, SourceSpan};
-use num_bigint::BigInt;
+use num_bigint::{BigInt, ToBigInt};
 use pyo3::exceptions::PyAttributeError;
 use pyo3::intern;
 use pyo3::prelude::*;
@@ -90,6 +90,24 @@ impl<'t> Content<'t, '_> {
         };
         Ok(Cow::Owned(content))
     }
+
+    fn to_bigint(&self) -> Option<BigInt> {
+        match self {
+            Self::Int(left) => Some(left.clone()),
+            Self::String(left) => match left.parse::<BigInt>() {
+                Ok(left) => Some(left),
+                Err(_) => None,
+            },
+            Self::Float(left) => match left.trunc().to_bigint() {
+                Some(left) => Some(left),
+                None => None,
+            },
+            Self::Py(left) => match left.extract::<BigInt>() {
+                Ok(left) => Some(left),
+                Err(_) => None,
+            },
+        }
+    }
 }
 
 pub trait Render {
@@ -167,6 +185,22 @@ impl Render for Filter {
     ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
         let left = self.left.resolve(py, template, context)?;
         Ok(match &self.filter {
+            FilterType::Add(right) => {
+                let right = right.resolve(py, template, context)?;
+                let left = match left {
+                    Some(left) => left,
+                    None => todo!(),
+                };
+                let right = match right {
+                    Some(right) => right,
+                    None => todo!(),
+                };
+                match (left.to_bigint(), right.to_bigint()) {
+                    (Some(left), Some(right)) => return Ok(Some(Content::Int(left + right))),
+                    _ => {}
+                }
+                todo!()
+            }
             FilterType::Default(right) => match left {
                 Some(left) => Some(left),
                 None => right.resolve(py, template, context)?,
