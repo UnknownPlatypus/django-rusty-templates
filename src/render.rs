@@ -186,15 +186,13 @@ impl Render for Filter {
         let left = self.left.resolve(py, template, context)?;
         Ok(match &self.filter {
             FilterType::Add(right) => {
-                let right = right.resolve(py, template, context)?;
                 let left = match left {
                     Some(left) => left,
-                    None => todo!(),
+                    None => return Ok(None),
                 };
-                let right = match right {
-                    Some(right) => right,
-                    None => todo!(),
-                };
+                let right = right
+                    .resolve(py, template, context)?
+                    .expect("missing argument in context should already have raised");
                 match (left.to_bigint(), right.to_bigint()) {
                     (Some(left), Some(right)) => return Ok(Some(Content::Int(left + right))),
                     _ => {}
