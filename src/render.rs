@@ -40,7 +40,7 @@ pub enum RenderError {
         #[label("key")]
         key_at: SourceSpan,
         #[label("{object}")]
-        object_at: SourceSpan,
+        object_at: Option<SourceSpan>,
     },
 }
 
@@ -167,7 +167,7 @@ impl Render for Variable {
                                     key: part.to_string(),
                                     object: variable.str()?.to_string(),
                                     key_at: key_at.into(),
-                                    object_at: object_at.into(),
+                                    object_at: Some(object_at.into()),
                                 }
                                 .into())
                             }
@@ -374,7 +374,25 @@ impl Render for Argument {
         Ok(Some(match &self.argument_type {
             ArgumentType::Text(text) => return text.resolve(py, template, context),
             ArgumentType::TranslatedText(_text) => todo!(),
-            ArgumentType::Variable(variable) => return variable.resolve(py, template, context),
+            ArgumentType::Variable(variable) => match variable.resolve(py, template, context)? {
+                Some(content) => content,
+                None => {
+                    let key = template.content(variable.at).to_string();
+                    let context: HashMap<&String, &Bound<'py, PyAny>> = context
+                        .context
+                        .iter()
+                        .map(|(k, v)| (k, v.bind(py)))
+                        .collect();
+                    let object = format!("{:?}", context);
+                    return Err(RenderError::VariableDoesNotExist {
+                        key,
+                        object,
+                        key_at: variable.at.into(),
+                        object_at: None,
+                    }
+                    .into());
+                }
+            },
             ArgumentType::Float(number) => Content::Float(*number),
             ArgumentType::Int(number) => Content::Int(number.clone()),
         }))

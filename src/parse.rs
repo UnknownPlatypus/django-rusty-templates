@@ -21,7 +21,7 @@ use crate::types::PyEq;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Variable {
-    at: (usize, usize),
+    pub at: (usize, usize),
 }
 
 impl<'t> Variable {
