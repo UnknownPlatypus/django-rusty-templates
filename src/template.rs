@@ -78,10 +78,16 @@ pub mod django_rusty_templates {
                     return Err(InvalidTemplateLibrary::new_err(error));
                 }
             };
-            let library = match library.getattr(intern!(py, "register")).ok_or_isinstance_of::<PyAttributeError>(py)? {
+            let library = match library
+                .getattr(intern!(py, "register"))
+                .ok_or_isinstance_of::<PyAttributeError>(py)?
+            {
                 Ok(library) => library,
                 Err(_) => {
-                    let error = format!("Module '{}' does not have a variable named 'register'", path);
+                    let error = format!(
+                        "Module '{}' does not have a variable named 'register'",
+                        path
+                    );
                     return Err(InvalidTemplateLibrary::new_err(error));
                 }
             };
@@ -169,7 +175,10 @@ pub mod django_rusty_templates {
                 Some(libraries) => import_libraries(libraries)?,
             };
             let builtins = vec![];
-            let data = EngineData { autoescape, libraries};
+            let data = EngineData {
+                autoescape,
+                libraries,
+            };
             Ok(Self {
                 dirs,
                 app_dirs,
@@ -183,7 +192,11 @@ pub mod django_rusty_templates {
             })
         }
 
-        pub fn get_template(&mut self, py: Python<'_>, template_name: String) -> PyResult<Template> {
+        pub fn get_template(
+            &mut self,
+            py: Python<'_>,
+            template_name: String,
+        ) -> PyResult<Template> {
             let mut tried = Vec::new();
             for loader in &mut self.template_loaders {
                 match loader.get_template(py, &template_name, &self.data) {
@@ -210,7 +223,12 @@ pub mod django_rusty_templates {
     }
 
     impl Template {
-        pub fn new(py: Python<'_>, template: &str, filename: PathBuf, engine_data: &EngineData) -> PyResult<Self> {
+        pub fn new(
+            py: Python<'_>,
+            template: &str,
+            filename: PathBuf,
+            engine_data: &EngineData,
+        ) -> PyResult<Self> {
             let mut parser = Parser::new(py, TemplateString(template), &engine_data.libraries);
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
@@ -229,7 +247,11 @@ pub mod django_rusty_templates {
             })
         }
 
-        pub fn new_from_string(py: Python<'_>, template: String, engine_data: &EngineData) -> PyResult<Self> {
+        pub fn new_from_string(
+            py: Python<'_>,
+            template: String,
+            engine_data: &EngineData,
+        ) -> PyResult<Self> {
             let mut parser = Parser::new(py, TemplateString(&template), &engine_data.libraries);
             let nodes = match parser.parse() {
                 Ok(nodes) => nodes,
@@ -246,11 +268,7 @@ pub mod django_rusty_templates {
             })
         }
 
-        fn _render(
-            &self,
-            py: Python<'_>,
-            context: &mut Context,
-        ) -> PyResult<String> {
+        fn _render(&self, py: Python<'_>, context: &mut Context) -> PyResult<String> {
             let mut rendered = String::with_capacity(self.template.len());
             let template = TemplateString(&self.template);
             for node in &self.nodes {
@@ -258,7 +276,10 @@ pub mod django_rusty_templates {
                     Ok(content) => rendered.push_str(&content),
                     Err(err) => {
                         let err = err.try_into_render_error()?;
-                        return Err(VariableDoesNotExist::with_source_code(err.into(), self.template.clone()));
+                        return Err(VariableDoesNotExist::with_source_code(
+                            err.into(),
+                            self.template.clone(),
+                        ));
                     }
                 }
             }
@@ -280,7 +301,10 @@ pub mod django_rusty_templates {
     #[cfg(test)]
     impl PyEq for Template {
         fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
-            self.filename == other.filename && self.autoescape == other.autoescape && self.template == other.template && self.nodes.py_eq(&other.nodes, py)
+            self.filename == other.filename
+                && self.autoescape == other.autoescape
+                && self.template == other.template
+                && self.nodes.py_eq(&other.nodes, py)
         }
     }
 
@@ -298,7 +322,11 @@ pub mod django_rusty_templates {
                 None => HashMap::new(),
             };
             let request = request.map(|request| request.unbind());
-            let mut context = Context {request, context, autoescape: self.autoescape};
+            let mut context = Context {
+                request,
+                context,
+                autoescape: self.autoescape,
+            };
             self._render(py, &mut context)
         }
     }
@@ -476,8 +504,8 @@ user = User(["Lily"])
     fn test_clone_template() {
         use std::collections::HashMap;
 
-        use pyo3::IntoPyObject;
         use pyo3::types::{PyAnyMethods, PyListMethods};
+        use pyo3::IntoPyObject;
 
         use crate::types::{CloneRef, PyEq};
 
@@ -497,12 +525,19 @@ user = User(["Lily"])
                 None,
                 "".to_string(),
                 "utf-8".to_string(),
-                Some(HashMap::from([("custom_filters", "tests.templatetags.custom_filters")]).into_pyobject(py).unwrap().into_any()),
+                Some(
+                    HashMap::from([("custom_filters", "tests.templatetags.custom_filters")])
+                        .into_pyobject(py)
+                        .unwrap()
+                        .into_any(),
+                ),
                 None,
                 false,
             )
             .unwrap();
-            let template = engine.get_template(py, "full_example.html".to_string()).unwrap();
+            let template = engine
+                .get_template(py, "full_example.html".to_string())
+                .unwrap();
             let cloned = template.clone_ref(py);
             assert!(cloned.py_eq(&template, py));
         })

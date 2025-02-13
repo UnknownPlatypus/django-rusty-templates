@@ -10,7 +10,9 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList, PyString};
 use thiserror::Error;
 
-use crate::parse::{Argument, ArgumentType, Filter, FilterType, Tag, TagElement, Text, TokenTree, Url, Variable};
+use crate::parse::{
+    Argument, ArgumentType, Filter, FilterType, Tag, TagElement, Text, TokenTree, Url, Variable,
+};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::TemplateString;
 use crate::utils::PyResultMethods;
@@ -39,7 +41,7 @@ pub enum RenderError {
         key_at: SourceSpan,
         #[label("{object}")]
         object_at: SourceSpan,
-    }
+    },
 }
 
 #[derive(Error, Debug)]
@@ -69,7 +71,10 @@ fn render_python(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String>
         true => value,
         false => value.str()?.into_any(),
     };
-    match value.getattr(intern!(py, "__html__")).ok_or_isinstance_of::<PyAttributeError>(py)? {
+    match value
+        .getattr(intern!(py, "__html__"))
+        .ok_or_isinstance_of::<PyAttributeError>(py)?
+    {
         Ok(html) => html.call0()?.extract::<String>(),
         Err(_) => Ok(encode_quoted_attribute(&value.str()?.extract::<String>()?).to_string()),
     }
@@ -130,12 +135,15 @@ impl Render for Variable {
                     Err(_) => {
                         let int = match part.parse::<usize>() {
                             Ok(int) => int,
-                            Err(_) => return Err(RenderError::VariableDoesNotExist {
-                                key: part.to_string(),
-                                object: variable.str()?.to_string(),
-                                key_at: key_at.into(),
-                                object_at: object_at.into(),
-                            }.into()),
+                            Err(_) => {
+                                return Err(RenderError::VariableDoesNotExist {
+                                    key: part.to_string(),
+                                    object: variable.str()?.to_string(),
+                                    key_at: key_at.into(),
+                                    object_at: object_at.into(),
+                                }
+                                .into())
+                            }
                         };
                         match variable.get_item(int) {
                             Ok(variable) => variable,
@@ -176,9 +184,11 @@ impl Render for Filter {
                 Some(Content::Py(value))
             }
             FilterType::Lower => match left {
-                Some(content) => Some(Content::String(Cow::Owned(content.render(context)?.to_lowercase()))),
+                Some(content) => Some(Content::String(Cow::Owned(
+                    content.render(context)?.to_lowercase(),
+                ))),
                 None => Some(Content::String(Cow::Borrowed(""))),
-            }
+            },
         })
     }
 }
@@ -189,10 +199,16 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         None => return Ok(none),
         Some(request) => request,
     };
-    if let Ok(current_app) = request.getattr(py, "current_app").ok_or_isinstance_of::<PyAttributeError>(py)? {
-         return Ok(current_app);
+    if let Ok(current_app) = request
+        .getattr(py, "current_app")
+        .ok_or_isinstance_of::<PyAttributeError>(py)?
+    {
+        return Ok(current_app);
     }
-    match request.getattr(py, "resolver_match").ok_or_isinstance_of::<PyAttributeError>(py)? {
+    match request
+        .getattr(py, "resolver_match")
+        .ok_or_isinstance_of::<PyAttributeError>(py)?
+    {
         Ok(resolver_match) => resolver_match.getattr(py, "namespace"),
         Err(_) => Ok(none),
     }
@@ -218,7 +234,13 @@ impl Render for Url {
             for arg in &self.args {
                 py_args.append(arg.resolve(py, template, context)?)?;
             }
-            reverse.call1((view_name, py.None(), py_args.to_tuple(), py.None(), current_app))
+            reverse.call1((
+                view_name,
+                py.None(),
+                py_args.to_tuple(),
+                py.None(),
+                current_app,
+            ))
         } else {
             let kwargs = PyDict::new(py);
             for (key, value) in &self.kwargs {
@@ -228,15 +250,13 @@ impl Render for Url {
         };
         match &self.variable {
             None => Ok(Some(Content::Py(url?))),
-            Some(variable) => {
-                match url.ok_or_isinstance_of::<NoReverseMatch>(py)? {
-                    Ok(url) => {
-                        context.context.insert(variable.clone(), url.unbind());
-                        Ok(None)
-                    }
-                    Err(_) => Ok(None),
+            Some(variable) => match url.ok_or_isinstance_of::<NoReverseMatch>(py)? {
+                Ok(url) => {
+                    context.context.insert(variable.clone(), url.unbind());
+                    Ok(None)
                 }
-            }
+                Err(_) => Ok(None),
+            },
         }
     }
 }
@@ -262,7 +282,9 @@ impl Render for Text {
         template: TemplateString<'t>,
         _context: &mut Context,
     ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
-        Ok(Some(Content::String(Cow::Borrowed(template.content(self.at)))))
+        Ok(Some(Content::String(Cow::Borrowed(
+            template.content(self.at),
+        ))))
     }
 }
 
@@ -333,7 +355,11 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ name }}");
             let variable = Variable::new((3, 4));
 
@@ -351,7 +377,11 @@ mod tests {
             let name = PyString::new(py, "Lily");
             data.set_item("name", name).unwrap();
             let context = HashMap::from([("data".to_string(), data.into_any().unbind())]);
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ data.name }}");
             let variable = Variable::new((3, 9));
 
@@ -368,7 +398,11 @@ mod tests {
             let name = PyString::new(py, "Lily");
             let names = PyList::new(py, [name]).unwrap();
             let context = HashMap::from([("names".to_string(), names.into_any().unbind())]);
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ names.0 }}");
             let variable = Variable::new((3, 7));
 
@@ -393,10 +427,15 @@ user = User('Lily')
 ",
                 None,
                 Some(&locals),
-            ).unwrap();
+            )
+            .unwrap();
 
             let context = locals.extract().unwrap();
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ user.name }}");
             let variable = Variable::new((3, 9));
 
@@ -412,13 +451,20 @@ user = User('Lily')
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ name|default:'Bryony' }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument { at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
+                filter: FilterType::Default(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                }),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -432,13 +478,20 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ name|default:'Bryony' }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument{ at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
+                filter: FilterType::Default(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                }),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -452,13 +505,20 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ count|default:12}}");
             let variable = Variable::new((3, 5));
             let filter = Filter {
                 at: (9, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument { at: (17, 2), argument_type: ArgumentType::Int(12.into())}),
+                filter: FilterType::Default(Argument {
+                    at: (17, 2),
+                    argument_type: ArgumentType::Int(12.into()),
+                }),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -472,13 +532,20 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ count|default:3.5}}");
             let variable = Variable::new((3, 5));
             let filter = Filter {
                 at: (9, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument{ at: (17, 3), argument_type: ArgumentType::Float(3.5)}),
+                filter: FilterType::Default(Argument {
+                    at: (17, 3),
+                    argument_type: ArgumentType::Float(3.5),
+                }),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -493,13 +560,20 @@ user = User('Lily')
         Python::with_gil(|py| {
             let me = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("me".to_string(), me.unbind())]);
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ name|default:me}}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument{ at: (16, 2), argument_type: ArgumentType::Variable(Variable::new((16, 2)))}),
+                filter: FilterType::Default(Argument {
+                    at: (16, 2),
+                    argument_type: ArgumentType::Variable(Variable::new((16, 2))),
+                }),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -514,7 +588,11 @@ user = User('Lily')
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ name|lower }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -534,7 +612,11 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ name|lower }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -554,13 +636,20 @@ user = User('Lily')
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context { context, request: None, autoescape: false };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
             let template = TemplateString("{{ name|default:'Bryony'|lower }}");
             let variable = Variable::new((3, 4));
             let default = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument { at: (16, 8), argument_type: ArgumentType::Text(Text::new((17, 6)))}),
+                filter: FilterType::Default(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                }),
             };
             let lower = Filter {
                 at: (25, 5),
@@ -580,7 +669,11 @@ user = User('Lily')
         Python::with_gil(|py| {
             let html = PyString::new(py, "<p>Hello World!</p>").into_any().unbind();
             let context = HashMap::from([("html".to_string(), html)]);
-            let mut context = Context { context, request: None, autoescape: true };
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: true,
+            };
             let template = TemplateString("{{ html }}");
             let html = Variable::new((3, 4));
 
