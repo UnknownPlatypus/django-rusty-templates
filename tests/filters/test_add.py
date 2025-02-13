@@ -51,3 +51,30 @@ def test_add_integer_strings():
 
     assert django_template.render({"foo": "2"}) == "5"
     assert rust_template.render({"foo": "2"}) == "5"
+
+
+def test_add_strings():
+    template = "{{ foo|add:'def' }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "abc"}) == "abcdef"
+    assert rust_template.render({"foo": "abc"}) == "abcdef"
+
+
+def test_add_lists():
+    template = "{{ foo|add:bar}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1], "bar": [2]}) == "[1, 2]"
+    assert rust_template.render({"foo": [1], "bar": [2]}) == "[1, 2]"
+
+
+def test_add_incompatible():
+    template = "{{ foo|add:bar}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1], "bar": 2}) == ""
+    assert rust_template.render({"foo": [1], "bar": 2}) == ""

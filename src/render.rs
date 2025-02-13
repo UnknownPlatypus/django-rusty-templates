@@ -80,7 +80,7 @@ fn render_python(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String>
     }
 }
 
-impl<'t> Content<'t, '_> {
+impl<'t, 'py> Content<'t, 'py> {
     fn render(self, context: &Context) -> PyResult<Cow<'t, str>> {
         let content = match self {
             Self::Py(content) => render_python(content, context)?,
@@ -111,10 +111,28 @@ impl<'t> Content<'t, '_> {
                             left.extract::<BigInt>()
                                 .expect("Python integers are BigInt compatible"),
                         ),
-                        Err(_) => todo!(),
+                        Err(_) => None,
                     }
                 }
             },
+        }
+    }
+
+    fn to_py(&self, py: Python<'py>) -> Bound<'py, PyAny> {
+        match self {
+            Self::Py(object) => object.clone(),
+            Self::Int(i) => i
+                .into_pyobject(py)
+                .expect("A BigInt can always be converted to a Python int.")
+                .into_any(),
+            Self::Float(f) => f
+                .into_pyobject(py)
+                .expect("An f64 can always be converted to a Python float.")
+                .into_any(),
+            Self::String(s) => s
+                .into_pyobject(py)
+                .expect("A string can always be converted to a Python str.")
+                .into_any(),
         }
     }
 }
@@ -204,9 +222,15 @@ impl Render for Filter {
                     .expect("missing argument in context should already have raised");
                 match (left.to_bigint(), right.to_bigint()) {
                     (Some(left), Some(right)) => return Ok(Some(Content::Int(left + right))),
-                    _ => {}
+                    _ => {
+                        let left = left.to_py(py);
+                        let right = right.to_py(py);
+                        match left.add(right) {
+                            Ok(sum) => return Ok(Some(Content::Py(sum))),
+                            Err(_) => return Ok(None),
+                        }
+                    }
                 }
-                todo!()
             }
             FilterType::Default(right) => match left {
                 Some(left) => Some(left),
