@@ -46,3 +46,20 @@ Django Rusty Templates is open to contributions. These can come in many forms:
 * Adding new test cases to ensure Django Rusty Templates behaves the same as Django.
 * Adding benchmarks to track performance.
 * Refactoring for readability or performance.
+
+### Getting started with development
+
+```
+pip install -r requirements.txt
+
+# using virtual environment? (otherwise may not find modules)
+export PYTHONPATH=/path/to/venv/lib/python3.x/site-packages
+
+# run cargo tests
+cargo test
+
+# build python package
+maturin develop
+
+# pytest
+```
