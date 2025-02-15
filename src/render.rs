@@ -229,6 +229,16 @@ impl Render for Filter {
                     }
                 }
             }
+            FilterType::AddSlashes => match left {
+                Some(content) => Some(Content::String(Cow::Owned(
+                    content
+                        .render(context)?
+                        .replace("\\", "\\\\")
+                        .replace("\"", "\\\"")
+                        .replace("'", "\\'"),
+                ))),
+                None => Some(Content::String(Cow::Borrowed(""))),
+            },
             FilterType::Default(right) => match left {
                 Some(left) => Some(left),
                 None => right.resolve(py, template, context)?,
@@ -549,6 +559,31 @@ user = User('Lily')
 
             let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_addslashes_single() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let name = PyString::new(py, "'hello'").into_any();
+            let context = HashMap::from([("quotes".to_string(), name.unbind())]);
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ quotes|addslashes }}");
+            let variable = Variable::new((3, 6));
+            let filter = Filter {
+                at: (10, 10),
+                left: TagElement::Variable(variable),
+                filter: FilterType::AddSlashes,
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "\\'hello\\'");
         })
     }
 

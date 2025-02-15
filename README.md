@@ -62,7 +62,7 @@ $ source .venv/bin/activate
 $ pip install -r requirements.txt
 ```
 
-To run the Python tests, build Django Rusty Templates in develop mode with maturin and then run pytest:
+To run the Python tests, build Django Rusty Templates in develop mode with maturin and then run pytest. Each change in rust needs a new execution of maturin develop.
 
 ```bash
 $ maturin develop

@@ -158,6 +158,7 @@ impl PyEq for TagElement {
 #[derive(Debug)]
 pub enum FilterType {
     Add(Argument),
+    AddSlashes,
     Default(Argument),
     External(Py<PyAny>, Option<Argument>),
     Lower,
@@ -169,6 +170,7 @@ impl PartialEq for FilterType {
             (Self::Add(a), Self::Add(b)) => a == b,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::Lower, Self::Lower) => true,
+            (Self::AddSlashes, Self::AddSlashes) => true,
             (Self::External(_, _), Self::External(_, _)) => false, // Can't compare PyAny to PyAny
             _ => false,
         }
@@ -179,6 +181,7 @@ impl CloneRef for FilterType {
     fn clone_ref(&self, py: Python<'_>) -> Self {
         match self {
             Self::Add(arg) => Self::Add(arg.clone()),
+            Self::AddSlashes => Self::AddSlashes,
             Self::Default(arg) => Self::Default(arg.clone()),
             Self::External(filter, arg) => Self::External(filter.clone_ref(py), arg.clone()),
             Self::Lower => Self::Lower,
@@ -191,6 +194,7 @@ impl PyEq for FilterType {
     fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
         match (self, other) {
             (Self::Add(a), Self::Add(b)) => a == b,
+            (Self::AddSlashes, Self::AddSlashes) => true,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::External(a1, a2), Self::External(b1, b2)) => {
                 a2 == b2
@@ -223,6 +227,15 @@ impl Filter {
             "add" => match right {
                 Some(right) => FilterType::Add(right),
                 None => return Err(ParseError::MissingArgument { at: at.into() }),
+            },
+            "addslashes" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        filter: "addslashes",
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::AddSlashes,
             },
             "default" => match right {
                 Some(right) => FilterType::Default(right),
