@@ -37,6 +37,7 @@ pub enum Content<'t, 'py> {
     Int(BigInt),
 }
 
+#[derive(Debug)]
 pub enum ContentString<'t> {
     String(Cow<'t, str>),
     HtmlSafe(Cow<'t, str>),
@@ -262,6 +263,7 @@ impl Render for Filter {
             FilterType::Default(filter) => filter.resolve(left, py, template, context),
             FilterType::External(filter) => filter.resolve(left, py, template, context),
             FilterType::Lower(filter) => filter.resolve(left, py, template, context),
+            FilterType::Safe(filter) => filter.resolve(left, py, template, context),
         };
         result
     }

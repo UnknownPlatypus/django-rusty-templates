@@ -13,6 +13,7 @@ use crate::filters::DefaultFilter;
 use crate::filters::ExternalFilter;
 use crate::filters::FilterType;
 use crate::filters::LowerFilter;
+use crate::filters::SafeFilter;
 use crate::lex::core::{Lexer, TokenType};
 use crate::lex::load::{LoadLexer, LoadToken};
 use crate::lex::tag::{lex_tag, TagLexerError, TagParts};
@@ -97,8 +98,9 @@ impl PartialEq for FilterType {
             (Self::AddSlashes(_), Self::AddSlashes(_)) => true,
             (Self::Capfirst(_), Self::Capfirst(_)) => true,
             (Self::Default(a), Self::Default(b)) => a.argument == b.argument,
-            (Self::Lower(_), Self::Lower(_)) => true,
             (Self::External(_), Self::External(_)) => false, // Can't compare PyAny to PyAny
+            (Self::Lower(_), Self::Lower(_)) => true,
+            (Self::Safe(_), Self::Safe(_)) => true,
             _ => false,
         }
     }
@@ -116,6 +118,7 @@ impl CloneRef for FilterType {
                 external_filter.argument.clone(),
             )),
             Self::Lower(_) => Self::Lower(LowerFilter),
+            Self::Safe(_) => Self::Safe(SafeFilter),
         }
     }
 }
@@ -137,6 +140,7 @@ impl PyEq for FilterType {
                         .expect("__eq__ should not raise")
             }
             (Self::Lower(_), Self::Lower(_)) => true,
+            (Self::Safe(_), Self::Safe(_)) => true,
             _ => false,
         }
     }
@@ -191,6 +195,15 @@ impl Filter {
                     })
                 }
                 None => FilterType::Lower(LowerFilter),
+            },
+            "safe" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        filter: "safe",
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::Safe(SafeFilter),
             },
             external => {
                 let external = match parser.external_filters.get(external) {
@@ -1566,6 +1579,11 @@ mod tests {
             let cloned = capfirst.clone_ref(py);
             assert_eq!(capfirst, cloned);
             assert!(capfirst.py_eq(&cloned, py));
+
+            let safe = FilterType::Safe(SafeFilter);
+            let cloned = safe.clone_ref(py);
+            assert_eq!(safe, cloned);
+            assert!(safe.py_eq(&cloned, py));
         })
     }
 }

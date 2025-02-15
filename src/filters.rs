@@ -13,6 +13,7 @@ pub enum FilterType {
     Default(DefaultFilter),
     External(ExternalFilter),
     Lower(LowerFilter),
+    Safe(SafeFilter),
 }
 
 pub trait ResolveFilter {
@@ -199,6 +200,34 @@ impl ResolveFilter for LowerFilter {
                     .map_content(|content| Cow::Owned(content.to_lowercase())),
             ),
             None => "".into_content(),
+        };
+        Ok(content)
+    }
+}
+
+#[derive(Debug)]
+pub struct SafeFilter;
+
+impl ResolveFilter for SafeFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> TemplateResult<'t, 'py> {
+        let content = match variable {
+            Some(content) => match content {
+                Content::HtmlSafe(content) => Some(Content::HtmlSafe(content)),
+                Content::String(content) => Some(Content::HtmlSafe(content)),
+                Content::Int(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Float(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Py(object) => {
+                    let content = object.str()?.extract::<String>()?;
+                    Some(Content::HtmlSafe(Cow::Owned(content)))
+                }
+            },
+            None => Some(Content::HtmlSafe(Cow::Borrowed(""))),
         };
         Ok(content)
     }
