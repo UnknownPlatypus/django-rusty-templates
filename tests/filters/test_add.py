@@ -87,3 +87,30 @@ def test_add_float():
 
     assert django_template.render({"foo": 1.2, "bar": 2.9}) == "3"
     assert rust_template.render({"foo": 1.2, "bar": 2.9}) == "3"
+
+
+def test_add_float_literal():
+    template = "{{ foo|add:2.9 }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": 1.2}) == "3"
+    assert rust_template.render({"foo": 1.2}) == "3"
+
+
+def test_add_incompatible_int():
+    template = "{{ foo|add:2}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1]}) == ""
+    assert rust_template.render({"foo": [1]}) == ""
+
+
+def test_add_incompatible_float():
+    template = "{{ foo|add:2.9}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1]}) == ""
+    assert rust_template.render({"foo": [1]}) == ""
