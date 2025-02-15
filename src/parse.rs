@@ -231,6 +231,7 @@ impl Filter {
             "lower" => match right {
                 Some(right) => {
                     return Err(ParseError::UnexpectedArgument {
+                        filter: "lower",
                         at: right.at.into(),
                     })
                 }
@@ -459,9 +460,10 @@ pub enum ParseError {
         #[label("here")]
         at: SourceSpan,
     },
-    #[error("Expected an argument")]
+    #[error("{filter} filter does not take an argument")]
     UnexpectedArgument {
-        #[label("here")]
+        filter: &'static str,
+        #[label("unexpected argument")]
         at: SourceSpan,
     },
     #[error("'url' takes at least one argument, a URL pattern name")]
@@ -1139,7 +1141,13 @@ mod tests {
             let template = "{{ foo|lower:baz }}";
             let mut parser = Parser::new(py, template.into(), &libraries);
             let error = parser.parse().unwrap_err().unwrap_parse_error();
-            assert_eq!(error, ParseError::UnexpectedArgument { at: (13, 3).into() });
+            assert_eq!(
+                error,
+                ParseError::UnexpectedArgument {
+                    filter: "lower",
+                    at: (13, 3).into()
+                }
+            );
         })
     }
 
