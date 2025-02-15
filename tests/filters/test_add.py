@@ -1,0 +1,138 @@
+import pytest
+from django.template import engines
+from django.template.exceptions import TemplateSyntaxError
+from django.template.base import VariableDoesNotExist
+
+
+def test_add_integers():
+    template = "{{ foo|add:3 }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": 2}) == "5"
+    assert rust_template.render({"foo": 2}) == "5"
+
+
+def test_add_no_variable():
+    template = "{{ foo|add:3 }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == ""
+    assert rust_template.render({}) == ""
+
+
+def test_add_no_argument():
+    template = "{{ foo|add:bar }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        django_template.render({"foo": 1})
+
+    assert str(exc_info.value) == "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {'foo': 1}]"
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        rust_template.render({"foo": 1})
+
+    assert str(exc_info.value) == """
+  × Failed lookup for key [bar] in {"foo": 1}
+   ╭────
+ 1 │ {{ foo|add:bar }}
+   ·            ─┬─
+   ·             ╰── key
+   ╰────
+"""
+
+
+def test_add_integer_strings():
+    template = "{{ foo|add:'3' }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "2"}) == "5"
+    assert rust_template.render({"foo": "2"}) == "5"
+
+
+def test_add_strings():
+    template = "{{ foo|add:'def' }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "abc"}) == "abcdef"
+    assert rust_template.render({"foo": "abc"}) == "abcdef"
+
+
+def test_add_lists():
+    template = "{{ foo|add:bar}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1], "bar": [2]}) == "[1, 2]"
+    assert rust_template.render({"foo": [1], "bar": [2]}) == "[1, 2]"
+
+
+def test_add_incompatible():
+    template = "{{ foo|add:bar}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1], "bar": 2}) == ""
+    assert rust_template.render({"foo": [1], "bar": 2}) == ""
+
+
+def test_add_float():
+    template = "{{ foo|add:bar}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": 1.2, "bar": 2.9}) == "3"
+    assert rust_template.render({"foo": 1.2, "bar": 2.9}) == "3"
+
+
+def test_add_float_literal():
+    template = "{{ foo|add:2.9 }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": 1.2}) == "3"
+    assert rust_template.render({"foo": 1.2}) == "3"
+
+
+def test_add_incompatible_int():
+    template = "{{ foo|add:2}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1]}) == ""
+    assert rust_template.render({"foo": [1]}) == ""
+
+
+def test_add_incompatible_float():
+    template = "{{ foo|add:2.9}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": [1]}) == ""
+    assert rust_template.render({"foo": [1]}) == ""
+
+
+def test_add_missing_argument():
+    template = "{{ foo|add }}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        django_template = engines["django"].from_string(template)
+
+    assert str(exc_info.value) == "add requires 2 arguments, 1 provided"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        rust_template = engines["rusty"].from_string(template)
+
+    assert str(exc_info.value) == """
+  × Expected an argument
+   ╭────
+ 1 │ {{ foo|add }}
+   ·        ─┬─
+   ·         ╰── here
+   ╰────
+"""
