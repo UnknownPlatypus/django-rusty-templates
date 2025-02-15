@@ -49,17 +49,34 @@ Django Rusty Templates is open to contributions. These can come in many forms:
 
 ### Getting started with development
 
+To develop locally, first create a virtualenv using your preferred method.
+
+```bash
+$ python -m venv .venv
 ```
-pip install -r requirements.txt
 
-# using virtual environment? (otherwise may not find modules)
+Activate the virtualenv and install the requirements:
+
+```bash
+$ source .venv/bin/activate
+$ pip install -r requirements.txt
+```
+
+To run the Python tests, build Django Rusty Templates in develop mode with maturin and then run pytest:
+
+```bash
+$ maturin develop
+$ pytest
+```
+
+You can also run the Rust tests:
+
+```bash
+$ cargo test
+```
+
+If you get an `ImportError` from python, you may need to set the `PYTHONPATH` environment variable:
+
+```bash
 export PYTHONPATH=/path/to/venv/lib/python3.x/site-packages
-
-# run cargo tests
-cargo test
-
-# build python package
-maturin develop
-
-# pytest
 ```
