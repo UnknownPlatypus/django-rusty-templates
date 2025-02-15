@@ -1546,4 +1546,19 @@ mod tests {
             assert!(translated.py_eq(&cloned, py));
         })
     }
+
+    #[test]
+    fn test_filter_type_clone_ref() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let add = FilterType::Add(Argument {
+                at: (6, 3),
+                argument_type: ArgumentType::Float(1.1),
+            });
+            let cloned = add.clone_ref(py);
+            assert_eq!(add, cloned);
+            assert!(add.py_eq(&cloned, py));
+        })
+    }
 }
