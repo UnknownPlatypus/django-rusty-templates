@@ -98,10 +98,7 @@ impl<'t, 'py> Content<'t, 'py> {
                 Ok(left) => Some(left),
                 Err(_) => None,
             },
-            Self::Float(left) => match left.trunc().to_bigint() {
-                Some(left) => Some(left),
-                None => None,
-            },
+            Self::Float(left) => left.trunc().to_bigint(),
             Self::Py(left) => match left.extract::<BigInt>() {
                 Ok(left) => Some(left),
                 Err(_) => {
