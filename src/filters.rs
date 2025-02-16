@@ -1,9 +1,11 @@
 use std::borrow::Cow;
 
+use html_escape::encode_quoted_attribute_to_string;
+use pyo3::prelude::*;
+
 use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Render, TemplateResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
-use pyo3::prelude::*;
 
 #[derive(Debug)]
 pub enum FilterType {
@@ -11,6 +13,7 @@ pub enum FilterType {
     AddSlashes(AddSlashesFilter),
     Capfirst(CapfirstFilter),
     Default(DefaultFilter),
+    Escape(EscapeFilter),
     External(ExternalFilter),
     Lower(LowerFilter),
     Safe(SafeFilter),
@@ -143,6 +146,39 @@ impl ResolveFilter for DefaultFilter {
             None => self.argument.resolve(py, template, context)?,
         };
         Ok(content)
+    }
+}
+
+#[derive(Debug)]
+pub struct EscapeFilter;
+
+impl ResolveFilter for EscapeFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        _context: &mut Context,
+    ) -> TemplateResult<'t, 'py> {
+        Ok(match variable {
+            Some(content) => match content {
+                Content::HtmlSafe(content) => Some(Content::HtmlSafe(content)),
+                Content::String(content) => {
+                    let mut encoded = String::new();
+                    encode_quoted_attribute_to_string(&content, &mut encoded);
+                    Some(Content::HtmlSafe(Cow::Owned(encoded)))
+                }
+                Content::Int(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Float(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Py(object) => {
+                    let content = object.str()?.extract::<String>()?;
+                    let mut encoded = String::new();
+                    encode_quoted_attribute_to_string(&content, &mut encoded);
+                    Some(Content::HtmlSafe(Cow::Owned(encoded)))
+                }
+            },
+            None => Some(Content::HtmlSafe(Cow::Borrowed(""))),
+        })
     }
 }
 

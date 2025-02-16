@@ -10,6 +10,7 @@ use crate::filters::AddFilter;
 use crate::filters::AddSlashesFilter;
 use crate::filters::CapfirstFilter;
 use crate::filters::DefaultFilter;
+use crate::filters::EscapeFilter;
 use crate::filters::ExternalFilter;
 use crate::filters::FilterType;
 use crate::filters::LowerFilter;
@@ -98,6 +99,7 @@ impl PartialEq for FilterType {
             (Self::AddSlashes(_), Self::AddSlashes(_)) => true,
             (Self::Capfirst(_), Self::Capfirst(_)) => true,
             (Self::Default(a), Self::Default(b)) => a.argument == b.argument,
+            (Self::Escape(_), Self::Escape(_)) => true,
             (Self::External(_), Self::External(_)) => false, // Can't compare PyAny to PyAny
             (Self::Lower(_), Self::Lower(_)) => true,
             (Self::Safe(_), Self::Safe(_)) => true,
@@ -113,6 +115,7 @@ impl CloneRef for FilterType {
             Self::AddSlashes(_) => Self::AddSlashes(AddSlashesFilter),
             Self::Capfirst(_) => Self::Capfirst(CapfirstFilter),
             Self::Default(filter) => Self::Default(DefaultFilter::new(filter.argument.clone())),
+            Self::Escape(_) => Self::Escape(EscapeFilter),
             Self::External(external_filter) => Self::External(ExternalFilter::new(
                 external_filter.filter.clone_ref(py),
                 external_filter.argument.clone(),
@@ -131,6 +134,7 @@ impl PyEq for FilterType {
             (Self::AddSlashes(_), Self::AddSlashes(_)) => true,
             (Self::Capfirst(_), Self::Capfirst(_)) => true,
             (Self::Default(a), Self::Default(b)) => a.argument == b.argument,
+            (Self::Escape(_), Self::Escape(_)) => true,
             (Self::External(ext_a), Self::External(ext_b)) => {
                 ext_a.argument == ext_b.argument
                     && ext_a
@@ -186,6 +190,15 @@ impl Filter {
             "default" => match right {
                 Some(right) => FilterType::Default(DefaultFilter::new(right)),
                 None => return Err(ParseError::MissingArgument { at: at.into() }),
+            },
+            "escape" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        filter: "escape",
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::Escape(EscapeFilter),
             },
             "lower" => match right {
                 Some(right) => {
@@ -1584,6 +1597,11 @@ mod tests {
             let cloned = safe.clone_ref(py);
             assert_eq!(safe, cloned);
             assert!(safe.py_eq(&cloned, py));
+
+            let escape = FilterType::Escape(EscapeFilter);
+            let cloned = escape.clone_ref(py);
+            assert_eq!(escape, cloned);
+            assert!(escape.py_eq(&cloned, py));
         })
     }
 }

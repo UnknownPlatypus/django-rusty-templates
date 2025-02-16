@@ -265,6 +265,7 @@ impl Render for Filter {
             FilterType::AddSlashes(filter) => filter.resolve(left, py, template, context),
             FilterType::Capfirst(filter) => filter.resolve(left, py, template, context),
             FilterType::Default(filter) => filter.resolve(left, py, template, context),
+            FilterType::Escape(filter) => filter.resolve(left, py, template, context),
             FilterType::External(filter) => filter.resolve(left, py, template, context),
             FilterType::Lower(filter) => filter.resolve(left, py, template, context),
             FilterType::Safe(filter) => filter.resolve(left, py, template, context),
