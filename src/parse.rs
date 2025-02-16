@@ -759,6 +759,8 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::template::django_rusty_templates::{EngineData, Template};
+    use pyo3::types::{PyDict, PyDictMethods};
 
     use crate::lex::common::LexerError;
 
@@ -1101,6 +1103,30 @@ mod tests {
             let mut parser = Parser::new(py, template.into(), &libraries);
             let error = parser.parse().unwrap_err().unwrap_parse_error();
             assert_eq!(error, ParseError::InvalidNumber { at: (11, 5).into() });
+        })
+    }
+
+    #[test]
+    fn test_filter_parse_addslashes() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ foo|addslashes }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("bar", "").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+
+            let context = PyDict::new(py);
+            context.set_item("foo", "").unwrap();
+            let template_string = "{{ foo|addslashes:invalid }}".to_string();
+            let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
+
+            let error_string = format!("{error}");
+            assert!(error_string.contains("addslashes filter does not take an argument"));
         })
     }
 
@@ -1580,6 +1606,11 @@ mod tests {
             let cloned = add.clone_ref(py);
             assert_eq!(add, cloned);
             assert!(add.py_eq(&cloned, py));
+
+            let add_slashes = FilterType::AddSlashes;
+            let cloned = add_slashes.clone_ref(py);
+            assert_eq!(add_slashes, cloned);
+            assert!(add_slashes.py_eq(&cloned, py));
         })
     }
 }

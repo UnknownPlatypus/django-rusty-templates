@@ -42,7 +42,7 @@ def test_addslashes02(self):
 
 def test_quotes(assert_render):
     template = "{{ a|addslashes }} and {{ b|addslashes }}"
-    expected = "\\\"double quotes\\\" and \\'single quotes\\'"
+    expected = r"\"double quotes\" and \'single quotes\'"
     context = {"a": mark_safe('"double quotes"'), "b": mark_safe("'single quotes'")}
 
     assert_render(template, context, expected)
@@ -51,7 +51,7 @@ def test_quotes(assert_render):
 def test_backslashes(assert_render):
     template = "{{ a|addslashes }}"
     context = {"a": r"\ : backslashes, too"}
-    expected = "\\\\ : backslashes, too"
+    expected = r"\\ : backslashes, too"
 
     assert_render(template, context, expected)
 

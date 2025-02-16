@@ -8,14 +8,14 @@ def rusty():
 
 
 @pytest.fixture
-def django_temp():
+def django_template():
     return engines["django"].from_string
 
 
 @pytest.fixture
-def assert_render(rusty, django_temp):
-    def temp(template, context, expected):
-        assert django_temp(template).render(context) == expected
+def assert_render(rusty, django_template):
+    def assert_render_template(template, context, expected):
+        assert django_template(template).render(context) == expected
         assert rusty(template).render(context) == expected
 
-    return temp
+    return assert_render_template

@@ -233,9 +233,9 @@ impl Render for Filter {
                 Some(content) => Some(Content::String(Cow::Owned(
                     content
                         .render(context)?
-                        .replace("\\", "\\\\")
+                        .replace(r"\", r"\\")
                         .replace("\"", "\\\"")
-                        .replace("'", "\\'"),
+                        .replace("'", r"\'"),
                 ))),
                 None => Some(Content::String(Cow::Borrowed(""))),
             },
