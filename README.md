@@ -80,3 +80,13 @@ If you get an `ImportError` from python, you may need to set the `PYTHONPATH` en
 ```bash
 export PYTHONPATH=/path/to/venv/lib/python3.x/site-packages
 ```
+
+When submitting a PR we check coverage. You can check coverage locally with
+
+```bash
+$ cargo llvm-cov
+# generate html
+$ cargo llvm-cov --html
+# open it
+$ open -a <your_browser> target/llvm-cov/html/index.html
+```
