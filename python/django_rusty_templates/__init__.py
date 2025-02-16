@@ -4,7 +4,7 @@ from django.template.backends.django import get_installed_libraries
 
 from .django_rusty_templates import Engine, Template
 
-__all__ = [Engine, Template]
+__all__ = ["RustyTemplates", "Template"]
 
 
 class RustyTemplates(BaseEngine):
