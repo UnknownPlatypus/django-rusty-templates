@@ -211,6 +211,8 @@ pub mod django_rusty_templates {
         pub fn from_string(&self, template_code: Bound<'_, PyString>) -> PyResult<Template> {
             Template::new_from_string(template_code.py(), template_code.extract()?, &self.data)
         }
+
+        // TODO render_to_string needs implementation.
     }
 
     #[derive(Debug)]

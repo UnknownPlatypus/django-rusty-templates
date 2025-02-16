@@ -158,6 +158,7 @@ impl PyEq for TagElement {
 #[derive(Debug)]
 pub enum FilterType {
     Add(Argument),
+    AddSlashes,
     Default(Argument),
     External(Py<PyAny>, Option<Argument>),
     Lower,
@@ -169,6 +170,7 @@ impl PartialEq for FilterType {
             (Self::Add(a), Self::Add(b)) => a == b,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::Lower, Self::Lower) => true,
+            (Self::AddSlashes, Self::AddSlashes) => true,
             (Self::External(_, _), Self::External(_, _)) => false, // Can't compare PyAny to PyAny
             _ => false,
         }
@@ -179,6 +181,7 @@ impl CloneRef for FilterType {
     fn clone_ref(&self, py: Python<'_>) -> Self {
         match self {
             Self::Add(arg) => Self::Add(arg.clone()),
+            Self::AddSlashes => Self::AddSlashes,
             Self::Default(arg) => Self::Default(arg.clone()),
             Self::External(filter, arg) => Self::External(filter.clone_ref(py), arg.clone()),
             Self::Lower => Self::Lower,
@@ -191,6 +194,7 @@ impl PyEq for FilterType {
     fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
         match (self, other) {
             (Self::Add(a), Self::Add(b)) => a == b,
+            (Self::AddSlashes, Self::AddSlashes) => true,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::External(a1, a2), Self::External(b1, b2)) => {
                 a2 == b2
@@ -223,6 +227,15 @@ impl Filter {
             "add" => match right {
                 Some(right) => FilterType::Add(right),
                 None => return Err(ParseError::MissingArgument { at: at.into() }),
+            },
+            "addslashes" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        filter: "addslashes",
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::AddSlashes,
             },
             "default" => match right {
                 Some(right) => FilterType::Default(right),
@@ -746,6 +759,8 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::template::django_rusty_templates::{EngineData, Template};
+    use pyo3::types::{PyDict, PyDictMethods};
 
     use crate::lex::common::LexerError;
 
@@ -1088,6 +1103,30 @@ mod tests {
             let mut parser = Parser::new(py, template.into(), &libraries);
             let error = parser.parse().unwrap_err().unwrap_parse_error();
             assert_eq!(error, ParseError::InvalidNumber { at: (11, 5).into() });
+        })
+    }
+
+    #[test]
+    fn test_filter_parse_addslashes() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ foo|addslashes }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("bar", "").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+
+            let context = PyDict::new(py);
+            context.set_item("foo", "").unwrap();
+            let template_string = "{{ foo|addslashes:invalid }}".to_string();
+            let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
+
+            let error_string = format!("{error}");
+            assert!(error_string.contains("addslashes filter does not take an argument"));
         })
     }
 
@@ -1567,6 +1606,11 @@ mod tests {
             let cloned = add.clone_ref(py);
             assert_eq!(add, cloned);
             assert!(add.py_eq(&cloned, py));
+
+            let add_slashes = FilterType::AddSlashes;
+            let cloned = add_slashes.clone_ref(py);
+            assert_eq!(add_slashes, cloned);
+            assert!(add_slashes.py_eq(&cloned, py));
         })
     }
 }
