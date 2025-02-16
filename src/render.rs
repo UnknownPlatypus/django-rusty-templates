@@ -583,7 +583,7 @@ user = User('Lily')
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
-            assert_eq!(rendered, "\\'hello\\'");
+            assert_eq!(rendered, r"\'hello\'");
         })
     }
 
