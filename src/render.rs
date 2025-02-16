@@ -134,6 +134,32 @@ impl<'t, 'py> Content<'t, 'py> {
     }
 }
 
+trait IntoOwnedContent<'t, 'py> {
+    fn into_content(self) -> Option<Content<'t, 'py>>;
+}
+
+trait IntoBorrowedContent<'a, 't, 'py>
+where
+    'a: 't,
+{
+    fn into_content(&'a self) -> Option<Content<'t, 'py>>;
+}
+
+impl<'a, 't, 'py> IntoBorrowedContent<'a, 't, 'py> for str
+where
+    'a: 't,
+{
+    fn into_content(&'a self) -> Option<Content<'t, 'py>> {
+        Some(Content::String(Cow::Borrowed(&self)))
+    }
+}
+
+impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
+    fn into_content(self) -> Option<Content<'t, 'py>> {
+        Some(Content::String(Cow::Owned(self)))
+    }
+}
+
 pub trait Render {
     fn resolve<'t, 'py>(
         &self,
@@ -230,14 +256,27 @@ impl Render for Filter {
                 }
             }
             FilterType::AddSlashes => match left {
-                Some(content) => Some(Content::String(Cow::Owned(
-                    content
-                        .render(context)?
-                        .replace(r"\", r"\\")
-                        .replace("\"", "\\\"")
-                        .replace("'", r"\'"),
-                ))),
-                None => Some(Content::String(Cow::Borrowed(""))),
+                Some(content) => content
+                    .render(context)?
+                    .replace(r"\", r"\\")
+                    .replace("\"", "\\\"")
+                    .replace("'", r"\'")
+                    .into_content(),
+                None => "".into_content(),
+            },
+            FilterType::Capfirst => match left {
+                Some(content) => {
+                    let content_string = content.render(context)?.into_owned();
+                    let mut chars = content_string.chars();
+                    let first_char = chars.next().unwrap_or('\0').to_uppercase();
+                    let string: String = first_char.chain(chars).collect();
+                    if string == "\0" {
+                        "".into_content()
+                    } else {
+                        string.into_content()
+                    }
+                }
+                None => "".into_content(),
             },
             FilterType::Default(right) => match left {
                 Some(left) => Some(left),
@@ -256,10 +295,8 @@ impl Render for Filter {
                 Some(Content::Py(value))
             }
             FilterType::Lower => match left {
-                Some(content) => Some(Content::String(Cow::Owned(
-                    content.render(context)?.to_lowercase(),
-                ))),
-                None => Some(Content::String(Cow::Borrowed(""))),
+                Some(content) => content.render(context)?.to_lowercase().into_content(),
+                None => "".into_content(),
             },
         })
     }
@@ -433,6 +470,7 @@ impl Render for Argument {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::template::django_rusty_templates::{EngineData, Template};
 
     use pyo3::types::{PyDict, PyList, PyString};
 
@@ -584,6 +622,44 @@ user = User('Lily')
 
             let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, r"\'hello\'");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_capfirst() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|capfirst }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "hello world").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "Hello world");
+
+            let context = PyDict::new(py);
+            context.set_item("var", "").unwrap();
+            let template_string = "{{ var|capfirst }}".to_string();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+
+            let context = PyDict::new(py);
+            context.set_item("bar", "").unwrap();
+            let template_string = "{{ var|capfirst }}".to_string();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+
+            let template_string = "{{ var|capfirst:invalid }}".to_string();
+            let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
+
+            let error_string = format!("{error}");
+            assert!(error_string.contains("capfirst filter does not take an argument"));
         })
     }
 
