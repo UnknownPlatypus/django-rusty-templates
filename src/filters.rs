@@ -80,8 +80,8 @@ impl ResolveFilter for AddFilter {
         match (variable.to_bigint(), right.to_bigint()) {
             (Some(variable), Some(right)) => return Ok(Some(Content::Int(variable + right))),
             _ => {
-                let variable = variable.to_py(py);
-                let right = right.to_py(py);
+                let variable = variable.to_py(py)?;
+                let right = right.to_py(py)?;
                 match variable.add(right) {
                     Ok(sum) => return Ok(Some(Content::Py(sum))),
                     Err(_) => return Ok(None),
@@ -214,7 +214,7 @@ impl ResolveFilter for SafeFilter {
         variable: Option<Content<'t, 'py>>,
         _py: Python<'py>,
         _template: TemplateString<'t>,
-        context: &mut Context,
+        _context: &mut Context,
     ) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(content) => match content {

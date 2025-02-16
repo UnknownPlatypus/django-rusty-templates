@@ -133,8 +133,8 @@ impl<'t, 'py> Content<'t, 'py> {
         }
     }
 
-    pub fn to_py(&self, py: Python<'py>) -> Bound<'py, PyAny> {
-        match self {
+    pub fn to_py(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        Ok(match self {
             Self::Py(object) => object.clone(),
             Self::Int(i) => i
                 .into_pyobject(py)
@@ -148,11 +148,15 @@ impl<'t, 'py> Content<'t, 'py> {
                 .into_pyobject(py)
                 .expect("A string can always be converted to a Python str.")
                 .into_any(),
-            Self::HtmlSafe(s) => s
-                .into_pyobject(py)
-                .expect("A string can always be converted to a Python str.")
-                .into_any(),
-        }
+            Self::HtmlSafe(s) => {
+                let string = s
+                    .into_pyobject(py)
+                    .expect("A string can always be converted to a Python str.");
+                let safestring = py.import(intern!(py, "django.utils.safestring"))?;
+                let mark_safe = safestring.getattr(intern!(py, "mark_safe"))?;
+                mark_safe.call1((string,))?
+            }
+        })
     }
 }
 
@@ -356,11 +360,13 @@ impl Render for Text {
         &self,
         _py: Python<'py>,
         template: TemplateString<'t>,
-        _context: &mut Context,
+        context: &mut Context,
     ) -> TemplateResult<'t, 'py> {
-        Ok(Some(Content::String(Cow::Borrowed(
-            template.content(self.at),
-        ))))
+        let resolved = Cow::Borrowed(template.content(self.at));
+        Ok(Some(match context.autoescape {
+            false => Content::String(resolved),
+            true => Content::HtmlSafe(resolved),
+        }))
     }
 }
 
