@@ -268,13 +268,12 @@ impl Render for Filter {
                 Some(content) => {
                     let content_string = content.render(context)?.into_owned();
                     let mut chars = content_string.chars();
-                    let first_char = chars.next().unwrap_or('\0').to_uppercase();
+                    let first_char = match chars.next() {
+                        Some(c) => c.to_uppercase(),
+                        None => return Ok("".into_content()),
+                    };
                     let string: String = first_char.chain(chars).collect();
-                    if string == "\0" {
-                        "".into_content()
-                    } else {
-                        string.into_content()
-                    }
+                    string.into_content()
                 }
                 None => "".into_content(),
             },
