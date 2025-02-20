@@ -1,3 +1,4 @@
+mod filters;
 mod lex;
 mod loaders;
 mod parse;

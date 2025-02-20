@@ -10,9 +10,14 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyInt, PyList, PyString, PyType};
 use thiserror::Error;
 
-use crate::parse::{
-    Argument, ArgumentType, Filter, FilterType, Tag, TagElement, Text, TokenTree, Url, Variable,
-};
+use crate::filters::AddFilter;
+use crate::filters::AddSlashesFilter;
+use crate::filters::CapfirstFilter;
+use crate::filters::DefaultFilter;
+use crate::filters::ExternalFilter;
+use crate::filters::LowerFilter;
+use crate::filters::{Argument, ArgumentType, FilterType, Text, Variable};
+use crate::parse::{Filter, Tag, TagElement, TokenTree, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::TemplateString;
 use crate::utils::PyResultMethods;
@@ -235,7 +240,7 @@ impl Render for Filter {
     ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
         let left = self.left.resolve(py, template, context)?;
         Ok(match &self.filter {
-            FilterType::Add(right) => {
+            FilterType::Add(right, AddFilter) => {
                 let left = match left {
                     Some(left) => left,
                     None => return Ok(None),
@@ -255,7 +260,7 @@ impl Render for Filter {
                     }
                 }
             }
-            FilterType::AddSlashes => match left {
+            FilterType::AddSlashes(AddSlashesFilter) => match left {
                 Some(content) => content
                     .render(context)?
                     .replace(r"\", r"\\")
@@ -264,7 +269,7 @@ impl Render for Filter {
                     .into_content(),
                 None => "".into_content(),
             },
-            FilterType::Capfirst => match left {
+            FilterType::Capfirst(CapfirstFilter) => match left {
                 Some(content) => {
                     let content_string = content.render(context)?.into_owned();
                     let mut chars = content_string.chars();
@@ -277,11 +282,11 @@ impl Render for Filter {
                 }
                 None => "".into_content(),
             },
-            FilterType::Default(right) => match left {
+            FilterType::Default(right, DefaultFilter) => match left {
                 Some(left) => Some(left),
                 None => right.resolve(py, template, context)?,
             },
-            FilterType::External(filter, arg) => {
+            FilterType::External(filter, arg, ExternalFilter) => {
                 let arg = match arg {
                     Some(arg) => arg.resolve(py, template, context)?,
                     None => None,
@@ -293,7 +298,7 @@ impl Render for Filter {
                 };
                 Some(Content::Py(value))
             }
-            FilterType::Lower => match left {
+            FilterType::Lower(LowerFilter) => match left {
                 Some(content) => content.render(context)?.to_lowercase().into_content(),
                 None => "".into_content(),
             },
@@ -473,7 +478,7 @@ mod tests {
 
     use pyo3::types::{PyDict, PyList, PyString};
 
-    use crate::parse::Text;
+    use crate::filters::Text;
 
     #[test]
     fn test_render_variable() {
@@ -588,10 +593,13 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument {
-                    at: (16, 8),
-                    argument_type: ArgumentType::Text(Text::new((17, 6))),
-                }),
+                filter: FilterType::Default(
+                    Argument {
+                        at: (16, 8),
+                        argument_type: ArgumentType::Text(Text::new((17, 6))),
+                    },
+                    DefaultFilter,
+                ),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -616,7 +624,7 @@ user = User('Lily')
             let filter = Filter {
                 at: (10, 10),
                 left: TagElement::Variable(variable),
-                filter: FilterType::AddSlashes,
+                filter: FilterType::AddSlashes(AddSlashesFilter),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -678,10 +686,13 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument {
-                    at: (16, 8),
-                    argument_type: ArgumentType::Text(Text::new((17, 6))),
-                }),
+                filter: FilterType::Default(
+                    Argument {
+                        at: (16, 8),
+                        argument_type: ArgumentType::Text(Text::new((17, 6))),
+                    },
+                    DefaultFilter,
+                ),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -705,10 +716,13 @@ user = User('Lily')
             let filter = Filter {
                 at: (9, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument {
-                    at: (17, 2),
-                    argument_type: ArgumentType::Int(12.into()),
-                }),
+                filter: FilterType::Default(
+                    Argument {
+                        at: (17, 2),
+                        argument_type: ArgumentType::Int(12.into()),
+                    },
+                    DefaultFilter,
+                ),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -732,10 +746,13 @@ user = User('Lily')
             let filter = Filter {
                 at: (9, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument {
-                    at: (17, 3),
-                    argument_type: ArgumentType::Float(3.5),
-                }),
+                filter: FilterType::Default(
+                    Argument {
+                        at: (17, 3),
+                        argument_type: ArgumentType::Float(3.5),
+                    },
+                    DefaultFilter,
+                ),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -760,10 +777,13 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument {
-                    at: (16, 2),
-                    argument_type: ArgumentType::Variable(Variable::new((16, 2))),
-                }),
+                filter: FilterType::Default(
+                    Argument {
+                        at: (16, 2),
+                        argument_type: ArgumentType::Variable(Variable::new((16, 2))),
+                    },
+                    DefaultFilter,
+                ),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -788,7 +808,7 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 5),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Lower,
+                filter: FilterType::Lower(LowerFilter),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -812,7 +832,7 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 5),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Lower,
+                filter: FilterType::Lower(LowerFilter),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -836,15 +856,18 @@ user = User('Lily')
             let default = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(Argument {
-                    at: (16, 8),
-                    argument_type: ArgumentType::Text(Text::new((17, 6))),
-                }),
+                filter: FilterType::Default(
+                    Argument {
+                        at: (16, 8),
+                        argument_type: ArgumentType::Text(Text::new((17, 6))),
+                    },
+                    DefaultFilter,
+                ),
             };
             let lower = Filter {
                 at: (25, 5),
                 left: TagElement::Filter(Box::new(default)),
-                filter: FilterType::Lower,
+                filter: FilterType::Lower(LowerFilter),
             };
 
             let rendered = lower.render(py, template, &mut context).unwrap();
