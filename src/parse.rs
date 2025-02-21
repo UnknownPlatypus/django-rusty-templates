@@ -159,6 +159,7 @@ impl PyEq for TagElement {
 pub enum FilterType {
     Add(Argument),
     AddSlashes,
+    Capfirst,
     Default(Argument),
     External(Py<PyAny>, Option<Argument>),
     Lower,
@@ -168,9 +169,10 @@ impl PartialEq for FilterType {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Add(a), Self::Add(b)) => a == b,
+            (Self::AddSlashes, Self::AddSlashes) => true,
+            (Self::Capfirst, Self::Capfirst) => true,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::Lower, Self::Lower) => true,
-            (Self::AddSlashes, Self::AddSlashes) => true,
             (Self::External(_, _), Self::External(_, _)) => false, // Can't compare PyAny to PyAny
             _ => false,
         }
@@ -182,6 +184,7 @@ impl CloneRef for FilterType {
         match self {
             Self::Add(arg) => Self::Add(arg.clone()),
             Self::AddSlashes => Self::AddSlashes,
+            Self::Capfirst => Self::Capfirst,
             Self::Default(arg) => Self::Default(arg.clone()),
             Self::External(filter, arg) => Self::External(filter.clone_ref(py), arg.clone()),
             Self::Lower => Self::Lower,
@@ -195,6 +198,7 @@ impl PyEq for FilterType {
         match (self, other) {
             (Self::Add(a), Self::Add(b)) => a == b,
             (Self::AddSlashes, Self::AddSlashes) => true,
+            (Self::Capfirst, Self::Capfirst) => true,
             (Self::Default(a), Self::Default(b)) => a == b,
             (Self::External(a1, a2), Self::External(b1, b2)) => {
                 a2 == b2
@@ -236,6 +240,15 @@ impl Filter {
                     })
                 }
                 None => FilterType::AddSlashes,
+            },
+            "capfirst" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        filter: "capfirst",
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::Capfirst,
             },
             "default" => match right {
                 Some(right) => FilterType::Default(right),
@@ -1611,6 +1624,11 @@ mod tests {
             let cloned = add_slashes.clone_ref(py);
             assert_eq!(add_slashes, cloned);
             assert!(add_slashes.py_eq(&cloned, py));
+
+            let capfirst = FilterType::Capfirst;
+            let cloned = capfirst.clone_ref(py);
+            assert_eq!(capfirst, cloned);
+            assert!(capfirst.py_eq(&cloned, py));
         })
     }
 }
