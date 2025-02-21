@@ -2,24 +2,30 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use html_escape::encode_quoted_attribute;
-use miette::{Diagnostic, SourceSpan};
 use num_bigint::{BigInt, ToBigInt};
 use pyo3::exceptions::PyAttributeError;
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyInt, PyList, PyString, PyType};
-use thiserror::Error;
 
+use crate::error::{PyRenderError, RenderError};
 use crate::filters::AddFilter;
 use crate::filters::AddSlashesFilter;
+use crate::filters::Applicable;
+use crate::filters::ApplicableArg;
+use crate::filters::ApplicableFilter;
 use crate::filters::CapfirstFilter;
 use crate::filters::DefaultFilter;
 use crate::filters::ExternalFilter;
+use crate::filters::FilterType;
 use crate::filters::LowerFilter;
-use crate::filters::{Argument, ArgumentType, FilterType, Text, Variable};
 use crate::parse::{Filter, Tag, TagElement, TokenTree, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
+use crate::types::Argument;
+use crate::types::ArgumentType;
 use crate::types::TemplateString;
+use crate::types::Text;
+use crate::types::Variable;
 use crate::utils::PyResultMethods;
 
 pub struct Context {
@@ -34,36 +40,6 @@ pub enum Content<'t, 'py> {
     String(Cow<'t, str>),
     Float(f64),
     Int(BigInt),
-}
-
-#[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
-pub enum RenderError {
-    #[error("Failed lookup for key [{key}] in {object}")]
-    VariableDoesNotExist {
-        key: String,
-        object: String,
-        #[label("key")]
-        key_at: SourceSpan,
-        #[label("{object}")]
-        object_at: Option<SourceSpan>,
-    },
-}
-
-#[derive(Error, Debug)]
-pub enum PyRenderError {
-    #[error(transparent)]
-    PyErr(#[from] PyErr),
-    #[error(transparent)]
-    RenderError(#[from] RenderError),
-}
-
-impl PyRenderError {
-    pub fn try_into_render_error(self) -> Result<RenderError, PyErr> {
-        match self {
-            Self::RenderError(err) => Ok(err),
-            Self::PyErr(err) => Err(err),
-        }
-    }
 }
 
 fn render_python(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String> {
@@ -86,7 +62,7 @@ fn render_python(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String>
 }
 
 impl<'t, 'py> Content<'t, 'py> {
-    fn render(self, context: &Context) -> PyResult<Cow<'t, str>> {
+    pub fn render(self, context: &Context) -> PyResult<Cow<'t, str>> {
         let content = match self {
             Self::Py(content) => render_python(content, context)?,
             Self::String(content) => return Ok(content),
@@ -96,7 +72,7 @@ impl<'t, 'py> Content<'t, 'py> {
         Ok(Cow::Owned(content))
     }
 
-    fn to_bigint(&self) -> Option<BigInt> {
+    pub fn to_bigint(&self) -> Option<BigInt> {
         match self {
             Self::Int(left) => Some(left.clone()),
             Self::String(left) => match left.parse::<BigInt>() {
@@ -120,7 +96,7 @@ impl<'t, 'py> Content<'t, 'py> {
         }
     }
 
-    fn to_py(&self, py: Python<'py>) -> Bound<'py, PyAny> {
+    pub fn to_py(&self, py: Python<'py>) -> Bound<'py, PyAny> {
         match self {
             Self::Py(object) => object.clone(),
             Self::Int(i) => i
@@ -139,11 +115,11 @@ impl<'t, 'py> Content<'t, 'py> {
     }
 }
 
-trait IntoOwnedContent<'t, 'py> {
+pub trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
 }
 
-trait IntoBorrowedContent<'a, 't, 'py>
+pub trait IntoBorrowedContent<'a, 't, 'py>
 where
     'a: 't,
 {
@@ -239,70 +215,22 @@ impl Render for Filter {
         context: &mut Context,
     ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
         let left = self.left.resolve(py, template, context)?;
-        Ok(match &self.filter {
+        let result = match &self.filter {
             FilterType::Add(right, AddFilter) => {
-                let left = match left {
-                    Some(left) => left,
-                    None => return Ok(None),
-                };
-                let right = right
-                    .resolve(py, template, context)?
-                    .expect("missing argument in context should already have raised");
-                match (left.to_bigint(), right.to_bigint()) {
-                    (Some(left), Some(right)) => return Ok(Some(Content::Int(left + right))),
-                    _ => {
-                        let left = left.to_py(py);
-                        let right = right.to_py(py);
-                        match left.add(right) {
-                            Ok(sum) => return Ok(Some(Content::Py(sum))),
-                            Err(_) => return Ok(None),
-                        }
-                    }
-                }
+                AddFilter::apply(left, right, py, template, context)
             }
-            FilterType::AddSlashes(AddSlashesFilter) => match left {
-                Some(content) => content
-                    .render(context)?
-                    .replace(r"\", r"\\")
-                    .replace("\"", "\\\"")
-                    .replace("'", r"\'")
-                    .into_content(),
-                None => "".into_content(),
-            },
-            FilterType::Capfirst(CapfirstFilter) => match left {
-                Some(content) => {
-                    let content_string = content.render(context)?.into_owned();
-                    let mut chars = content_string.chars();
-                    let first_char = match chars.next() {
-                        Some(c) => c.to_uppercase(),
-                        None => return Ok("".into_content()),
-                    };
-                    let string: String = first_char.chain(chars).collect();
-                    string.into_content()
-                }
-                None => "".into_content(),
-            },
-            FilterType::Default(right, DefaultFilter) => match left {
-                Some(left) => Some(left),
-                None => right.resolve(py, template, context)?,
-            },
+            FilterType::AddSlashes(AddSlashesFilter) => AddSlashesFilter::apply(left, context),
+            FilterType::Capfirst(CapfirstFilter) => CapfirstFilter::apply(left, context),
+
+            FilterType::Default(right, DefaultFilter) => {
+                DefaultFilter::apply(left, right, py, template, context)
+            }
             FilterType::External(filter, arg, ExternalFilter) => {
-                let arg = match arg {
-                    Some(arg) => arg.resolve(py, template, context)?,
-                    None => None,
-                };
-                let filter = filter.bind(py);
-                let value = match arg {
-                    Some(arg) => filter.call1((left, arg))?,
-                    None => filter.call1((left,))?,
-                };
-                Some(Content::Py(value))
+                ExternalFilter::apply(filter, left, arg.as_ref(), py, template, context)
             }
-            FilterType::Lower(LowerFilter) => match left {
-                Some(content) => content.render(context)?.to_lowercase().into_content(),
-                None => "".into_content(),
-            },
-        })
+            FilterType::Lower(LowerFilter) => LowerFilter::apply(left, context),
+        };
+        result
     }
 }
 
@@ -401,41 +329,6 @@ impl Render for Text {
     }
 }
 
-impl Render for TagElement {
-    fn resolve<'t, 'py>(
-        &self,
-        py: Python<'py>,
-        template: TemplateString<'t>,
-        context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
-        match self {
-            Self::Text(text) => text.resolve(py, template, context),
-            Self::TranslatedText(_text) => todo!(),
-            Self::Variable(variable) => variable.resolve(py, template, context),
-            Self::Filter(filter) => filter.resolve(py, template, context),
-            Self::Int(int) => Ok(Some(Content::Int(int.clone()))),
-            Self::Float(float) => Ok(Some(Content::Float(*float))),
-        }
-    }
-}
-
-impl Render for TokenTree {
-    fn resolve<'t, 'py>(
-        &self,
-        py: Python<'py>,
-        template: TemplateString<'t>,
-        context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
-        match self {
-            Self::Text(text) => text.resolve(py, template, context),
-            Self::TranslatedText(_text) => todo!(),
-            Self::Tag(tag) => tag.resolve(py, template, context),
-            Self::Variable(variable) => variable.resolve(py, template, context),
-            Self::Filter(filter) => filter.resolve(py, template, context),
-        }
-    }
-}
-
 impl Render for Argument {
     fn resolve<'t, 'py>(
         &self,
@@ -471,14 +364,50 @@ impl Render for Argument {
     }
 }
 
+impl Render for TagElement {
+    fn resolve<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+        match self {
+            Self::Text(text) => text.resolve(py, template, context),
+            Self::TranslatedText(_text) => todo!(),
+            Self::Variable(variable) => variable.resolve(py, template, context),
+            Self::Filter(filter) => filter.resolve(py, template, context),
+            Self::Int(int) => Ok(Some(Content::Int(int.clone()))),
+            Self::Float(float) => Ok(Some(Content::Float(*float))),
+        }
+    }
+}
+
+impl Render for TokenTree {
+    fn resolve<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+        match self {
+            Self::Text(text) => text.resolve(py, template, context),
+            Self::TranslatedText(_text) => todo!(),
+            Self::Tag(tag) => tag.resolve(py, template, context),
+            Self::Variable(variable) => variable.resolve(py, template, context),
+            Self::Filter(filter) => filter.resolve(py, template, context),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::template::django_rusty_templates::{EngineData, Template};
+    use crate::types::{Argument, ArgumentType};
 
     use pyo3::types::{PyDict, PyList, PyString};
 
-    use crate::filters::Text;
+    use crate::types::Text;
 
     #[test]
     fn test_render_variable() {

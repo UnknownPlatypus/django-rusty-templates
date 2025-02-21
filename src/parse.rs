@@ -7,7 +7,7 @@ use pyo3::prelude::*;
 use thiserror::Error;
 
 use crate::filters;
-use crate::filters::{Argument, ArgumentType, FilterType, Text, Variable};
+use crate::filters::FilterType;
 use crate::lex::core::{Lexer, TokenType};
 use crate::lex::load::{LoadLexer, LoadToken};
 use crate::lex::tag::{lex_tag, TagLexerError, TagParts};
@@ -16,6 +16,10 @@ use crate::lex::variable::{
     lex_variable, Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError,
 };
 use crate::lex::START_TAG_LEN;
+use crate::types::Argument;
+use crate::types::ArgumentType;
+use crate::types::Text;
+use crate::types::Variable;
 use crate::types::{CloneRef, TemplateString};
 
 #[cfg(test)]

@@ -1,3 +1,4 @@
+mod error;
 mod filters;
 mod lex;
 mod loaders;
