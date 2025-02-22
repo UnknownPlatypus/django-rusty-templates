@@ -9,16 +9,8 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyInt, PyList, PyString, PyType};
 
 use crate::error::{PyRenderError, RenderError};
-use crate::filters::AddFilter;
-use crate::filters::AddSlashesFilter;
-use crate::filters::Applicable;
-use crate::filters::ApplicableArg;
-use crate::filters::ApplicableFilter;
-use crate::filters::CapfirstFilter;
-use crate::filters::DefaultFilter;
-use crate::filters::ExternalFilter;
 use crate::filters::FilterType;
-use crate::filters::LowerFilter;
+use crate::filters::ResolveFilter;
 use crate::parse::{Filter, Tag, TagElement, TokenTree, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::Argument;
@@ -218,19 +210,12 @@ impl Render for Filter {
     ) -> TemplateResult<'t, 'py> {
         let left = self.left.resolve(py, template, context)?;
         let result = match &self.filter {
-            FilterType::Add(right, AddFilter) => {
-                AddFilter::apply(left, right, py, template, context)
-            }
-            FilterType::AddSlashes(AddSlashesFilter) => AddSlashesFilter::apply(left, context),
-            FilterType::Capfirst(CapfirstFilter) => CapfirstFilter::apply(left, context),
-
-            FilterType::Default(right, DefaultFilter) => {
-                DefaultFilter::apply(left, right, py, template, context)
-            }
-            FilterType::External(filter, arg, ExternalFilter) => {
-                ExternalFilter::apply(filter, left, arg.as_ref(), py, template, context)
-            }
-            FilterType::Lower(LowerFilter) => LowerFilter::apply(left, context),
+            FilterType::Add(filter) => filter.resolve(left, py, template, context),
+            FilterType::AddSlashes(filter) => filter.resolve(left, py, template, context),
+            FilterType::Capfirst(filter) => filter.resolve(left, py, template, context),
+            FilterType::Default(filter) => filter.resolve(left, py, template, context),
+            FilterType::External(filter) => filter.resolve(left, py, template, context),
+            FilterType::Lower(filter) => filter.resolve(left, py, template, context),
         };
         result
     }
@@ -404,6 +389,7 @@ impl Render for TokenTree {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::filters::{AddSlashesFilter, DefaultFilter, LowerFilter};
     use crate::template::django_rusty_templates::{EngineData, Template};
     use crate::types::{Argument, ArgumentType};
 
@@ -524,13 +510,10 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(
-                    Argument {
-                        at: (16, 8),
-                        argument_type: ArgumentType::Text(Text::new((17, 6))),
-                    },
-                    DefaultFilter,
-                ),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                })),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -617,13 +600,10 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(
-                    Argument {
-                        at: (16, 8),
-                        argument_type: ArgumentType::Text(Text::new((17, 6))),
-                    },
-                    DefaultFilter,
-                ),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                })),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -647,13 +627,10 @@ user = User('Lily')
             let filter = Filter {
                 at: (9, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(
-                    Argument {
-                        at: (17, 2),
-                        argument_type: ArgumentType::Int(12.into()),
-                    },
-                    DefaultFilter,
-                ),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (17, 2),
+                    argument_type: ArgumentType::Int(12.into()),
+                })),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -677,13 +654,10 @@ user = User('Lily')
             let filter = Filter {
                 at: (9, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(
-                    Argument {
-                        at: (17, 3),
-                        argument_type: ArgumentType::Float(3.5),
-                    },
-                    DefaultFilter,
-                ),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (17, 3),
+                    argument_type: ArgumentType::Float(3.5),
+                })),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -708,13 +682,10 @@ user = User('Lily')
             let filter = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(
-                    Argument {
-                        at: (16, 2),
-                        argument_type: ArgumentType::Variable(Variable::new((16, 2))),
-                    },
-                    DefaultFilter,
-                ),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 2),
+                    argument_type: ArgumentType::Variable(Variable::new((16, 2))),
+                })),
             };
 
             let rendered = filter.render(py, template, &mut context).unwrap();
@@ -787,13 +758,10 @@ user = User('Lily')
             let default = Filter {
                 at: (8, 7),
                 left: TagElement::Variable(variable),
-                filter: FilterType::Default(
-                    Argument {
-                        at: (16, 8),
-                        argument_type: ArgumentType::Text(Text::new((17, 6))),
-                    },
-                    DefaultFilter,
-                ),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                })),
             };
             let lower = Filter {
                 at: (25, 5),

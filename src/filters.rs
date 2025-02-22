@@ -5,55 +5,35 @@ use pyo3::prelude::*;
 
 #[derive(Debug)]
 pub enum FilterType {
-    Add(Argument, AddFilter),
+    Add(AddFilter),
     AddSlashes(AddSlashesFilter),
     Capfirst(CapfirstFilter),
-    Default(Argument, DefaultFilter),
-    External(Py<PyAny>, Option<Argument>, ExternalFilter),
+    Default(DefaultFilter),
+    External(ExternalFilter),
     Lower(LowerFilter),
 }
 
-pub trait Applicable<'t, 'py> {
-    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py>;
-}
-
-pub trait ApplicableArg<'t, 'py> {
-    fn apply(
+pub trait ResolveFilter {
+    fn resolve<'t, 'py>(
+        &self,
         variable: Option<Content<'t, 'py>>,
-        arg: &Argument,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> TemplateResult<'t, 'py>;
 }
 
-pub trait ApplicableFilter<'t, 'py> {
-    fn apply(
-        filter: &Py<PyAny>,
-        variable: Option<Content<'t, 'py>>,
-        arg: Option<&Argument>,
-        py: Python<'py>,
-        template: TemplateString<'t>,
-        context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
-        let arg = match arg {
-            Some(arg) => arg.resolve(py, template, context)?,
-            None => None,
-        };
-        let filter = filter.bind(py);
-        let value = match arg {
-            Some(arg) => filter.call1((variable, arg))?,
-            None => filter.call1((variable,))?,
-        };
-        Ok(Some(Content::Py(value)))
-    }
-}
-
 #[derive(Debug)]
 pub struct AddSlashesFilter;
 
-impl<'t, 'py> Applicable<'t, 'py> for AddSlashesFilter {
-    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py> {
+impl ResolveFilter for AddSlashesFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(content) => content
                 .render(context)?
@@ -68,12 +48,20 @@ impl<'t, 'py> Applicable<'t, 'py> for AddSlashesFilter {
 }
 
 #[derive(Debug)]
-pub struct AddFilter;
+pub struct AddFilter {
+    pub argument: Argument,
+}
 
-impl<'t, 'py> ApplicableArg<'t, 'py> for AddFilter {
-    fn apply(
+impl AddFilter {
+    pub fn new(argument: Argument) -> Self {
+        Self { argument: argument }
+    }
+}
+
+impl ResolveFilter for AddFilter {
+    fn resolve<'t, 'py>(
+        &self,
         variable: Option<Content<'t, 'py>>,
-        arg: &Argument,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
@@ -82,7 +70,8 @@ impl<'t, 'py> ApplicableArg<'t, 'py> for AddFilter {
             Some(left) => left,
             None => return Ok(None),
         };
-        let right = arg
+        let right = self
+            .argument
             .resolve(py, template, context)?
             .expect("missing argument in context should already have raised");
         match (variable.to_bigint(), right.to_bigint()) {
@@ -102,8 +91,14 @@ impl<'t, 'py> ApplicableArg<'t, 'py> for AddFilter {
 #[derive(Debug)]
 pub struct CapfirstFilter;
 
-impl<'t, 'py> Applicable<'t, 'py> for CapfirstFilter {
-    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py> {
+impl ResolveFilter for CapfirstFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(content) => {
                 let content_string = content.render(context)?.into_owned();
@@ -122,33 +117,79 @@ impl<'t, 'py> Applicable<'t, 'py> for CapfirstFilter {
 }
 
 #[derive(Debug)]
-pub struct DefaultFilter;
+pub struct DefaultFilter {
+    pub argument: Argument,
+}
 
-impl<'t, 'py> ApplicableArg<'t, 'py> for DefaultFilter {
-    fn apply(
+impl DefaultFilter {
+    pub fn new(argument: Argument) -> Self {
+        Self { argument: argument }
+    }
+}
+
+impl ResolveFilter for DefaultFilter {
+    fn resolve<'t, 'py>(
+        &self,
         variable: Option<Content<'t, 'py>>,
-        arg: &Argument,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(left) => Some(left),
-            None => arg.resolve(py, template, context)?,
+            None => self.argument.resolve(py, template, context)?,
         };
         Ok(content)
     }
 }
 
 #[derive(Debug)]
-pub struct ExternalFilter;
-impl<'t, 'py> ApplicableFilter<'t, 'py> for ExternalFilter {}
+pub struct ExternalFilter {
+    pub filter: Py<PyAny>,
+    pub argument: Option<Argument>,
+}
+
+impl ExternalFilter {
+    pub fn new(filter: Py<PyAny>, argument: Option<Argument>) -> Self {
+        Self {
+            filter: filter,
+            argument: argument,
+        }
+    }
+}
+
+impl ResolveFilter for ExternalFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> TemplateResult<'t, 'py> {
+        let arg = match &self.argument {
+            Some(arg) => arg.resolve(py, template, context)?,
+            None => None,
+        };
+        let filter = self.filter.bind(py);
+        let value = match arg {
+            Some(arg) => filter.call1((variable, arg))?,
+            None => filter.call1((variable,))?,
+        };
+        Ok(Some(Content::Py(value)))
+    }
+}
 
 #[derive(Debug)]
 pub struct LowerFilter;
 
-impl<'t, 'py> Applicable<'t, 'py> for LowerFilter {
-    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py> {
+impl ResolveFilter for LowerFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(content) => content.render(context)?.to_lowercase().into_content(),
             None => "".into_content(),
