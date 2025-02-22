@@ -34,6 +34,8 @@ pub struct Context {
     pub autoescape: bool,
 }
 
+pub type TemplateResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
+
 #[derive(Debug, IntoPyObject)]
 pub enum Content<'t, 'py> {
     Py(Bound<'py, PyAny>),
@@ -147,7 +149,7 @@ pub trait Render {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError>;
+    ) -> TemplateResult<'t, 'py>;
 
     fn render<'t>(
         &self,
@@ -168,7 +170,7 @@ impl Render for Variable {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         let mut parts = self.parts(template);
         let (first, mut object_at) = parts.next().expect("Variable names cannot be empty");
         let mut variable = match context.context.get(first) {
@@ -213,7 +215,7 @@ impl Render for Filter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         let left = self.left.resolve(py, template, context)?;
         let result = match &self.filter {
             FilterType::Add(right, AddFilter) => {
@@ -261,7 +263,7 @@ impl Render for Url {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         let view_name = match self.view_name.resolve(py, template, context)? {
             Some(view_name) => view_name,
             None => Content::String(Cow::Borrowed("")),
@@ -308,7 +310,7 @@ impl Render for Tag {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         match self {
             Self::Load => Ok(None),
             Self::Url(url) => url.resolve(py, template, context),
@@ -322,7 +324,7 @@ impl Render for Text {
         _py: Python<'py>,
         template: TemplateString<'t>,
         _context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         Ok(Some(Content::String(Cow::Borrowed(
             template.content(self.at),
         ))))
@@ -335,7 +337,7 @@ impl Render for Argument {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         Ok(Some(match &self.argument_type {
             ArgumentType::Text(text) => return text.resolve(py, template, context),
             ArgumentType::TranslatedText(_text) => todo!(),
@@ -370,7 +372,7 @@ impl Render for TagElement {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
             Self::TranslatedText(_text) => todo!(),
@@ -388,7 +390,7 @@ impl Render for TokenTree {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
             Self::TranslatedText(_text) => todo!(),

@@ -1,5 +1,4 @@
-use crate::error::PyRenderError;
-use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Render};
+use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Render, TemplateResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
 use pyo3::prelude::*;
@@ -15,10 +14,7 @@ pub enum FilterType {
 }
 
 pub trait Applicable<'t, 'py> {
-    fn apply(
-        variable: Option<Content<'t, 'py>>,
-        context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError>;
+    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py>;
 }
 
 pub trait ApplicableArg<'t, 'py> {
@@ -28,7 +24,7 @@ pub trait ApplicableArg<'t, 'py> {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError>;
+    ) -> TemplateResult<'t, 'py>;
 }
 
 pub trait ApplicableFilter<'t, 'py> {
@@ -39,7 +35,7 @@ pub trait ApplicableFilter<'t, 'py> {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         let arg = match arg {
             Some(arg) => arg.resolve(py, template, context)?,
             None => None,
@@ -57,10 +53,7 @@ pub trait ApplicableFilter<'t, 'py> {
 pub struct AddSlashesFilter;
 
 impl<'t, 'py> Applicable<'t, 'py> for AddSlashesFilter {
-    fn apply(
-        variable: Option<Content<'t, 'py>>,
-        context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(content) => content
                 .render(context)?
@@ -84,7 +77,7 @@ impl<'t, 'py> ApplicableArg<'t, 'py> for AddFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         let variable = match variable {
             Some(left) => left,
             None => return Ok(None),
@@ -110,10 +103,7 @@ impl<'t, 'py> ApplicableArg<'t, 'py> for AddFilter {
 pub struct CapfirstFilter;
 
 impl<'t, 'py> Applicable<'t, 'py> for CapfirstFilter {
-    fn apply(
-        variable: Option<Content<'t, 'py>>,
-        context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(content) => {
                 let content_string = content.render(context)?.into_owned();
@@ -141,7 +131,7 @@ impl<'t, 'py> ApplicableArg<'t, 'py> for DefaultFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    ) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(left) => Some(left),
             None => arg.resolve(py, template, context)?,
@@ -158,10 +148,7 @@ impl<'t, 'py> ApplicableFilter<'t, 'py> for ExternalFilter {}
 pub struct LowerFilter;
 
 impl<'t, 'py> Applicable<'t, 'py> for LowerFilter {
-    fn apply(
-        variable: Option<Content<'t, 'py>>,
-        context: &mut Context,
-    ) -> Result<Option<Content<'t, 'py>>, PyRenderError> {
+    fn apply(variable: Option<Content<'t, 'py>>, context: &mut Context) -> TemplateResult<'t, 'py> {
         let content = match variable {
             Some(content) => content.render(context)?.to_lowercase().into_content(),
             None => "".into_content(),
