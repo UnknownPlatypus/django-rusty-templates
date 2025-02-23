@@ -80,3 +80,23 @@ def test_safe_escaped():
     escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
     assert django_template.render({"html": html}) == escaped
     assert rust_template.render({"html": html}) == escaped
+
+
+def test_safe_autoescape_off():
+    template = "{% autoescape off %}{{ html|safe }}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    html = "<p>Hello World!</p>"
+    assert django_template.render({"html": html}) == html
+    assert rust_template.render({"html": html}) == html
+
+
+def test_safe_autoescape_off_lower():
+    template = "{% autoescape off %}{{ html|lower|safe }}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    html = "<p>Hello World!</p>"
+    assert django_template.render({"html": html}) == html.lower()
+    assert rust_template.render({"html": html}) == html.lower()

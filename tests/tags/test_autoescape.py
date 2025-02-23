@@ -98,7 +98,7 @@ def test_missing_endautoescape():
 
 
 @pytest.mark.xfail(reason="endfor not implemented yet")
-def test_unexpected_end_tag():
+def test_wrong_end_tag():
     template = "{% autoescape off %}{{ html }}{% endfor %}{% endautoescape %}"
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
@@ -122,3 +122,63 @@ def test_endautoescape_argument():
 
     assert django_template.render({"html": html}) == html
     assert rust_template.render({"html": html}) == html
+
+
+def test_nested_autoescape():
+    html = "<p>Hello World!</p>"
+    template = "{{ html }}{% autoescape off %}{{ html }}{% autoescape on %}{{ html }}{% endautoescape %}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
+    assert django_template.render({"html": html}) == f"{escaped}{html}{escaped}"
+    assert rust_template.render({"html": html}) == f"{escaped}{html}{escaped}"
+
+
+def test_autoescape_text():
+    template = "{% autoescape off %}<p>Hello World!</p>{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    html = "<p>Hello World!</p>"
+    assert django_template.render({}) == html
+    assert rust_template.render({}) == html
+
+
+def test_autoescape_comment():
+    template = "{% autoescape off %}{# comment #}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == ""
+    assert rust_template.render({}) == ""
+
+
+def test_autoescape_url():
+    template = "{% autoescape off %}{% url 'home' %}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "/"
+    assert rust_template.render({}) == "/"
+
+
+def test_unexpected_end_tag():
+    template = "{% endautoescape %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert str(exc_info.value) == "Invalid block tag on line 1: 'endautoescape'. Did you forget to register or load this tag?"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    assert str(exc_info.value) == """
+  × Unexpected tag endautoescape
+   ╭────
+ 1 │ {% endautoescape %}
+   · ─────────┬─────────
+   ·          ╰── unexpected tag
+   ╰────
+"""

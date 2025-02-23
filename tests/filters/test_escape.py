@@ -71,3 +71,25 @@ def test_escape_float():
 
     assert django_template.render({}) == "1.6"
     assert rust_template.render({}) == "1.6"
+
+
+def test_escape_autoescape_off():
+    template = "{% autoescape off %}{{ html|escape }}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    html = "<p>Hello World!</p>"
+    escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
+    assert django_template.render({"html": html}) == escaped
+    assert rust_template.render({"html": html}) == escaped
+
+
+def test_escape_autoescape_off_lower():
+    template = "{% autoescape off %}{{ html|lower|escape }}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    html = "<p>Hello World!</p>"
+    escaped = "&lt;p&gt;hello world!&lt;/p&gt;"
+    assert django_template.render({"html": html}) == escaped
+    assert rust_template.render({"html": html}) == escaped
