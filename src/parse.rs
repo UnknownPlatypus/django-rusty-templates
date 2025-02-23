@@ -1751,4 +1751,37 @@ mod tests {
             assert!(escape.py_eq(&cloned, py));
         })
     }
+
+    #[test]
+    fn test_tag_clone_ref() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let load = Tag::Load;
+            let cloned = load.clone_ref(py);
+            assert_eq!(load, cloned);
+            assert!(load.py_eq(&cloned, py));
+
+            let url = Tag::Url(Url {
+                view_name: TagElement::Variable(Variable { at: (7, 14) }),
+                args: vec![],
+                kwargs: vec![],
+                variable: None,
+            });
+            let cloned = url.clone_ref(py);
+            assert_eq!(url, cloned);
+            assert!(url.py_eq(&cloned, py));
+
+            let text = Text { at: (0, 3) };
+            let translated = TokenTree::TranslatedText(text);
+            let text = TokenTree::Text(text);
+            let autoescape = Tag::Autoescape {
+                enabled: AutoescapeEnabled::On,
+                nodes: vec![translated, text],
+            };
+            let cloned = autoescape.clone_ref(py);
+            assert_eq!(autoescape, cloned);
+            assert!(autoescape.py_eq(&cloned, py));
+        })
+    }
 }
