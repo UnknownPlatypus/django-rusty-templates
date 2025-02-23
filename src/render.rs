@@ -186,14 +186,30 @@ impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
     }
 }
 
-pub trait Render {
+/// Trait for resolving a template element into content suitable for
+/// further processing by another template element.
+pub trait Resolve {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> TemplateResult<'t, 'py>;
+}
 
+/// Trait for rendering a template element into content suitable for
+/// output in the completely processed template.
+pub trait Render {
+    fn render<'t>(
+        &self,
+        py: Python<'_>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> Result<Cow<'t, str>, PyRenderError> ;
+}
+
+/// All resolvable template elements can be rendered
+impl<T> Render for T where T: Resolve {
     fn render<'t>(
         &self,
         py: Python<'_>,
@@ -207,7 +223,7 @@ pub trait Render {
     }
 }
 
-impl Render for Variable {
+impl Resolve for Variable {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
@@ -252,7 +268,7 @@ impl Render for Variable {
     }
 }
 
-impl Render for Filter {
+impl Resolve for Filter {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
@@ -295,7 +311,7 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
     }
 }
 
-impl Render for Url {
+impl Resolve for Url {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
@@ -343,20 +359,20 @@ impl Render for Url {
 }
 
 impl Render for Tag {
-    fn resolve<'t, 'py>(
+    fn render<'t>(
         &self,
-        py: Python<'py>,
+        py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
-        match self {
-            Self::Load => Ok(None),
-            Self::Url(url) => url.resolve(py, template, context),
-        }
+    ) -> Result<Cow<'t, str>, PyRenderError> {
+        Ok(match self {
+            Self::Load => Cow::Borrowed(""),
+            Self::Url(url) => url.render(py, template, context)?,
+        })
     }
 }
 
-impl Render for Text {
+impl Resolve for Text {
     fn resolve<'t, 'py>(
         &self,
         _py: Python<'py>,
@@ -371,7 +387,7 @@ impl Render for Text {
     }
 }
 
-impl Render for Argument {
+impl Resolve for Argument {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
@@ -406,7 +422,7 @@ impl Render for Argument {
     }
 }
 
-impl Render for TagElement {
+impl Resolve for TagElement {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
@@ -425,18 +441,18 @@ impl Render for TagElement {
 }
 
 impl Render for TokenTree {
-    fn resolve<'t, 'py>(
+    fn render<'t>(
         &self,
-        py: Python<'py>,
+        py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> Result<Cow<'t, str>, PyRenderError> {
         match self {
-            Self::Text(text) => text.resolve(py, template, context),
+            Self::Text(text) => text.render(py, template, context),
             Self::TranslatedText(_text) => todo!(),
-            Self::Tag(tag) => tag.resolve(py, template, context),
-            Self::Variable(variable) => variable.resolve(py, template, context),
-            Self::Filter(filter) => filter.resolve(py, template, context),
+            Self::Tag(tag) => tag.render(py, template, context),
+            Self::Variable(variable) => variable.render(py, template, context),
+            Self::Filter(filter) => filter.render(py, template, context),
         }
     }
 }

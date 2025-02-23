@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
 
-use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Render, TemplateResult};
+use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Resolve, TemplateResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
 
