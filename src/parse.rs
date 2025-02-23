@@ -548,7 +548,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
     pub fn parse(&mut self) -> Result<Vec<TokenTree>, PyParseError> {
         let mut nodes = Vec::new();
         while let Some(token) = self.lexer.next() {
-            nodes.push(match token.token_type {
+            let node = match token.token_type {
                 TokenType::Text => TokenTree::Text(Text::new(token.at)),
                 TokenType::Comment => continue,
                 TokenType::Variable => self
@@ -559,7 +559,8 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
                     )?
                     .into(),
                 TokenType::Tag => self.parse_tag(token.content(self.template), token.at)?,
-            })
+            };
+            nodes.push(node)
         }
         Ok(nodes)
     }
