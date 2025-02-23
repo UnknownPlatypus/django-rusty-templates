@@ -366,6 +366,18 @@ impl Render for Tag {
         context: &mut Context,
     ) -> Result<Cow<'t, str>, PyRenderError> {
         Ok(match self {
+            Self::Autoescape { enabled, nodes } => {
+                let autoescape = context.autoescape;
+                context.autoescape = enabled.into();
+
+                let mut rendered = vec![];
+                for node in nodes {
+                    rendered.push(node.render(py, template, context)?)
+                }
+
+                context.autoescape = autoescape;
+                Cow::Owned(rendered.join(""))
+            },
             Self::Load => Cow::Borrowed(""),
             Self::Url(url) => url.render(py, template, context)?,
         })

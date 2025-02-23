@@ -1,3 +1,4 @@
+pub mod autoescape;
 pub mod common;
 pub mod core;
 pub mod load;
