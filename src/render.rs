@@ -9,7 +9,7 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 use crate::error::{PyRenderError, RenderError};
-use crate::parse::{Filter, Tag, TagElement, TokenTree, Url};
+use crate::parse::{Tag, TagElement, TokenTree, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::Argument;
 use crate::types::ArgumentType;
@@ -17,8 +17,6 @@ use crate::types::TemplateString;
 use crate::types::Text;
 use crate::types::Variable;
 use crate::utils::PyResultMethods;
-use crate::filters::FilterType;
-use filters::ResolveFilter;
 use types::{Content, Context};
 
 pub type ResolveResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
@@ -106,28 +104,6 @@ impl Resolve for Variable {
             object_at.1 += key_at.1 + 1;
         }
         Ok(Some(Content::Py(variable)))
-    }
-}
-
-impl Resolve for Filter {
-    fn resolve<'t, 'py>(
-        &self,
-        py: Python<'py>,
-        template: TemplateString<'t>,
-        context: &mut Context,
-    ) -> ResolveResult<'t, 'py> {
-        let left = self.left.resolve(py, template, context)?;
-        let result = match &self.filter {
-            FilterType::Add(filter) => filter.resolve(left, py, template, context),
-            FilterType::AddSlashes(filter) => filter.resolve(left, py, template, context),
-            FilterType::Capfirst(filter) => filter.resolve(left, py, template, context),
-            FilterType::Default(filter) => filter.resolve(left, py, template, context),
-            FilterType::Escape(filter) => filter.resolve(left, py, template, context),
-            FilterType::External(filter) => filter.resolve(left, py, template, context),
-            FilterType::Lower(filter) => filter.resolve(left, py, template, context),
-            FilterType::Safe(filter) => filter.resolve(left, py, template, context),
-        };
-        result
     }
 }
 

@@ -5,8 +5,9 @@ use pyo3::prelude::*;
 
 use crate::filters::{
     AddFilter, AddSlashesFilter, CapfirstFilter, DefaultFilter, EscapeFilter, ExternalFilter,
-    LowerFilter, SafeFilter,
+    FilterType, LowerFilter, SafeFilter,
 };
+use crate::parse::Filter;
 use crate::render::types::{Content, Context};
 use crate::render::{Resolve, ResolveResult};
 use crate::types::TemplateString;
@@ -34,6 +35,28 @@ where
 impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
     fn into_content(self) -> Option<Content<'t, 'py>> {
         Some(Content::String(Cow::Owned(self)))
+    }
+}
+
+impl Resolve for Filter {
+    fn resolve<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        let left = self.left.resolve(py, template, context)?;
+        let result = match &self.filter {
+            FilterType::Add(filter) => filter.resolve(left, py, template, context),
+            FilterType::AddSlashes(filter) => filter.resolve(left, py, template, context),
+            FilterType::Capfirst(filter) => filter.resolve(left, py, template, context),
+            FilterType::Default(filter) => filter.resolve(left, py, template, context),
+            FilterType::Escape(filter) => filter.resolve(left, py, template, context),
+            FilterType::External(filter) => filter.resolve(left, py, template, context),
+            FilterType::Lower(filter) => filter.resolve(left, py, template, context),
+            FilterType::Safe(filter) => filter.resolve(left, py, template, context),
+        };
+        result
     }
 }
 
@@ -239,7 +262,7 @@ impl ResolveFilter for SafeFilter {
 mod tests {
     use super::*;
     use crate::filters::{AddSlashesFilter, DefaultFilter, LowerFilter};
-    use crate::render::{Filter, FilterType, Render, TagElement};
+    use crate::render::{Render, TagElement};
     use crate::template::django_rusty_templates::{EngineData, Template};
     use crate::types::{Argument, ArgumentType, Text, Variable};
 
