@@ -352,12 +352,14 @@ impl PyEq for Tag {
 #[derive(PartialEq, Eq)]
 enum EndTagType {
     Autoescape,
+    Verbatim,
 }
 
 impl EndTagType {
     fn as_str(&self) -> &'static str {
         match self {
             EndTagType::Autoescape => "endautoescape",
+            EndTagType::Verbatim => "endverbatim",
         }
     }
 }
@@ -734,6 +736,10 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             "autoescape" => Either::Left(self.parse_autoescape(at, parts)?),
             "endautoescape" => Either::Right(EndTag {
                 end: EndTagType::Autoescape,
+                at,
+            }),
+            "endverbatim" => Either::Right(EndTag {
+                end: EndTagType::Verbatim,
                 at,
             }),
             _ => todo!(),

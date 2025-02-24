@@ -97,20 +97,25 @@ def test_missing_endautoescape():
 """
 
 
-@pytest.mark.xfail(reason="endfor not implemented yet")
 def test_wrong_end_tag():
-    template = "{% autoescape off %}{{ html }}{% endfor %}{% endautoescape %}"
+    template = "{% autoescape off %}{{ html }}{% endverbatim %}{% endautoescape %}"
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["django"].from_string(template)
 
-    assert str(exc_info.value) == "Invalid block tag on line 1: 'endfor', expected 'endautoescape'. Did you forget to register or load this tag?"
+    assert str(exc_info.value) == "Invalid block tag on line 1: 'endverbatim', expected 'endautoescape'. Did you forget to register or load this tag?"
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["rusty"].from_string(template)
 
-    print(exc_info.value)
     assert str(exc_info.value) == """
+  × Unexpected tag endverbatim, expected endautoescape
+   ╭────
+ 1 │ {% autoescape off %}{{ html }}{% endverbatim %}{% endautoescape %}
+   · ──────────┬─────────          ────────┬────────
+   ·           │                           ╰── unexpected tag
+   ·           ╰── start tag
+   ╰────
 """
 
 
