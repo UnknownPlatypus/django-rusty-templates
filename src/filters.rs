@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
 
-use crate::render::{AsBorrowedContent, Context, IntoOwnedContent, Resolve, TemplateResult};
+use crate::render::{AsBorrowedContent, Context, IntoOwnedContent, Resolve, ResolveResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
 
@@ -26,7 +26,7 @@ pub trait ResolveFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py>;
+    ) -> ResolveResult<'t, 'py>;
 }
 
 #[derive(Debug)]
@@ -39,7 +39,7 @@ impl ResolveFilter for AddSlashesFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(content) => content
                 .render(context)?
@@ -71,7 +71,7 @@ impl ResolveFilter for AddFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let variable = match variable {
             Some(left) => left,
             None => return Ok(None),
@@ -104,7 +104,7 @@ impl ResolveFilter for CapfirstFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(content) => {
                 let content_string = content.render(context)?.into_owned();
@@ -140,7 +140,7 @@ impl ResolveFilter for DefaultFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(left) => Some(left),
             None => self.argument.resolve(py, template, context)?,
@@ -159,7 +159,7 @@ impl ResolveFilter for EscapeFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         _context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         Ok(match variable {
             Some(content) => match content {
                 Content::HtmlSafe(content) => Some(Content::HtmlSafe(content)),
@@ -201,7 +201,7 @@ impl ResolveFilter for ExternalFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let arg = match &self.argument {
             Some(arg) => arg.resolve(py, template, context)?,
             None => None,
@@ -225,7 +225,7 @@ impl ResolveFilter for LowerFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(content) => Some(
                 content
@@ -248,7 +248,7 @@ impl ResolveFilter for SafeFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         _context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(content) => match content {
                 Content::HtmlSafe(content) => Some(Content::HtmlSafe(content)),

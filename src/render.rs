@@ -26,7 +26,8 @@ pub struct Context {
     pub autoescape: bool,
 }
 
-pub type TemplateResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
+pub type ResolveResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
+pub type RenderResult<'t> = Result<Cow<'t, str>, PyRenderError>;
 
 #[derive(Debug, IntoPyObject)]
 pub enum Content<'t, 'py> {
@@ -194,7 +195,7 @@ pub trait Resolve {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py>;
+    ) -> ResolveResult<'t, 'py>;
 }
 
 /// Trait for rendering a template element into content suitable for
@@ -205,7 +206,7 @@ pub trait Render {
         py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Cow<'t, str>, PyRenderError>;
+    ) -> RenderResult<'t>;
 }
 
 /// All resolvable template elements can be rendered
@@ -218,7 +219,7 @@ where
         py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Cow<'t, str>, PyRenderError> {
+    ) -> RenderResult<'t> {
         match self.resolve(py, template, context)? {
             Some(content) => Ok(content.render(context)?),
             None => Ok(Cow::Borrowed("")),
@@ -232,7 +233,7 @@ impl Resolve for Variable {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let mut parts = self.parts(template);
         let (first, mut object_at) = parts.next().expect("Variable names cannot be empty");
         let mut variable = match context.context.get(first) {
@@ -277,7 +278,7 @@ impl Resolve for Filter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let left = self.left.resolve(py, template, context)?;
         let result = match &self.filter {
             FilterType::Add(filter) => filter.resolve(left, py, template, context),
@@ -320,7 +321,7 @@ impl Resolve for Url {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let view_name = match self.view_name.resolve(py, template, context)? {
             Some(view_name) => view_name,
             None => Content::String(Cow::Borrowed("")),
@@ -367,7 +368,7 @@ impl Render for Tag {
         py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Cow<'t, str>, PyRenderError> {
+    ) -> RenderResult<'t> {
         Ok(match self {
             Self::Autoescape { enabled, nodes } => {
                 let autoescape = context.autoescape;
@@ -393,7 +394,7 @@ impl Resolve for Text {
         _py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let resolved = Cow::Borrowed(template.content(self.at));
         Ok(Some(match context.autoescape {
             false => Content::String(resolved),
@@ -408,7 +409,7 @@ impl Resolve for Argument {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         Ok(Some(match &self.argument_type {
             ArgumentType::Text(text) => return text.resolve(py, template, context),
             ArgumentType::TranslatedText(_text) => todo!(),
@@ -443,7 +444,7 @@ impl Resolve for TagElement {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
             Self::TranslatedText(_text) => todo!(),
@@ -461,7 +462,7 @@ impl Render for TokenTree {
         py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Cow<'t, str>, PyRenderError> {
+    ) -> RenderResult<'t> {
         match self {
             Self::Text(text) => text.render(py, template, context),
             Self::TranslatedText(_text) => todo!(),
