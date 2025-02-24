@@ -1,3 +1,4 @@
+pub mod filters;
 pub mod types;
 
 use std::borrow::Cow;
@@ -8,8 +9,6 @@ use pyo3::prelude::*;
 use pyo3::types::{PyDict, PyList};
 
 use crate::error::{PyRenderError, RenderError};
-use crate::filters::FilterType;
-use crate::filters::ResolveFilter;
 use crate::parse::{Filter, Tag, TagElement, TokenTree, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::Argument;
@@ -18,6 +17,8 @@ use crate::types::TemplateString;
 use crate::types::Text;
 use crate::types::Variable;
 use crate::utils::PyResultMethods;
+use crate::filters::FilterType;
+use filters::ResolveFilter;
 use types::{Content, Context};
 
 pub type ResolveResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
