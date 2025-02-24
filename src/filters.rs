@@ -3,9 +3,35 @@ use std::borrow::Cow;
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
 
-use crate::render::{AsBorrowedContent, Context, IntoOwnedContent, Resolve, ResolveResult};
+use crate::render::{Context, Resolve, ResolveResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
+
+pub trait IntoOwnedContent<'t, 'py> {
+    fn into_content(self) -> Option<Content<'t, 'py>>;
+}
+
+pub trait AsBorrowedContent<'a, 't, 'py>
+where
+    'a: 't,
+{
+    fn as_content(&'a self) -> Option<Content<'t, 'py>>;
+}
+
+impl<'a, 't, 'py> AsBorrowedContent<'a, 't, 'py> for str
+where
+    'a: 't,
+{
+    fn as_content(&'a self) -> Option<Content<'t, 'py>> {
+        Some(Content::String(Cow::Borrowed(self)))
+    }
+}
+
+impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
+    fn into_content(self) -> Option<Content<'t, 'py>> {
+        Some(Content::String(Cow::Owned(self)))
+    }
+}
 
 #[derive(Debug)]
 pub enum FilterType {

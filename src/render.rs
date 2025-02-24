@@ -161,32 +161,6 @@ impl<'t, 'py> Content<'t, 'py> {
     }
 }
 
-pub trait IntoOwnedContent<'t, 'py> {
-    fn into_content(self) -> Option<Content<'t, 'py>>;
-}
-
-pub trait AsBorrowedContent<'a, 't, 'py>
-where
-    'a: 't,
-{
-    fn as_content(&'a self) -> Option<Content<'t, 'py>>;
-}
-
-impl<'a, 't, 'py> AsBorrowedContent<'a, 't, 'py> for str
-where
-    'a: 't,
-{
-    fn as_content(&'a self) -> Option<Content<'t, 'py>> {
-        Some(Content::String(Cow::Borrowed(self)))
-    }
-}
-
-impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
-    fn into_content(self) -> Option<Content<'t, 'py>> {
-        Some(Content::String(Cow::Owned(self)))
-    }
-}
-
 /// Trait for resolving a template element into content suitable for
 /// further processing by another template element.
 pub trait Resolve {
