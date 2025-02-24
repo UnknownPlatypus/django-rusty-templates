@@ -152,6 +152,13 @@ impl PyEq for FilterType {
     }
 }
 
+fn unexpected_argument(filter: &'static str, right: Argument) -> ParseError {
+    ParseError::UnexpectedArgument {
+        filter,
+        at: right.at.into(),
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Filter {
     pub at: (usize, usize),
@@ -172,21 +179,11 @@ impl Filter {
                 None => return Err(ParseError::MissingArgument { at: at.into() }),
             },
             "addslashes" => match right {
-                Some(right) => {
-                    return Err(ParseError::UnexpectedArgument {
-                        filter: "addslashes",
-                        at: right.at.into(),
-                    })
-                }
+                Some(right) => return Err(unexpected_argument("addslashes", right)),
                 None => FilterType::AddSlashes(AddSlashesFilter),
             },
             "capfirst" => match right {
-                Some(right) => {
-                    return Err(ParseError::UnexpectedArgument {
-                        filter: "capfirst",
-                        at: right.at.into(),
-                    })
-                }
+                Some(right) => return Err(unexpected_argument("capfirst", right)),
                 None => FilterType::Capfirst(CapfirstFilter),
             },
             "default" => match right {
@@ -194,30 +191,15 @@ impl Filter {
                 None => return Err(ParseError::MissingArgument { at: at.into() }),
             },
             "escape" => match right {
-                Some(right) => {
-                    return Err(ParseError::UnexpectedArgument {
-                        filter: "escape",
-                        at: right.at.into(),
-                    })
-                }
+                Some(right) => return Err(unexpected_argument("escape", right)),
                 None => FilterType::Escape(EscapeFilter),
             },
             "lower" => match right {
-                Some(right) => {
-                    return Err(ParseError::UnexpectedArgument {
-                        filter: "lower",
-                        at: right.at.into(),
-                    })
-                }
+                Some(right) => return Err(unexpected_argument("lower", right)),
                 None => FilterType::Lower(LowerFilter),
             },
             "safe" => match right {
-                Some(right) => {
-                    return Err(ParseError::UnexpectedArgument {
-                        filter: "safe",
-                        at: right.at.into(),
-                    })
-                }
+                Some(right) => return Err(unexpected_argument("safe", right)),
                 None => FilterType::Safe(SafeFilter),
             },
             external => {
