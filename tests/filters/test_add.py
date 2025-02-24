@@ -147,3 +147,21 @@ def test_add_safe():
     expected = "<p>Some HTML</p><p>More HTML</p>"
     assert django_template.render({"html": html}) == expected
     assert rust_template.render({"html": html}) == expected
+
+
+def test_add_integer_strings_autoescape_off():
+    template = "{% autoescape off %}{{ foo|add:'3' }}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "2"}) == "5"
+    assert rust_template.render({"foo": "2"}) == "5"
+
+
+def test_add_strings_autoescape_off():
+    template = "{% autoescape off %}{{ foo|add:'def' }}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "abc"}) == "abcdef"
+    assert rust_template.render({"foo": "abc"}) == "abcdef"
