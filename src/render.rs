@@ -164,18 +164,18 @@ pub trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
 }
 
-pub trait IntoBorrowedContent<'a, 't, 'py>
+pub trait AsBorrowedContent<'a, 't, 'py>
 where
     'a: 't,
 {
-    fn into_content(&'a self) -> Option<Content<'t, 'py>>;
+    fn as_content(&'a self) -> Option<Content<'t, 'py>>;
 }
 
-impl<'a, 't, 'py> IntoBorrowedContent<'a, 't, 'py> for str
+impl<'a, 't, 'py> AsBorrowedContent<'a, 't, 'py> for str
 where
     'a: 't,
 {
-    fn into_content(&'a self) -> Option<Content<'t, 'py>> {
+    fn as_content(&'a self) -> Option<Content<'t, 'py>> {
         Some(Content::String(Cow::Borrowed(self)))
     }
 }

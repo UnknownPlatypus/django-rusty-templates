@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
 
-use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Resolve, TemplateResult};
+use crate::render::{AsBorrowedContent, Context, IntoOwnedContent, Resolve, TemplateResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
 
@@ -47,7 +47,7 @@ impl ResolveFilter for AddSlashesFilter {
                 .replace("\"", "\\\"")
                 .replace("'", r"\'")
                 .into_content(),
-            None => "".into_content(),
+            None => "".as_content(),
         };
         Ok(content)
     }
@@ -111,12 +111,12 @@ impl ResolveFilter for CapfirstFilter {
                 let mut chars = content_string.chars();
                 let first_char = match chars.next() {
                     Some(c) => c.to_uppercase(),
-                    None => return Ok("".into_content()),
+                    None => return Ok("".as_content()),
                 };
                 let string: String = first_char.chain(chars).collect();
                 string.into_content()
             }
-            None => "".into_content(),
+            None => "".as_content(),
         };
         Ok(content)
     }
@@ -232,7 +232,7 @@ impl ResolveFilter for LowerFilter {
                     .resolve_string(context)?
                     .map_content(|content| Cow::Owned(content.to_lowercase())),
             ),
-            None => "".into_content(),
+            None => "".as_content(),
         };
         Ok(content)
     }
