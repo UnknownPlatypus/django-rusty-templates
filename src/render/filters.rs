@@ -234,3 +234,297 @@ impl ResolveFilter for SafeFilter {
         Ok(content)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::filters::{AddSlashesFilter, DefaultFilter, LowerFilter};
+    use crate::render::{Filter, FilterType, Render, TagElement};
+    use crate::template::django_rusty_templates::{EngineData, Template};
+    use crate::types::{Argument, ArgumentType, Text, Variable};
+
+    use pyo3::types::{PyDict, PyString};
+
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_render_filter() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let name = PyString::new(py, "Lily").into_any();
+            let context = HashMap::from([("name".to_string(), name.unbind())]);
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ name|default:'Bryony' }}");
+            let variable = Variable::new((3, 4));
+            let filter = Filter {
+                at: (8, 7),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                })),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_addslashes_single() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let name = PyString::new(py, "'hello'").into_any();
+            let context = HashMap::from([("quotes".to_string(), name.unbind())]);
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ quotes|addslashes }}");
+            let variable = Variable::new((3, 6));
+            let filter = Filter {
+                at: (10, 10),
+                left: TagElement::Variable(variable),
+                filter: FilterType::AddSlashes(AddSlashesFilter),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, r"\'hello\'");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_capfirst() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|capfirst }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "hello world").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "Hello world");
+
+            let context = PyDict::new(py);
+            context.set_item("var", "").unwrap();
+            let template_string = "{{ var|capfirst }}".to_string();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+
+            let context = PyDict::new(py);
+            context.set_item("bar", "").unwrap();
+            let template_string = "{{ var|capfirst }}".to_string();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+
+            let template_string = "{{ var|capfirst:invalid }}".to_string();
+            let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
+
+            let error_string = format!("{error}");
+            assert!(error_string.contains("capfirst filter does not take an argument"));
+        })
+    }
+
+    #[test]
+    fn test_render_filter_default() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ name|default:'Bryony' }}");
+            let variable = Variable::new((3, 4));
+            let filter = Filter {
+                at: (8, 7),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                })),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "Bryony");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_default_integer() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ count|default:12}}");
+            let variable = Variable::new((3, 5));
+            let filter = Filter {
+                at: (9, 7),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (17, 2),
+                    argument_type: ArgumentType::Int(12.into()),
+                })),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "12");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_default_float() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ count|default:3.5}}");
+            let variable = Variable::new((3, 5));
+            let filter = Filter {
+                at: (9, 7),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (17, 3),
+                    argument_type: ArgumentType::Float(3.5),
+                })),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "3.5");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_default_variable() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let me = PyString::new(py, "Lily").into_any();
+            let context = HashMap::from([("me".to_string(), me.unbind())]);
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ name|default:me}}");
+            let variable = Variable::new((3, 4));
+            let filter = Filter {
+                at: (8, 7),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 2),
+                    argument_type: ArgumentType::Variable(Variable::new((16, 2))),
+                })),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_lower() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let name = PyString::new(py, "Lily").into_any();
+            let context = HashMap::from([("name".to_string(), name.unbind())]);
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ name|lower }}");
+            let variable = Variable::new((3, 4));
+            let filter = Filter {
+                at: (8, 5),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Lower(LowerFilter),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_lower_missing_left() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ name|lower }}");
+            let variable = Variable::new((3, 4));
+            let filter = Filter {
+                at: (8, 5),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Lower(LowerFilter),
+            };
+
+            let rendered = filter.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "");
+        })
+    }
+
+    #[test]
+    fn test_render_chained_filters() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let context = HashMap::new();
+            let mut context = Context {
+                context,
+                request: None,
+                autoescape: false,
+            };
+            let template = TemplateString("{{ name|default:'Bryony'|lower }}");
+            let variable = Variable::new((3, 4));
+            let default = Filter {
+                at: (8, 7),
+                left: TagElement::Variable(variable),
+                filter: FilterType::Default(DefaultFilter::new(Argument {
+                    at: (16, 8),
+                    argument_type: ArgumentType::Text(Text::new((17, 6))),
+                })),
+            };
+            let lower = Filter {
+                at: (25, 5),
+                left: TagElement::Filter(Box::new(default)),
+                filter: FilterType::Lower(LowerFilter),
+            };
+
+            let rendered = lower.render(py, template, &mut context).unwrap();
+            assert_eq!(rendered, "bryony");
+        })
+    }
+}
