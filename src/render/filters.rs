@@ -262,7 +262,8 @@ impl ResolveFilter for SafeFilter {
 mod tests {
     use super::*;
     use crate::filters::{AddSlashesFilter, DefaultFilter, LowerFilter};
-    use crate::render::{Render, TagElement};
+    use crate::parse::TagElement;
+    use crate::render::Render;
     use crate::template::django_rusty_templates::{EngineData, Template};
     use crate::types::{Argument, ArgumentType, Text, Variable};
 
