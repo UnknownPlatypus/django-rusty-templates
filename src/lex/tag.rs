@@ -34,7 +34,9 @@ pub fn lex_tag(tag: &str, start: usize) -> Result<Option<(TagToken, TagParts)>, 
         None => {
             let at = (start, tag.len());
             let token = TagToken { at };
-            let parts = TagParts { at: (tag.len(), 0) };
+            let parts = TagParts {
+                at: (start + tag.len(), 0),
+            };
             return Ok(Some((token, parts)));
         }
     };
@@ -81,7 +83,7 @@ mod tests {
         let (token, rest) = lex_tag(tag, START_TAG_LEN).unwrap().unwrap();
         assert_eq!(token, TagToken { at: (3, 9) });
         assert_eq!(TemplateString(template).content(token.at), "csrftoken");
-        assert_eq!(rest, TagParts { at: (9, 0) })
+        assert_eq!(rest, TagParts { at: (12, 0) })
     }
 
     #[test]

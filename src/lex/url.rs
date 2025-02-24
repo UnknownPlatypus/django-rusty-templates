@@ -125,10 +125,7 @@ impl<'t> UrlLexer<'t> {
     }
 
     fn lex_kwarg(&mut self) -> Option<(usize, usize)> {
-        let index = match self.rest.find('=') {
-            Some(index) => index,
-            None => return None,
-        };
+        let index = self.rest.find('=')?;
         match self.rest.find(|c: char| !c.is_xid_continue()) {
             Some(n) if n < index => return None,
             _ => {}

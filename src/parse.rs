@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use either::Either;
 use miette::{Diagnostic, SourceSpan};
 use num_bigint::BigInt;
 use pyo3::intern;
@@ -10,9 +11,12 @@ use crate::filters::AddFilter;
 use crate::filters::AddSlashesFilter;
 use crate::filters::CapfirstFilter;
 use crate::filters::DefaultFilter;
+use crate::filters::EscapeFilter;
 use crate::filters::ExternalFilter;
 use crate::filters::FilterType;
 use crate::filters::LowerFilter;
+use crate::filters::SafeFilter;
+use crate::lex::autoescape::{lex_autoescape_argument, AutoescapeEnabled, AutoescapeError};
 use crate::lex::core::{Lexer, TokenType};
 use crate::lex::load::{LoadLexer, LoadToken};
 use crate::lex::tag::{lex_tag, TagLexerError, TagParts};
@@ -97,8 +101,10 @@ impl PartialEq for FilterType {
             (Self::AddSlashes(_), Self::AddSlashes(_)) => true,
             (Self::Capfirst(_), Self::Capfirst(_)) => true,
             (Self::Default(a), Self::Default(b)) => a.argument == b.argument,
-            (Self::Lower(_), Self::Lower(_)) => true,
+            (Self::Escape(_), Self::Escape(_)) => true,
             (Self::External(_), Self::External(_)) => false, // Can't compare PyAny to PyAny
+            (Self::Lower(_), Self::Lower(_)) => true,
+            (Self::Safe(_), Self::Safe(_)) => true,
             _ => false,
         }
     }
@@ -111,11 +117,13 @@ impl CloneRef for FilterType {
             Self::AddSlashes(_) => Self::AddSlashes(AddSlashesFilter),
             Self::Capfirst(_) => Self::Capfirst(CapfirstFilter),
             Self::Default(filter) => Self::Default(DefaultFilter::new(filter.argument.clone())),
+            Self::Escape(_) => Self::Escape(EscapeFilter),
             Self::External(external_filter) => Self::External(ExternalFilter::new(
                 external_filter.filter.clone_ref(py),
                 external_filter.argument.clone(),
             )),
             Self::Lower(_) => Self::Lower(LowerFilter),
+            Self::Safe(_) => Self::Safe(SafeFilter),
         }
     }
 }
@@ -128,6 +136,7 @@ impl PyEq for FilterType {
             (Self::AddSlashes(_), Self::AddSlashes(_)) => true,
             (Self::Capfirst(_), Self::Capfirst(_)) => true,
             (Self::Default(a), Self::Default(b)) => a.argument == b.argument,
+            (Self::Escape(_), Self::Escape(_)) => true,
             (Self::External(ext_a), Self::External(ext_b)) => {
                 ext_a.argument == ext_b.argument
                     && ext_a
@@ -137,6 +146,7 @@ impl PyEq for FilterType {
                         .expect("__eq__ should not raise")
             }
             (Self::Lower(_), Self::Lower(_)) => true,
+            (Self::Safe(_), Self::Safe(_)) => true,
             _ => false,
         }
     }
@@ -183,6 +193,15 @@ impl Filter {
                 Some(right) => FilterType::Default(DefaultFilter::new(right)),
                 None => return Err(ParseError::MissingArgument { at: at.into() }),
             },
+            "escape" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        filter: "escape",
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::Escape(EscapeFilter),
+            },
             "lower" => match right {
                 Some(right) => {
                     return Err(ParseError::UnexpectedArgument {
@@ -191,6 +210,15 @@ impl Filter {
                     })
                 }
                 None => FilterType::Lower(LowerFilter),
+            },
+            "safe" => match right {
+                Some(right) => {
+                    return Err(ParseError::UnexpectedArgument {
+                        filter: "safe",
+                        at: right.at.into(),
+                    })
+                }
+                None => FilterType::Safe(SafeFilter),
             },
             external => {
                 let external = match parser.external_filters.get(external) {
@@ -279,6 +307,10 @@ impl PyEq for Url {
 
 #[derive(Debug, PartialEq)]
 pub enum Tag {
+    Autoescape {
+        enabled: AutoescapeEnabled,
+        nodes: Vec<TokenTree>,
+    },
     Load,
     Url(Url),
 }
@@ -286,6 +318,10 @@ pub enum Tag {
 impl CloneRef for Tag {
     fn clone_ref(&self, py: Python<'_>) -> Self {
         match self {
+            Self::Autoescape { enabled, nodes } => Self::Autoescape {
+                enabled: enabled.clone(),
+                nodes: nodes.clone_ref(py),
+            },
             Self::Load => Self::Load,
             Self::Url(url) => Self::Url(url.clone_ref(py)),
         }
@@ -296,10 +332,47 @@ impl CloneRef for Tag {
 impl PyEq for Tag {
     fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
         match (self, other) {
+            (
+                Self::Autoescape {
+                    enabled: a,
+                    nodes: b,
+                },
+                Self::Autoescape {
+                    enabled: c,
+                    nodes: d,
+                },
+            ) => a == c && b.py_eq(d, py),
             (Self::Load, Self::Load) => true,
             (Self::Url(a), Self::Url(b)) => a.py_eq(b, py),
             _ => false,
         }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+enum EndTagType {
+    Autoescape,
+    Verbatim,
+}
+
+impl EndTagType {
+    fn as_str(&self) -> &'static str {
+        match self {
+            EndTagType::Autoescape => "endautoescape",
+            EndTagType::Verbatim => "endverbatim",
+        }
+    }
+}
+
+#[derive(PartialEq, Eq)]
+struct EndTag {
+    at: (usize, usize),
+    end: EndTagType,
+}
+
+impl EndTag {
+    fn as_str(&self) -> &'static str {
+        self.end.as_str()
     }
 }
 
@@ -370,6 +443,9 @@ pub enum ParseError {
     },
     #[error(transparent)]
     #[diagnostic(transparent)]
+    AutoescapeError(#[from] AutoescapeError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
     BlockError(#[from] TagLexerError),
     #[error(transparent)]
     #[diagnostic(transparent)]
@@ -386,6 +462,13 @@ pub enum ParseError {
     #[error("Invalid numeric literal")]
     InvalidNumber {
         #[label("here")]
+        at: SourceSpan,
+    },
+    #[error("Unclosed '{start}' tag. Looking for one of: {expected}")]
+    MissingEndTag {
+        start: &'static str,
+        expected: String,
+        #[label("started here")]
         at: SourceSpan,
     },
     #[error("'{tag}' is not a valid tag or filter in tag library '{library}'")]
@@ -421,10 +504,25 @@ pub enum ParseError {
         #[label("unexpected argument")]
         at: SourceSpan,
     },
+    #[error("Unexpected tag {unexpected}")]
+    UnexpectedEndTag {
+        unexpected: &'static str,
+        #[label("unexpected tag")]
+        at: SourceSpan,
+    },
     #[error("'url' takes at least one argument, a URL pattern name")]
     UrlTagNoArguments {
         #[label("here")]
         at: SourceSpan,
+    },
+    #[error("Unexpected tag {unexpected}, expected {expected}")]
+    WrongEndTag {
+        unexpected: &'static str,
+        expected: &'static str,
+        #[label("unexpected tag")]
+        at: SourceSpan,
+        #[label("start tag")]
+        start_at: SourceSpan,
     },
 }
 
@@ -522,7 +620,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
     pub fn parse(&mut self) -> Result<Vec<TokenTree>, PyParseError> {
         let mut nodes = Vec::new();
         while let Some(token) = self.lexer.next() {
-            nodes.push(match token.token_type {
+            let node = match token.token_type {
                 TokenType::Text => TokenTree::Text(Text::new(token.at)),
                 TokenType::Comment => continue,
                 TokenType::Variable => self
@@ -532,10 +630,65 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
                         token.at.0 + START_TAG_LEN,
                     )?
                     .into(),
-                TokenType::Tag => self.parse_tag(token.content(self.template), token.at)?,
-            })
+                TokenType::Tag => match self.parse_tag(token.content(self.template), token.at)? {
+                    Either::Left(token_tree) => token_tree,
+                    Either::Right(end_tag) => {
+                        return Err(ParseError::UnexpectedEndTag {
+                            at: end_tag.at.into(),
+                            unexpected: end_tag.as_str(),
+                        }
+                        .into())
+                    }
+                },
+            };
+            nodes.push(node)
         }
         Ok(nodes)
+    }
+
+    fn parse_until(
+        &mut self,
+        until: EndTagType,
+        start: &'static str,
+        start_at: (usize, usize),
+    ) -> Result<Vec<TokenTree>, PyParseError> {
+        let mut nodes = Vec::new();
+        while let Some(token) = self.lexer.next() {
+            let node = match token.token_type {
+                TokenType::Text => TokenTree::Text(Text::new(token.at)),
+                TokenType::Comment => continue,
+                TokenType::Variable => self
+                    .parse_variable(
+                        token.content(self.template),
+                        token.at,
+                        token.at.0 + START_TAG_LEN,
+                    )?
+                    .into(),
+                TokenType::Tag => match self.parse_tag(token.content(self.template), token.at)? {
+                    Either::Left(token_tree) => token_tree,
+                    Either::Right(end_tag) => {
+                        if end_tag.end == until {
+                            return Ok(nodes);
+                        } else {
+                            return Err(ParseError::WrongEndTag {
+                                expected: until.as_str(),
+                                unexpected: end_tag.as_str(),
+                                at: end_tag.at.into(),
+                                start_at: start_at.into(),
+                            }
+                            .into());
+                        }
+                    }
+                },
+            };
+            nodes.push(node)
+        }
+        Err(ParseError::MissingEndTag {
+            start,
+            expected: [until.as_str()].join(", "),
+            at: start_at.into(),
+        }
+        .into())
     }
 
     fn parse_variable(
@@ -561,7 +714,11 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
         Ok(var)
     }
 
-    fn parse_tag(&mut self, tag: &'t str, at: (usize, usize)) -> Result<TokenTree, PyParseError> {
+    fn parse_tag(
+        &mut self,
+        tag: &'t str,
+        at: (usize, usize),
+    ) -> Result<Either<TokenTree, EndTag>, PyParseError> {
         let maybe_tag = match lex_tag(tag, at.0 + START_TAG_LEN) {
             Ok(maybe_tag) => maybe_tag,
             Err(e) => {
@@ -574,8 +731,17 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             Some(t) => t,
         };
         Ok(match self.template.content(tag.at) {
-            "url" => self.parse_url(at, parts)?,
-            "load" => self.parse_load(at, parts)?,
+            "url" => Either::Left(self.parse_url(at, parts)?),
+            "load" => Either::Left(self.parse_load(at, parts)?),
+            "autoescape" => Either::Left(self.parse_autoescape(at, parts)?),
+            "endautoescape" => Either::Right(EndTag {
+                end: EndTagType::Autoescape,
+                at,
+            }),
+            "endverbatim" => Either::Right(EndTag {
+                end: EndTagType::Verbatim,
+                at,
+            }),
             _ => todo!(),
         })
     }
@@ -695,6 +861,19 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             variable,
         };
         Ok(TokenTree::Tag(Tag::Url(url)))
+    }
+
+    fn parse_autoescape(
+        &mut self,
+        at: (usize, usize),
+        parts: TagParts,
+    ) -> Result<TokenTree, PyParseError> {
+        let token = lex_autoescape_argument(self.template, parts).map_err(ParseError::from)?;
+        let nodes = self.parse_until(EndTagType::Autoescape, "autoescape", at)?;
+        Ok(TokenTree::Tag(Tag::Autoescape {
+            enabled: token.enabled,
+            nodes,
+        }))
     }
 }
 
@@ -1566,6 +1745,49 @@ mod tests {
             let cloned = capfirst.clone_ref(py);
             assert_eq!(capfirst, cloned);
             assert!(capfirst.py_eq(&cloned, py));
+
+            let safe = FilterType::Safe(SafeFilter);
+            let cloned = safe.clone_ref(py);
+            assert_eq!(safe, cloned);
+            assert!(safe.py_eq(&cloned, py));
+
+            let escape = FilterType::Escape(EscapeFilter);
+            let cloned = escape.clone_ref(py);
+            assert_eq!(escape, cloned);
+            assert!(escape.py_eq(&cloned, py));
+        })
+    }
+
+    #[test]
+    fn test_tag_clone_ref() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let load = Tag::Load;
+            let cloned = load.clone_ref(py);
+            assert_eq!(load, cloned);
+            assert!(load.py_eq(&cloned, py));
+
+            let url = Tag::Url(Url {
+                view_name: TagElement::Variable(Variable { at: (7, 14) }),
+                args: vec![],
+                kwargs: vec![],
+                variable: None,
+            });
+            let cloned = url.clone_ref(py);
+            assert_eq!(url, cloned);
+            assert!(url.py_eq(&cloned, py));
+
+            let text = Text { at: (0, 3) };
+            let translated = TokenTree::TranslatedText(text);
+            let text = TokenTree::Text(text);
+            let autoescape = Tag::Autoescape {
+                enabled: AutoescapeEnabled::On,
+                nodes: vec![translated, text],
+            };
+            let cloned = autoescape.clone_ref(py);
+            assert_eq!(autoescape, cloned);
+            assert!(autoescape.py_eq(&cloned, py));
         })
     }
 }

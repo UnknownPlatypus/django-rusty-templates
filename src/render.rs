@@ -26,19 +26,46 @@ pub struct Context {
     pub autoescape: bool,
 }
 
-pub type TemplateResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
+pub type ResolveResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
+pub type RenderResult<'t> = Result<Cow<'t, str>, PyRenderError>;
 
 #[derive(Debug, IntoPyObject)]
 pub enum Content<'t, 'py> {
     Py(Bound<'py, PyAny>),
     String(Cow<'t, str>),
+    HtmlSafe(Cow<'t, str>),
     Float(f64),
     Int(BigInt),
 }
 
-fn render_python(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String> {
+#[derive(Debug)]
+pub enum ContentString<'t> {
+    String(Cow<'t, str>),
+    HtmlSafe(Cow<'t, str>),
+}
+
+#[allow(clippy::needless_lifetimes)] // https://github.com/rust-lang/rust-clippy/issues/13923
+impl<'t, 'py> ContentString<'t> {
+    fn content(self) -> Cow<'t, str> {
+        match self {
+            Self::String(content) => content,
+            Self::HtmlSafe(content) => content,
+        }
+    }
+
+    pub fn map_content(self, f: impl FnOnce(Cow<'t, str>) -> Cow<'t, str>) -> Content<'t, 'py> {
+        match self {
+            Self::String(content) => Content::String(f(content)),
+            Self::HtmlSafe(content) => Content::HtmlSafe(f(content)),
+        }
+    }
+}
+
+fn resolve_python<'t>(value: Bound<'_, PyAny>, context: &Context) -> PyResult<ContentString<'t>> {
     if !context.autoescape {
-        return value.str()?.extract::<String>();
+        return Ok(ContentString::String(
+            value.str()?.extract::<String>()?.into(),
+        ));
     };
     let py = value.py();
 
@@ -46,30 +73,47 @@ fn render_python(value: Bound<'_, PyAny>, context: &Context) -> PyResult<String>
         true => value,
         false => value.str()?.into_any(),
     };
-    match value
-        .getattr(intern!(py, "__html__"))
-        .ok_or_isinstance_of::<PyAttributeError>(py)?
-    {
-        Ok(html) => html.call0()?.extract::<String>(),
-        Err(_) => Ok(encode_quoted_attribute(&value.str()?.extract::<String>()?).to_string()),
-    }
+    Ok(ContentString::HtmlSafe(
+        match value
+            .getattr(intern!(py, "__html__"))
+            .ok_or_isinstance_of::<PyAttributeError>(py)?
+        {
+            Ok(html) => html.call0()?.extract::<String>()?,
+            Err(_) => encode_quoted_attribute(&value.str()?.extract::<String>()?).to_string(),
+        }
+        .into(),
+    ))
 }
 
 impl<'t, 'py> Content<'t, 'py> {
     pub fn render(self, context: &Context) -> PyResult<Cow<'t, str>> {
-        let content = match self {
-            Self::Py(content) => render_python(content, context)?,
-            Self::String(content) => return Ok(content),
-            Self::Float(content) => content.to_string(),
-            Self::Int(content) => content.to_string(),
-        };
-        Ok(Cow::Owned(content))
+        Ok(match self {
+            Self::Py(content) => resolve_python(content, context)?.content(),
+            Self::String(content) => content,
+            Self::HtmlSafe(content) => content,
+            Self::Float(content) => content.to_string().into(),
+            Self::Int(content) => content.to_string().into(),
+        })
+    }
+
+    pub fn resolve_string(self, context: &Context) -> PyResult<ContentString<'t>> {
+        Ok(match self {
+            Self::String(content) => ContentString::String(content),
+            Self::HtmlSafe(content) => ContentString::HtmlSafe(content),
+            Self::Float(content) => ContentString::String(content.to_string().into()),
+            Self::Int(content) => ContentString::String(content.to_string().into()),
+            Self::Py(content) => return resolve_python(content, context),
+        })
     }
 
     pub fn to_bigint(&self) -> Option<BigInt> {
         match self {
             Self::Int(left) => Some(left.clone()),
             Self::String(left) => match left.parse::<BigInt>() {
+                Ok(left) => Some(left),
+                Err(_) => None,
+            },
+            Self::HtmlSafe(left) => match left.parse::<BigInt>() {
                 Ok(left) => Some(left),
                 Err(_) => None,
             },
@@ -90,8 +134,8 @@ impl<'t, 'py> Content<'t, 'py> {
         }
     }
 
-    pub fn to_py(&self, py: Python<'py>) -> Bound<'py, PyAny> {
-        match self {
+    pub fn to_py(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        Ok(match self {
             Self::Py(object) => object.clone(),
             Self::Int(i) => i
                 .into_pyobject(py)
@@ -105,7 +149,15 @@ impl<'t, 'py> Content<'t, 'py> {
                 .into_pyobject(py)
                 .expect("A string can always be converted to a Python str.")
                 .into_any(),
-        }
+            Self::HtmlSafe(s) => {
+                let string = s
+                    .into_pyobject(py)
+                    .expect("A string can always be converted to a Python str.");
+                let safestring = py.import(intern!(py, "django.utils.safestring"))?;
+                let mark_safe = safestring.getattr(intern!(py, "mark_safe"))?;
+                mark_safe.call1((string,))?
+            }
+        })
     }
 }
 
@@ -113,19 +165,19 @@ pub trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
 }
 
-pub trait IntoBorrowedContent<'a, 't, 'py>
+pub trait AsBorrowedContent<'a, 't, 'py>
 where
     'a: 't,
 {
-    fn into_content(&'a self) -> Option<Content<'t, 'py>>;
+    fn as_content(&'a self) -> Option<Content<'t, 'py>>;
 }
 
-impl<'a, 't, 'py> IntoBorrowedContent<'a, 't, 'py> for str
+impl<'a, 't, 'py> AsBorrowedContent<'a, 't, 'py> for str
 where
     'a: 't,
 {
-    fn into_content(&'a self) -> Option<Content<'t, 'py>> {
-        Some(Content::String(Cow::Borrowed(&self)))
+    fn as_content(&'a self) -> Option<Content<'t, 'py>> {
+        Some(Content::String(Cow::Borrowed(self)))
     }
 }
 
@@ -135,20 +187,39 @@ impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
     }
 }
 
-pub trait Render {
+/// Trait for resolving a template element into content suitable for
+/// further processing by another template element.
+pub trait Resolve {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py>;
+    ) -> ResolveResult<'t, 'py>;
+}
 
+/// Trait for rendering a template element into content suitable for
+/// output in the completely processed template.
+pub trait Render {
     fn render<'t>(
         &self,
         py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Cow<'t, str>, PyRenderError> {
+    ) -> RenderResult<'t>;
+}
+
+/// All resolvable template elements can be rendered
+impl<T> Render for T
+where
+    T: Resolve,
+{
+    fn render<'t>(
+        &self,
+        py: Python<'_>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> RenderResult<'t> {
         match self.resolve(py, template, context)? {
             Some(content) => Ok(content.render(context)?),
             None => Ok(Cow::Borrowed("")),
@@ -156,13 +227,13 @@ pub trait Render {
     }
 }
 
-impl Render for Variable {
+impl Resolve for Variable {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let mut parts = self.parts(template);
         let (first, mut object_at) = parts.next().expect("Variable names cannot be empty");
         let mut variable = match context.context.get(first) {
@@ -201,21 +272,23 @@ impl Render for Variable {
     }
 }
 
-impl Render for Filter {
+impl Resolve for Filter {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let left = self.left.resolve(py, template, context)?;
         let result = match &self.filter {
             FilterType::Add(filter) => filter.resolve(left, py, template, context),
             FilterType::AddSlashes(filter) => filter.resolve(left, py, template, context),
             FilterType::Capfirst(filter) => filter.resolve(left, py, template, context),
             FilterType::Default(filter) => filter.resolve(left, py, template, context),
+            FilterType::Escape(filter) => filter.resolve(left, py, template, context),
             FilterType::External(filter) => filter.resolve(left, py, template, context),
             FilterType::Lower(filter) => filter.resolve(left, py, template, context),
+            FilterType::Safe(filter) => filter.resolve(left, py, template, context),
         };
         result
     }
@@ -242,13 +315,13 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
     }
 }
 
-impl Render for Url {
+impl Resolve for Url {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let view_name = match self.view_name.resolve(py, template, context)? {
             Some(view_name) => view_name,
             None => Content::String(Cow::Borrowed("")),
@@ -290,39 +363,53 @@ impl Render for Url {
 }
 
 impl Render for Tag {
-    fn resolve<'t, 'py>(
+    fn render<'t>(
         &self,
-        py: Python<'py>,
+        py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
-        match self {
-            Self::Load => Ok(None),
-            Self::Url(url) => url.resolve(py, template, context),
-        }
+    ) -> RenderResult<'t> {
+        Ok(match self {
+            Self::Autoescape { enabled, nodes } => {
+                let autoescape = context.autoescape;
+                context.autoescape = enabled.into();
+
+                let mut rendered = vec![];
+                for node in nodes {
+                    rendered.push(node.render(py, template, context)?)
+                }
+
+                context.autoescape = autoescape;
+                Cow::Owned(rendered.join(""))
+            }
+            Self::Load => Cow::Borrowed(""),
+            Self::Url(url) => url.render(py, template, context)?,
+        })
     }
 }
 
-impl Render for Text {
+impl Resolve for Text {
     fn resolve<'t, 'py>(
         &self,
         _py: Python<'py>,
         template: TemplateString<'t>,
-        _context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
-        Ok(Some(Content::String(Cow::Borrowed(
-            template.content(self.at),
-        ))))
+        context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        let resolved = Cow::Borrowed(template.content(self.at));
+        Ok(Some(match context.autoescape {
+            false => Content::String(resolved),
+            true => Content::HtmlSafe(resolved),
+        }))
     }
 }
 
-impl Render for Argument {
+impl Resolve for Argument {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         Ok(Some(match &self.argument_type {
             ArgumentType::Text(text) => return text.resolve(py, template, context),
             ArgumentType::TranslatedText(_text) => todo!(),
@@ -351,13 +438,13 @@ impl Render for Argument {
     }
 }
 
-impl Render for TagElement {
+impl Resolve for TagElement {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         match self {
             Self::Text(text) => text.resolve(py, template, context),
             Self::TranslatedText(_text) => todo!(),
@@ -370,18 +457,18 @@ impl Render for TagElement {
 }
 
 impl Render for TokenTree {
-    fn resolve<'t, 'py>(
+    fn render<'t>(
         &self,
-        py: Python<'py>,
+        py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> RenderResult<'t> {
         match self {
-            Self::Text(text) => text.resolve(py, template, context),
+            Self::Text(text) => text.render(py, template, context),
             Self::TranslatedText(_text) => todo!(),
-            Self::Tag(tag) => tag.resolve(py, template, context),
-            Self::Variable(variable) => variable.resolve(py, template, context),
-            Self::Filter(filter) => filter.resolve(py, template, context),
+            Self::Tag(tag) => tag.render(py, template, context),
+            Self::Variable(variable) => variable.render(py, template, context),
+            Self::Filter(filter) => filter.render(py, template, context),
         }
     }
 }

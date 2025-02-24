@@ -1,7 +1,11 @@
-use crate::render::{Context, IntoBorrowedContent, IntoOwnedContent, Render, TemplateResult};
+use std::borrow::Cow;
+
+use html_escape::encode_quoted_attribute_to_string;
+use pyo3::prelude::*;
+
+use crate::render::{AsBorrowedContent, Context, IntoOwnedContent, Resolve, ResolveResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
-use pyo3::prelude::*;
 
 #[derive(Debug)]
 pub enum FilterType {
@@ -9,8 +13,10 @@ pub enum FilterType {
     AddSlashes(AddSlashesFilter),
     Capfirst(CapfirstFilter),
     Default(DefaultFilter),
+    Escape(EscapeFilter),
     External(ExternalFilter),
     Lower(LowerFilter),
+    Safe(SafeFilter),
 }
 
 pub trait ResolveFilter {
@@ -20,7 +26,7 @@ pub trait ResolveFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py>;
+    ) -> ResolveResult<'t, 'py>;
 }
 
 #[derive(Debug)]
@@ -33,7 +39,7 @@ impl ResolveFilter for AddSlashesFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(content) => content
                 .render(context)?
@@ -41,7 +47,7 @@ impl ResolveFilter for AddSlashesFilter {
                 .replace("\"", "\\\"")
                 .replace("'", r"\'")
                 .into_content(),
-            None => "".into_content(),
+            None => "".as_content(),
         };
         Ok(content)
     }
@@ -54,7 +60,7 @@ pub struct AddFilter {
 
 impl AddFilter {
     pub fn new(argument: Argument) -> Self {
-        Self { argument: argument }
+        Self { argument }
     }
 }
 
@@ -65,7 +71,7 @@ impl ResolveFilter for AddFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let variable = match variable {
             Some(left) => left,
             None => return Ok(None),
@@ -75,13 +81,13 @@ impl ResolveFilter for AddFilter {
             .resolve(py, template, context)?
             .expect("missing argument in context should already have raised");
         match (variable.to_bigint(), right.to_bigint()) {
-            (Some(variable), Some(right)) => return Ok(Some(Content::Int(variable + right))),
+            (Some(variable), Some(right)) => Ok(Some(Content::Int(variable + right))),
             _ => {
-                let variable = variable.to_py(py);
-                let right = right.to_py(py);
+                let variable = variable.to_py(py)?;
+                let right = right.to_py(py)?;
                 match variable.add(right) {
-                    Ok(sum) => return Ok(Some(Content::Py(sum))),
-                    Err(_) => return Ok(None),
+                    Ok(sum) => Ok(Some(Content::Py(sum))),
+                    Err(_) => Ok(None),
                 }
             }
         }
@@ -98,19 +104,19 @@ impl ResolveFilter for CapfirstFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(content) => {
                 let content_string = content.render(context)?.into_owned();
                 let mut chars = content_string.chars();
                 let first_char = match chars.next() {
                     Some(c) => c.to_uppercase(),
-                    None => return Ok("".into_content()),
+                    None => return Ok("".as_content()),
                 };
                 let string: String = first_char.chain(chars).collect();
                 string.into_content()
             }
-            None => "".into_content(),
+            None => "".as_content(),
         };
         Ok(content)
     }
@@ -123,7 +129,7 @@ pub struct DefaultFilter {
 
 impl DefaultFilter {
     pub fn new(argument: Argument) -> Self {
-        Self { argument: argument }
+        Self { argument }
     }
 }
 
@@ -134,12 +140,45 @@ impl ResolveFilter for DefaultFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
             Some(left) => Some(left),
             None => self.argument.resolve(py, template, context)?,
         };
         Ok(content)
+    }
+}
+
+#[derive(Debug)]
+pub struct EscapeFilter;
+
+impl ResolveFilter for EscapeFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        _context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        Ok(match variable {
+            Some(content) => match content {
+                Content::HtmlSafe(content) => Some(Content::HtmlSafe(content)),
+                Content::String(content) => {
+                    let mut encoded = String::new();
+                    encode_quoted_attribute_to_string(&content, &mut encoded);
+                    Some(Content::HtmlSafe(Cow::Owned(encoded)))
+                }
+                Content::Int(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Float(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Py(object) => {
+                    let content = object.str()?.extract::<String>()?;
+                    let mut encoded = String::new();
+                    encode_quoted_attribute_to_string(&content, &mut encoded);
+                    Some(Content::HtmlSafe(Cow::Owned(encoded)))
+                }
+            },
+            None => Some(Content::HtmlSafe(Cow::Borrowed(""))),
+        })
     }
 }
 
@@ -151,10 +190,7 @@ pub struct ExternalFilter {
 
 impl ExternalFilter {
     pub fn new(filter: Py<PyAny>, argument: Option<Argument>) -> Self {
-        Self {
-            filter: filter,
-            argument: argument,
-        }
+        Self { filter, argument }
     }
 }
 
@@ -165,7 +201,7 @@ impl ResolveFilter for ExternalFilter {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let arg = match &self.argument {
             Some(arg) => arg.resolve(py, template, context)?,
             None => None,
@@ -189,10 +225,42 @@ impl ResolveFilter for LowerFilter {
         _py: Python<'py>,
         _template: TemplateString<'t>,
         context: &mut Context,
-    ) -> TemplateResult<'t, 'py> {
+    ) -> ResolveResult<'t, 'py> {
         let content = match variable {
-            Some(content) => content.render(context)?.to_lowercase().into_content(),
-            None => "".into_content(),
+            Some(content) => Some(
+                content
+                    .resolve_string(context)?
+                    .map_content(|content| Cow::Owned(content.to_lowercase())),
+            ),
+            None => "".as_content(),
+        };
+        Ok(content)
+    }
+}
+
+#[derive(Debug)]
+pub struct SafeFilter;
+
+impl ResolveFilter for SafeFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        _context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        let content = match variable {
+            Some(content) => match content {
+                Content::HtmlSafe(content) => Some(Content::HtmlSafe(content)),
+                Content::String(content) => Some(Content::HtmlSafe(content)),
+                Content::Int(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Float(n) => Some(Content::HtmlSafe(Cow::Owned(n.to_string()))),
+                Content::Py(object) => {
+                    let content = object.str()?.extract::<String>()?;
+                    Some(Content::HtmlSafe(Cow::Owned(content)))
+                }
+            },
+            None => Some(Content::HtmlSafe(Cow::Borrowed(""))),
         };
         Ok(content)
     }
