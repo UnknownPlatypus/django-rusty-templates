@@ -7,11 +7,11 @@ use crate::render::{Context, Resolve, ResolveResult};
 use crate::types::Argument;
 use crate::{render::Content, types::TemplateString};
 
-pub trait IntoOwnedContent<'t, 'py> {
+trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
 }
 
-pub trait AsBorrowedContent<'a, 't, 'py>
+trait AsBorrowedContent<'a, 't, 'py>
 where
     'a: 't,
 {
