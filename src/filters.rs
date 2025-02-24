@@ -3,9 +3,9 @@ use std::borrow::Cow;
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
 
-use crate::render::{Context, Resolve, ResolveResult};
-use crate::types::Argument;
-use crate::{render::Content, types::TemplateString};
+use crate::render::types::{Content, Context};
+use crate::render::{Resolve, ResolveResult};
+use crate::types::{Argument, TemplateString};
 
 trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
