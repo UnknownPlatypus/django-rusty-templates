@@ -683,12 +683,12 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             };
             nodes.push(node)
         }
-        return Err(ParseError::MissingEndTag {
+        Err(ParseError::MissingEndTag {
             start,
-            expected: vec![until.as_str()].join(", "),
+            expected: [until.as_str()].join(", "),
             at: start_at.into(),
         }
-        .into());
+        .into())
     }
 
     fn parse_variable(

@@ -176,7 +176,7 @@ where
     'a: 't,
 {
     fn into_content(&'a self) -> Option<Content<'t, 'py>> {
-        Some(Content::String(Cow::Borrowed(&self)))
+        Some(Content::String(Cow::Borrowed(self)))
     }
 }
 
@@ -205,11 +205,14 @@ pub trait Render {
         py: Python<'_>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<Cow<'t, str>, PyRenderError> ;
+    ) -> Result<Cow<'t, str>, PyRenderError>;
 }
 
 /// All resolvable template elements can be rendered
-impl<T> Render for T where T: Resolve {
+impl<T> Render for T
+where
+    T: Resolve,
+{
     fn render<'t>(
         &self,
         py: Python<'_>,
@@ -377,7 +380,7 @@ impl Render for Tag {
 
                 context.autoescape = autoescape;
                 Cow::Owned(rendered.join(""))
-            },
+            }
             Self::Load => Cow::Borrowed(""),
             Self::Url(url) => url.render(py, template, context)?,
         })

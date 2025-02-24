@@ -60,7 +60,7 @@ pub struct AddFilter {
 
 impl AddFilter {
     pub fn new(argument: Argument) -> Self {
-        Self { argument: argument }
+        Self { argument }
     }
 }
 
@@ -81,13 +81,13 @@ impl ResolveFilter for AddFilter {
             .resolve(py, template, context)?
             .expect("missing argument in context should already have raised");
         match (variable.to_bigint(), right.to_bigint()) {
-            (Some(variable), Some(right)) => return Ok(Some(Content::Int(variable + right))),
+            (Some(variable), Some(right)) => Ok(Some(Content::Int(variable + right))),
             _ => {
                 let variable = variable.to_py(py)?;
                 let right = right.to_py(py)?;
                 match variable.add(right) {
-                    Ok(sum) => return Ok(Some(Content::Py(sum))),
-                    Err(_) => return Ok(None),
+                    Ok(sum) => Ok(Some(Content::Py(sum))),
+                    Err(_) => Ok(None),
                 }
             }
         }
@@ -129,7 +129,7 @@ pub struct DefaultFilter {
 
 impl DefaultFilter {
     pub fn new(argument: Argument) -> Self {
-        Self { argument: argument }
+        Self { argument }
     }
 }
 
@@ -190,10 +190,7 @@ pub struct ExternalFilter {
 
 impl ExternalFilter {
     pub fn new(filter: Py<PyAny>, argument: Option<Argument>) -> Self {
-        Self {
-            filter: filter,
-            argument: argument,
-        }
+        Self { filter, argument }
     }
 }
 
