@@ -16,7 +16,7 @@ pub type RenderResult<'t> = Result<Cow<'t, str>, PyRenderError>;
 
 /// Trait for resolving a template element into content suitable for
 /// further processing by another template element.
-pub trait Resolve {
+trait Resolve {
     fn resolve<'t, 'py>(
         &self,
         py: Python<'py>,
