@@ -14,7 +14,8 @@ pub mod django_rusty_templates {
 
     use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader};
     use crate::parse::{Parser, TokenTree};
-    use crate::render::{Context, Render};
+    use crate::render::Render;
+    use crate::render::types::Context;
     use crate::types::{CloneRef, TemplateString};
     use crate::utils::PyResultMethods;
 
