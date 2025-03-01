@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::sync::LazyLock;
 
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
@@ -13,6 +14,14 @@ use crate::render::{Resolve, ResolveResult};
 use crate::types::TemplateString;
 use regex::Regex;
 use unicode_normalization::UnicodeNormalization;
+
+// Used for replacing all non-word and non-spaces with an empty string
+static NON_WORD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[^\w\s-]").expect("Static string will never panic"));
+
+// regex for whitespaces and hyphen, used for replacing with hyphen only
+static WHITESPACE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[-\s]+").expect("Static string will never panic"));
 
 trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
@@ -269,9 +278,6 @@ impl ResolveFilter for SlugifyFilter {
         _template: TemplateString<'t>,
         _context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
-        let non_word_re = Regex::new(r"[^\w\s-]").unwrap();
-        let whitespace_re = Regex::new(r"[-\s]+").unwrap();
-
         let content = match variable {
             Some(content) => {
                 let content = content.to_py(py)?.str()?.extract::<String>()?;
@@ -282,9 +288,9 @@ impl ResolveFilter for SlugifyFilter {
                     .filter(|c| c.is_ascii())
                     .collect::<String>()
                     .to_lowercase();
-                let content = non_word_re.replace_all(&content, "");
+                let content = NON_WORD_RE.replace_all(&content, "");
                 let content = content.trim();
-                let content = whitespace_re.replace_all(&content, "-");
+                let content = WHITESPACE_RE.replace_all(&content, "-");
                 content.to_string().into_content()
             }
             None => "".as_content(),
