@@ -3,6 +3,8 @@ use std::sync::LazyLock;
 
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
+use pyo3::sync::GILOnceCell;
+use pyo3::types::PyType;
 
 use crate::filters::{
     AddFilter, AddSlashesFilter, CapfirstFilter, DefaultFilter, EscapeFilter, ExternalFilter,
@@ -22,6 +24,8 @@ static NON_WORD_RE: LazyLock<Regex> =
 // regex for whitespaces and hyphen, used for replacing with hyphen only
 static WHITESPACE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[-\s]+").expect("Static string will never panic"));
+
+static SAFEDATA: GILOnceCell<Py<PyType>> = GILOnceCell::new();
 
 trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
@@ -270,6 +274,20 @@ impl ResolveFilter for SafeFilter {
     }
 }
 
+fn slugify(content: Cow<str>) -> Cow<str> {
+    let content = content
+        .nfkd()
+        // first decomposing characters, then only keeping
+        // the ascii ones, filtering out diacritics for example.
+        .filter(|c| c.is_ascii())
+        .collect::<String>()
+        .to_lowercase();
+    let content = NON_WORD_RE.replace_all(&content, "");
+    let content = content.trim();
+    let content = WHITESPACE_RE.replace_all(&content, "-");
+    Cow::Owned(content.to_string())
+}
+
 impl ResolveFilter for SlugifyFilter {
     fn resolve<'t, 'py>(
         &self,
@@ -279,20 +297,22 @@ impl ResolveFilter for SlugifyFilter {
         _context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
         let content = match variable {
-            Some(content) => {
-                let content = content.to_py(py)?.str()?.extract::<String>()?;
-                let content = content
-                    .nfkd()
-                    // first decomposing characters, then only keeping
-                    // the ascii ones, filtering out diacritics for example.
-                    .filter(|c| c.is_ascii())
-                    .collect::<String>()
-                    .to_lowercase();
-                let content = NON_WORD_RE.replace_all(&content, "");
-                let content = content.trim();
-                let content = WHITESPACE_RE.replace_all(&content, "-");
-                content.to_string().into_content()
-            }
+            Some(content) => match content {
+                Content::Py(content) => {
+                    let slug = slugify(Cow::Owned(content.str()?.extract::<String>()?));
+                    #[allow(non_snake_case)]
+                    let SafeData = SAFEDATA.import(py, "django.utils.safestring", "SafeData")?;
+                    match content.is_instance(SafeData)? {
+                        true => Some(Content::HtmlSafe(slug)),
+                        false => Some(Content::String(slug)),
+                    }
+                }
+                // Int and Float requires no slugify, we only need to turn it into a string.
+                Content::Int(content) => Some(Content::String(Cow::Owned(content.to_string()))),
+                Content::Float(content) => Some(Content::String(Cow::Owned(content.to_string()))),
+                Content::String(content) => Some(Content::String(slugify(content))),
+                Content::HtmlSafe(content) => Some(Content::HtmlSafe(slugify(content))),
+            },
             None => "".as_content(),
         };
         Ok(content)
