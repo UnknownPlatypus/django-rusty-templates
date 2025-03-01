@@ -24,7 +24,7 @@ pub enum ContentString<'t> {
 
 #[allow(clippy::needless_lifetimes)] // https://github.com/rust-lang/rust-clippy/issues/13923
 impl<'t, 'py> ContentString<'t> {
-    fn content(self) -> Cow<'t, str> {
+    pub fn content(self) -> Cow<'t, str> {
         match self {
             Self::String(content) => content,
             Self::HtmlSafe(content) => content,

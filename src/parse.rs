@@ -16,15 +16,16 @@ use crate::filters::ExternalFilter;
 use crate::filters::FilterType;
 use crate::filters::LowerFilter;
 use crate::filters::SafeFilter;
-use crate::lex::autoescape::{lex_autoescape_argument, AutoescapeEnabled, AutoescapeError};
+use crate::filters::SlugifyFilter;
+use crate::lex::START_TAG_LEN;
+use crate::lex::autoescape::{AutoescapeEnabled, AutoescapeError, lex_autoescape_argument};
 use crate::lex::core::{Lexer, TokenType};
 use crate::lex::load::{LoadLexer, LoadToken};
-use crate::lex::tag::{lex_tag, TagLexerError, TagParts};
+use crate::lex::tag::{TagLexerError, TagParts, lex_tag};
 use crate::lex::url::{UrlLexer, UrlLexerError, UrlToken, UrlTokenType};
 use crate::lex::variable::{
-    lex_variable, Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError,
+    Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError, lex_variable,
 };
-use crate::lex::START_TAG_LEN;
 use crate::types::Argument;
 use crate::types::ArgumentType;
 use crate::types::Text;
@@ -105,6 +106,7 @@ impl PartialEq for FilterType {
             (Self::External(_), Self::External(_)) => false, // Can't compare PyAny to PyAny
             (Self::Lower(_), Self::Lower(_)) => true,
             (Self::Safe(_), Self::Safe(_)) => true,
+            (Self::Slugify(_), Self::Slugify(_)) => true,
             _ => false,
         }
     }
@@ -124,6 +126,7 @@ impl CloneRef for FilterType {
             )),
             Self::Lower(_) => Self::Lower(LowerFilter),
             Self::Safe(_) => Self::Safe(SafeFilter),
+            Self::Slugify(_) => Self::Slugify(SlugifyFilter),
         }
     }
 }
@@ -147,6 +150,7 @@ impl PyEq for FilterType {
             }
             (Self::Lower(_), Self::Lower(_)) => true,
             (Self::Safe(_), Self::Safe(_)) => true,
+            (Self::Slugify(_), Self::Slugify(_)) => true,
             _ => false,
         }
     }
@@ -202,6 +206,10 @@ impl Filter {
                 Some(right) => return Err(unexpected_argument("safe", right)),
                 None => FilterType::Safe(SafeFilter),
             },
+            "slugify" => match right {
+                Some(right) => return Err(unexpected_argument("slugify", right)),
+                None => FilterType::Slugify(SlugifyFilter),
+            },
             external => {
                 let external = match parser.external_filters.get(external) {
                     Some(external) => external.clone().unbind(),
@@ -209,7 +217,7 @@ impl Filter {
                         return Err(ParseError::InvalidFilter {
                             at: at.into(),
                             filter: external.to_string(),
-                        })
+                        });
                     }
                 };
                 FilterType::External(ExternalFilter::new(external, right))
@@ -619,7 +627,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
                             at: end_tag.at.into(),
                             unexpected: end_tag.as_str(),
                         }
-                        .into())
+                        .into());
                     }
                 },
             };
@@ -1737,6 +1745,11 @@ mod tests {
             let cloned = escape.clone_ref(py);
             assert_eq!(escape, cloned);
             assert!(escape.py_eq(&cloned, py));
+
+            let slugify = FilterType::Slugify(SlugifyFilter);
+            let cloned = slugify.clone_ref(py);
+            assert_eq!(slugify, cloned);
+            assert!(slugify.py_eq(&cloned, py));
         })
     }
 

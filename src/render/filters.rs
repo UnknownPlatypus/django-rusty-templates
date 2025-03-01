@@ -1,16 +1,31 @@
 use std::borrow::Cow;
+use std::sync::LazyLock;
 
 use html_escape::encode_quoted_attribute_to_string;
 use pyo3::prelude::*;
+use pyo3::sync::GILOnceCell;
+use pyo3::types::PyType;
 
 use crate::filters::{
     AddFilter, AddSlashesFilter, CapfirstFilter, DefaultFilter, EscapeFilter, ExternalFilter,
-    FilterType, LowerFilter, SafeFilter,
+    FilterType, LowerFilter, SafeFilter, SlugifyFilter,
 };
 use crate::parse::Filter;
 use crate::render::types::{Content, Context};
 use crate::render::{Resolve, ResolveResult};
 use crate::types::TemplateString;
+use regex::Regex;
+use unicode_normalization::UnicodeNormalization;
+
+// Used for replacing all non-word and non-spaces with an empty string
+static NON_WORD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[^\w\s-]").expect("Static string will never panic"));
+
+// regex for whitespaces and hyphen, used for replacing with hyphen only
+static WHITESPACE_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"[-\s]+").expect("Static string will never panic"));
+
+static SAFEDATA: GILOnceCell<Py<PyType>> = GILOnceCell::new();
 
 trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
@@ -55,6 +70,7 @@ impl Resolve for Filter {
             FilterType::External(filter) => filter.resolve(left, py, template, context),
             FilterType::Lower(filter) => filter.resolve(left, py, template, context),
             FilterType::Safe(filter) => filter.resolve(left, py, template, context),
+            FilterType::Slugify(filter) => filter.resolve(left, py, template, context),
         };
         result
     }
@@ -258,6 +274,51 @@ impl ResolveFilter for SafeFilter {
     }
 }
 
+fn slugify(content: Cow<str>) -> Cow<str> {
+    let content = content
+        .nfkd()
+        // first decomposing characters, then only keeping
+        // the ascii ones, filtering out diacritics for example.
+        .filter(|c| c.is_ascii())
+        .collect::<String>()
+        .to_lowercase();
+    let content = NON_WORD_RE.replace_all(&content, "");
+    let content = content.trim();
+    let content = WHITESPACE_RE.replace_all(&content, "-");
+    Cow::Owned(content.to_string())
+}
+
+impl ResolveFilter for SlugifyFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        py: Python<'py>,
+        _template: TemplateString<'t>,
+        _context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        let content = match variable {
+            Some(content) => match content {
+                Content::Py(content) => {
+                    let slug = slugify(Cow::Owned(content.str()?.extract::<String>()?));
+                    #[allow(non_snake_case)]
+                    let SafeData = SAFEDATA.import(py, "django.utils.safestring", "SafeData")?;
+                    match content.is_instance(SafeData)? {
+                        true => Some(Content::HtmlSafe(slug)),
+                        false => Some(Content::String(slug)),
+                    }
+                }
+                // Int and Float requires no slugify, we only need to turn it into a string.
+                Content::Int(content) => Some(Content::String(Cow::Owned(content.to_string()))),
+                Content::Float(content) => Some(Content::String(Cow::Owned(content.to_string()))),
+                Content::String(content) => Some(Content::String(slugify(content))),
+                Content::HtmlSafe(content) => Some(Content::HtmlSafe(slugify(content))),
+            },
+            None => "".as_content(),
+        };
+        Ok(content)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,7 +328,23 @@ mod tests {
     use crate::template::django_rusty_templates::{EngineData, Template};
     use crate::types::{Argument, ArgumentType, Text, Variable};
 
+    use pyo3::IntoPyObjectExt;
     use pyo3::types::{PyDict, PyString};
+    static MARK_SAFE: GILOnceCell<Py<PyAny>> = GILOnceCell::new();
+
+    fn mark_safe(py: Python<'_>, string: String) -> Result<Py<PyAny>, PyErr> {
+        let mark_safe = match MARK_SAFE.get(py) {
+            Some(mark_safe) => mark_safe,
+            None => {
+                let py_mark_safe = py.import("django.utils.safestring")?;
+                let py_mark_safe = py_mark_safe.getattr("mark_safe")?;
+                MARK_SAFE.set(py, py_mark_safe.into());
+                MARK_SAFE.get(py).unwrap()
+            }
+        };
+        let safe_string = mark_safe.call1(py, (string,))?;
+        Ok(safe_string)
+    }
 
     use std::collections::HashMap;
 
@@ -296,6 +373,176 @@ mod tests {
 
             let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_happy_path() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "hello world").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_spaces_omitted() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", " hello world").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_special_characters_omitted() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "a&€%").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "a");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_multiple_spaces_inside_becomes_single() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "a & b").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "a-b");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_integer() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|default:1|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "1");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_float() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|default:1.3|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "1.3");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_rust_string() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|default:'hello world'|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_safe_string() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|default:'hello world'|safe|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_safe_string_from_rust_treated_as_py() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let safe_string = mark_safe(py, "a &amp; b".to_string()).unwrap();
+            context.set_item("var", safe_string).unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "a-amp-b");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_non_existing_variable() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ not_there|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify_invalid() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify:invalid }}".to_string();
+            let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
+
+            let error_string = format!("{error}");
+            assert!(error_string.contains("slugify filter does not take an argument"));
         })
     }
 
