@@ -48,7 +48,7 @@ pub enum UrlLexerError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     LexerError(#[from] LexerError),
-    #[error("")]
+    #[error("Incomplete keyword argument")]
     IncompleteKeywordArgument {
         #[label("here")]
         at: SourceSpan,
@@ -552,5 +552,14 @@ mod tests {
             }
             .into()
         );
+    }
+
+    #[test]
+    fn test_lex_url_incomplete_kwarg_message() {
+        let template = "{% url name= %}";
+        let parts = TagParts { at: (7, 5) };
+        let mut lexer = UrlLexer::new(template.into(), parts);
+        let error = lexer.next().unwrap().unwrap_err();
+        assert_eq!(error.to_string(), "Incomplete keyword argument");
     }
 }
