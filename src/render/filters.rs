@@ -328,7 +328,23 @@ mod tests {
     use crate::template::django_rusty_templates::{EngineData, Template};
     use crate::types::{Argument, ArgumentType, Text, Variable};
 
+    use pyo3::IntoPyObjectExt;
     use pyo3::types::{PyDict, PyString};
+    static MARK_SAFE: GILOnceCell<Py<PyAny>> = GILOnceCell::new();
+
+    fn mark_safe(py: Python<'_>, string: String) -> Result<Py<PyAny>, PyErr> {
+        let mark_safe = match MARK_SAFE.get(py) {
+            Some(mark_safe) => mark_safe,
+            None => {
+                let py_mark_safe = py.import("django.utils.safestring")?;
+                let py_mark_safe = py_mark_safe.getattr("mark_safe")?;
+                MARK_SAFE.set(py, py_mark_safe.into());
+                MARK_SAFE.get(py).unwrap()
+            }
+        };
+        let safe_string = mark_safe.call1(py, (string,))?;
+        Ok(safe_string)
+    }
 
     use std::collections::HashMap;
 
@@ -408,6 +424,40 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "1");
+
+            let engine = EngineData::empty();
+            let template_string = "{{ var|default:1.3|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "1.3");
+
+            let engine = EngineData::empty();
+            let template_string = "{{ var|default:'hello world'|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+
+            let engine = EngineData::empty();
+            let template_string = "{{ var|default:'hello world'|safe|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            let safe_string = mark_safe(py, "a &amp; b".to_string()).unwrap();
+            context.set_item("var", safe_string).unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "a-amp-b");
 
             let engine = EngineData::empty();
             let template_string = "{{ not_there|slugify }}".to_string();
