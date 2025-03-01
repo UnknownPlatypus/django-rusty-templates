@@ -3,28 +3,18 @@ Adapted from
 https://github.com/django/django/blob/5.1/tests/template_tests/filter_tests/test_slugify.py
 """
 
-import pytest
 from django.utils.functional import lazy
 from django.utils.safestring import mark_safe
 
 
-@pytest.mark.xfail(reason="autoescape not ready yet")
-def test_slugify01(self):
+def test_slugify01(assert_render):
     """
     Running slugify on a pre-escaped string leads to odd behavior,
     but the result is still safe.
     """
-    # @setup(
-    #     {
-    #         "slugify01": (
-    #             "{% autoescape off %}{{ a|slugify }} {{ b|slugify }}{% endautoescape %}"
-    #         )
-    #     }
-    # )
-    output = self.engine.render_to_string(
-        "slugify01", {"a": "a & b", "b": mark_safe("a &amp; b")}
-    )
-    self.assertEqual(output, "a-b a-amp-b")
+    template = "{% autoescape off %}{{ a|slugify }} {{ b|slugify }}{% endautoescape %}"
+    context = {"a": "a & b", "b": mark_safe("a &amp; b")}
+    assert_render(template, context, "a-b a-amp-b")
 
 
 def test_slugify02(assert_render):
