@@ -11,6 +11,8 @@ use crate::parse::Filter;
 use crate::render::types::{Content, Context};
 use crate::render::{Resolve, ResolveResult};
 use crate::types::TemplateString;
+use regex::Regex;
+use unicode_normalization::UnicodeNormalization;
 
 trait IntoOwnedContent<'t, 'py> {
     fn into_content(self) -> Option<Content<'t, 'py>>;
@@ -263,11 +265,31 @@ impl ResolveFilter for SlugifyFilter {
     fn resolve<'t, 'py>(
         &self,
         variable: Option<Content<'t, 'py>>,
-        _py: Python<'py>,
+        py: Python<'py>,
         _template: TemplateString<'t>,
         context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
-        Ok("".as_content())
+        let non_word_re = Regex::new(r"[^\w\s-]").unwrap();
+        let whitespace_re = Regex::new(r"[-\s]+").unwrap();
+
+        let content = match variable {
+            Some(content) => {
+                let content = content.resolve_string(context)?.content();
+                let content = content
+                    .nfkd()
+                    // first decomposing characters, then only keeping
+                    // the ascii ones, filtering out diacritics for example.
+                    .filter(|c| c.is_ascii())
+                    .collect::<String>()
+                    .to_lowercase();
+                let content = non_word_re.replace_all(&content, "");
+                let content = content.trim();
+                let content = whitespace_re.replace_all(&content, "-");
+                content.to_string().into_content()
+            }
+            None => "".as_content(),
+        };
+        Ok(content)
     }
 }
 
@@ -309,6 +331,49 @@ mod tests {
 
             let rendered = filter.render(py, template, &mut context).unwrap();
             assert_eq!(rendered, "Lily");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_slugify() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "hello world").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", " hello world").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello-world");
+
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "a&€%").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "a");
+
+            let engine = EngineData::empty();
+            let template_string = "{{ var|slugify }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "a & b").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "a-b");
         })
     }
 
