@@ -150,6 +150,7 @@ impl PyEq for FilterType {
             }
             (Self::Lower(_), Self::Lower(_)) => true,
             (Self::Safe(_), Self::Safe(_)) => true,
+            (Self::Slugify(_), Self::Slugify(_)) => true,
             _ => false,
         }
     }
@@ -206,7 +207,7 @@ impl Filter {
                 None => FilterType::Safe(SafeFilter),
             },
             "slugify" => match right {
-                Some(right) => return Err(unexpected_argument("safe", right)),
+                Some(right) => return Err(unexpected_argument("slugify", right)),
                 None => FilterType::Slugify(SlugifyFilter),
             },
             external => {
@@ -1744,6 +1745,11 @@ mod tests {
             let cloned = escape.clone_ref(py);
             assert_eq!(escape, cloned);
             assert!(escape.py_eq(&cloned, py));
+
+            let slugify = FilterType::Slugify(SlugifyFilter);
+            let cloned = slugify.clone_ref(py);
+            assert_eq!(slugify, cloned);
+            assert!(slugify.py_eq(&cloned, py));
         })
     }
 
