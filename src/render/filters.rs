@@ -377,7 +377,7 @@ mod tests {
     }
 
     #[test]
-    fn test_render_filter_slugify() {
+    fn test_render_filter_slugify_happy_path() {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
@@ -389,7 +389,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "hello-world");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_spaces_omitted() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -398,7 +405,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "hello-world");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_special_characters_omitted() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -407,7 +421,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "a");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_multiple_spaces_inside_becomes_single() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -416,7 +437,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "a-b");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_integer() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:1|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -424,7 +452,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "1");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_float() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:1.3|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -432,7 +467,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "1.3");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_rust_string() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:'hello world'|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -440,7 +482,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "hello-world");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_safe_string() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:'hello world'|safe|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -448,7 +497,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "hello-world");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_safe_string_from_rust_treated_as_py() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -458,7 +514,14 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "a-amp-b");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_non_existing_variable() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ not_there|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -466,7 +529,15 @@ mod tests {
             let result = template.render(py, Some(context), None).unwrap();
 
             assert_eq!(result, "");
+        })
+    }
 
+    #[test]
+    fn test_render_filter_slugify_invalid() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
             let template_string = "{{ var|slugify:invalid }}".to_string();
             let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
 
