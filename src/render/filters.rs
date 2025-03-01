@@ -267,14 +267,14 @@ impl ResolveFilter for SlugifyFilter {
         variable: Option<Content<'t, 'py>>,
         py: Python<'py>,
         _template: TemplateString<'t>,
-        context: &mut Context,
+        _context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
         let non_word_re = Regex::new(r"[^\w\s-]").unwrap();
         let whitespace_re = Regex::new(r"[-\s]+").unwrap();
 
         let content = match variable {
             Some(content) => {
-                let content = content.resolve_string(context)?.content();
+                let content = content.to_py(py)?.str()?.extract::<String>()?;
                 let content = content
                     .nfkd()
                     // first decomposing characters, then only keeping
