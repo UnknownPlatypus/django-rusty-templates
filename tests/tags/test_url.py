@@ -1,6 +1,7 @@
 import pytest
 from django.template import engines
 from django.template.base import VariableDoesNotExist
+from django.template.exceptions import TemplateSyntaxError
 from django.test import RequestFactory
 from django.urls import resolve, NoReverseMatch
 
@@ -166,3 +167,87 @@ def test_render_url_view_name_error():
    ·           ╰── 1
    ╰────
 """
+
+
+def test_render_url_invalid_keyword():
+    template = "{% url foo= %}"
+
+    with pytest.raises(TemplateSyntaxError) as django_error:
+        engines["django"].from_string(template)
+
+    msg = "Could not parse the remainder: '=' from 'foo='"
+    assert str(django_error.value) == msg
+
+    with pytest.raises(TemplateSyntaxError) as rust_error:
+        engines["rusty"].from_string(template)
+
+    assert str(rust_error.value) == """\
+  × Incomplete keyword argument
+   ╭────
+ 1 │ {% url foo= %}
+   ·        ──┬─
+   ·          ╰── here
+   ╰────
+"""
+
+
+def test_render_url_invalid_dotted_lookup_keyword():
+    template = "{% url foo.bar= %}"
+
+    with pytest.raises(TemplateSyntaxError) as django_error:
+        engines["django"].from_string(template)
+
+    msg = "Could not parse the remainder: '=' from 'foo.bar='"
+    assert str(django_error.value) == msg
+
+    with pytest.raises(TemplateSyntaxError) as rust_error:
+        engines["rusty"].from_string(template)
+
+    assert str(rust_error.value) == """\
+  × Could not parse the remainder
+   ╭────
+ 1 │ {% url foo.bar= %}
+   ·               ┬
+   ·               ╰── here
+   ╰────
+"""
+
+
+def test_render_url_dotted_lookup_keyword():
+    template = "{% url foo.bar='lily' %}"
+
+    with pytest.raises(TemplateSyntaxError) as django_error:
+        engines["django"].from_string(template)
+
+    msg = "Could not parse the remainder: '='lily'' from 'foo.bar='lily''"
+    assert str(django_error.value) == msg
+
+    with pytest.raises(TemplateSyntaxError) as rust_error:
+        engines["rusty"].from_string(template)
+
+    assert str(rust_error.value) == """\
+  × Could not parse the remainder
+   ╭────
+ 1 │ {% url foo.bar='lily' %}
+   ·               ───┬───
+   ·                  ╰── here
+   ╰────
+"""
+
+
+def test_render_url_dotted_lookup_filter_with_equal_char():
+    template = "{% url foo.bar|default:'=' %}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(NoReverseMatch) as django_error:
+        django_template.render({})
+
+    msg = "Reverse for '=' not found. '=' is not a valid view function or pattern name."
+    assert django_error.value.args[0] == msg
+
+    with pytest.raises(NoReverseMatch) as rust_error:
+        rust_template.render({})
+
+    assert rust_error.value.args[0] == msg

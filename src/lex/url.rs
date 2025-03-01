@@ -155,7 +155,7 @@ impl<'t> UrlLexer<'t> {
                     _ => {}
                 },
                 _ if in_text.is_some() => {}
-                c if c.is_whitespace() => break,
+                c if !c.is_xid_continue() && c != '.' && c != '|' && c != ':' => break,
                 _ => {}
             }
             end += 1;
