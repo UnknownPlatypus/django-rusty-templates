@@ -12,6 +12,7 @@ pub enum FilterType {
     External(ExternalFilter),
     Lower(LowerFilter),
     Safe(SafeFilter),
+    Slugify(SlugifyFilter),
 }
 
 #[derive(Debug)]
@@ -62,3 +63,6 @@ pub struct LowerFilter;
 
 #[derive(Debug)]
 pub struct SafeFilter;
+
+#[derive(Debug)]
+pub struct SlugifyFilter;

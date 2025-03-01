@@ -5,7 +5,7 @@ use pyo3::prelude::*;
 
 use crate::filters::{
     AddFilter, AddSlashesFilter, CapfirstFilter, DefaultFilter, EscapeFilter, ExternalFilter,
-    FilterType, LowerFilter, SafeFilter,
+    FilterType, LowerFilter, SafeFilter, SlugifyFilter,
 };
 use crate::parse::Filter;
 use crate::render::types::{Content, Context};
@@ -55,6 +55,7 @@ impl Resolve for Filter {
             FilterType::External(filter) => filter.resolve(left, py, template, context),
             FilterType::Lower(filter) => filter.resolve(left, py, template, context),
             FilterType::Safe(filter) => filter.resolve(left, py, template, context),
+            FilterType::Slugify(filter) => filter.resolve(left, py, template, context),
         };
         result
     }
@@ -255,6 +256,18 @@ impl ResolveFilter for SafeFilter {
             None => Some(Content::HtmlSafe(Cow::Borrowed(""))),
         };
         Ok(content)
+    }
+}
+
+impl ResolveFilter for SlugifyFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        _py: Python<'py>,
+        _template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        Ok("".as_content())
     }
 }
 
