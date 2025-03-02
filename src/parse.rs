@@ -164,10 +164,33 @@ pub struct Url {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub enum IfCondition {
+    Variable(TagElement),
+    And(Box<IfCondition>, Box<IfCondition>),
+    Or(Box<IfCondition>, Box<IfCondition>),
+    Not(Box<IfCondition>),
+    Equal(Box<IfCondition>, Box<IfCondition>),
+    NotEqual(Box<IfCondition>, Box<IfCondition>),
+    LessThan(Box<IfCondition>, Box<IfCondition>),
+    GreaterThan(Box<IfCondition>, Box<IfCondition>),
+    LessThanEqual(Box<IfCondition>, Box<IfCondition>),
+    GreaterThanEqual(Box<IfCondition>, Box<IfCondition>),
+    In(Box<IfCondition>, Box<IfCondition>),
+    NotIn(Box<IfCondition>, Box<IfCondition>),
+    Is(Box<IfCondition>, Box<IfCondition>),
+    IsNot(Box<IfCondition>, Box<IfCondition>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Tag {
     Autoescape {
         enabled: AutoescapeEnabled,
         nodes: Vec<TokenTree>,
+    },
+    If {
+        condition: IfCondition,
+        truthy: Vec<TokenTree>,
+        falsey: Option<Vec<TokenTree>>,
     },
     Load,
     Url(Url),
