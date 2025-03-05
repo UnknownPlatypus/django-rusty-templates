@@ -167,19 +167,19 @@ pub struct Url {
 #[derive(Clone, Debug, PartialEq)]
 pub enum IfCondition {
     Variable(TagElement),
-    And(Box<IfCondition>, Box<IfCondition>),
-    Or(Box<IfCondition>, Box<IfCondition>),
+    And(Box<(IfCondition, IfCondition)>),
+    Or(Box<(IfCondition, IfCondition)>),
     Not(Box<IfCondition>),
-    Equal(Box<IfCondition>, Box<IfCondition>),
-    NotEqual(Box<IfCondition>, Box<IfCondition>),
-    LessThan(Box<IfCondition>, Box<IfCondition>),
-    GreaterThan(Box<IfCondition>, Box<IfCondition>),
-    LessThanEqual(Box<IfCondition>, Box<IfCondition>),
-    GreaterThanEqual(Box<IfCondition>, Box<IfCondition>),
-    In(Box<IfCondition>, Box<IfCondition>),
-    NotIn(Box<IfCondition>, Box<IfCondition>),
-    Is(Box<IfCondition>, Box<IfCondition>),
-    IsNot(Box<IfCondition>, Box<IfCondition>),
+    Equal(Box<(IfCondition, IfCondition)>),
+    NotEqual(Box<(IfCondition, IfCondition)>),
+    LessThan(Box<(IfCondition, IfCondition)>),
+    GreaterThan(Box<(IfCondition, IfCondition)>),
+    LessThanEqual(Box<(IfCondition, IfCondition)>),
+    GreaterThanEqual(Box<(IfCondition, IfCondition)>),
+    In(Box<(IfCondition, IfCondition)>),
+    NotIn(Box<(IfCondition, IfCondition)>),
+    Is(Box<(IfCondition, IfCondition)>),
+    IsNot(Box<(IfCondition, IfCondition)>),
 }
 
 fn parse_if_condition(
