@@ -1781,4 +1781,14 @@ mod tests {
             );
         })
     }
+
+    #[test]
+    fn test_variable_token_binding_power() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let var = IfConditionTokenType::Variable;
+            assert_eq!(var.binding_power(), None);
+        })
+    }
 }
