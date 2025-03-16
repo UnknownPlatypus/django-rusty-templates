@@ -16,11 +16,8 @@ pub mod django_rusty_templates {
     use crate::parse::{Parser, TokenTree};
     use crate::render::Render;
     use crate::render::types::Context;
-    use crate::types::{CloneRef, TemplateString};
+    use crate::types::TemplateString;
     use crate::utils::PyResultMethods;
-
-    #[cfg(test)]
-    use crate::types::PyEq;
 
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.base, VariableDoesNotExist);
@@ -75,7 +72,11 @@ pub mod django_rusty_templates {
             let library = match py.import(&path).ok_or_isinstance_of::<PyImportError>(py)? {
                 Ok(library) => library,
                 Err(e) => {
-                    let error = format!("Invalid template library specified. ImportError raised when trying to load '{}': {}", path, e.value(py));
+                    let error = format!(
+                        "Invalid template library specified. ImportError raised when trying to load '{}': {}",
+                        path,
+                        e.value(py)
+                    );
                     return Err(InvalidTemplateLibrary::new_err(error));
                 }
             };
@@ -216,7 +217,7 @@ pub mod django_rusty_templates {
         // TODO render_to_string needs implementation.
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq)]
     #[pyclass]
     pub struct Template {
         pub filename: Option<PathBuf>,
@@ -290,27 +291,6 @@ pub mod django_rusty_templates {
         }
     }
 
-    impl CloneRef for Template {
-        fn clone_ref(&self, py: Python<'_>) -> Self {
-            Self {
-                filename: self.filename.clone(),
-                template: self.template.clone(),
-                nodes: self.nodes.clone_ref(py),
-                autoescape: self.autoescape,
-            }
-        }
-    }
-
-    #[cfg(test)]
-    impl PyEq for Template {
-        fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
-            self.filename == other.filename
-                && self.autoescape == other.autoescape
-                && self.template == other.template
-                && self.nodes.py_eq(&other.nodes, py)
-        }
-    }
-
     #[pymethods]
     impl Template {
         #[pyo3(signature = (context=None, request=None))]
@@ -339,8 +319,8 @@ pub mod django_rusty_templates {
 mod tests {
     use super::django_rusty_templates::*;
 
-    use pyo3::types::{PyDict, PyDictMethods, PyString};
     use pyo3::Python;
+    use pyo3::types::{PyDict, PyDictMethods, PyString};
 
     #[test]
     fn test_syntax_error() {
@@ -507,10 +487,8 @@ user = User(["Lily"])
     fn test_clone_template() {
         use std::collections::HashMap;
 
-        use pyo3::types::{PyAnyMethods, PyListMethods};
         use pyo3::IntoPyObject;
-
-        use crate::types::{CloneRef, PyEq};
+        use pyo3::types::{PyAnyMethods, PyListMethods};
 
         pyo3::prepare_freethreaded_python();
 
@@ -541,8 +519,8 @@ user = User(["Lily"])
             let template = engine
                 .get_template(py, "full_example.html".to_string())
                 .unwrap();
-            let cloned = template.clone_ref(py);
-            assert!(cloned.py_eq(&template, py));
+            let cloned = template.clone();
+            assert_eq!(cloned, template);
         })
     }
 }

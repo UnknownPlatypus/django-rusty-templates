@@ -2,7 +2,7 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
-use crate::lex::common::{lex_numeric, lex_text, lex_translated, LexerError};
+use crate::lex::common::{LexerError, lex_numeric, lex_text, lex_translated};
 use crate::lex::tag::TagParts;
 use crate::lex::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 use crate::types::TemplateString;

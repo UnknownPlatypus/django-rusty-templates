@@ -3,8 +3,8 @@ use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
 use crate::lex::common::{
-    check_variable_attrs, lex_numeric, lex_text, lex_translated, lex_variable_argument,
-    trim_variable, LexerError,
+    LexerError, check_variable_attrs, lex_numeric, lex_text, lex_translated, lex_variable_argument,
+    trim_variable,
 };
 use crate::lex::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 
@@ -22,7 +22,7 @@ pub struct Argument {
     pub at: (usize, usize),
 }
 
-impl<'t> Argument {
+impl Argument {
     pub fn content_at(&self) -> (usize, usize) {
         match self.argument_type {
             ArgumentType::Variable => self.at,
@@ -42,7 +42,8 @@ impl<'t> Argument {
         }
     }
 
-    pub fn content(&self, template: &'t str) -> &'t str {
+    #[cfg(test)]
+    pub fn content<'t>(&self, template: &'t str) -> &'t str {
         let (start, len) = self.content_at();
         &template[start..start + len]
     }
@@ -54,6 +55,7 @@ pub struct FilterToken {
     pub argument: Option<Argument>,
 }
 
+#[cfg(test)]
 impl<'t> FilterToken {
     pub fn content(&self, template: &'t str) -> &'t str {
         let (start, len) = self.at;
@@ -66,6 +68,7 @@ pub struct VariableToken {
     pub at: (usize, usize),
 }
 
+#[cfg(test)]
 impl<'t> VariableToken {
     pub fn content(&self, template: &'t str) -> &'t str {
         let (start, len) = self.at;
@@ -135,7 +138,7 @@ impl<'t> FilterLexer<'t> {
                 return Self {
                     rest: "",
                     byte: start + variable.len(),
-                }
+                };
             }
         };
         let variable = &variable[offset..];
