@@ -16,7 +16,7 @@ pub mod django_rusty_templates {
     use crate::parse::{Parser, TokenTree};
     use crate::render::Render;
     use crate::render::types::Context;
-    use crate::types::{CloneRef, TemplateString};
+    use crate::types::TemplateString;
     use crate::utils::PyResultMethods;
 
     #[cfg(test)]
@@ -216,7 +216,7 @@ pub mod django_rusty_templates {
         // TODO render_to_string needs implementation.
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     #[pyclass]
     pub struct Template {
         pub filename: Option<PathBuf>,
@@ -287,17 +287,6 @@ pub mod django_rusty_templates {
                 }
             }
             Ok(rendered)
-        }
-    }
-
-    impl CloneRef for Template {
-        fn clone_ref(&self, py: Python<'_>) -> Self {
-            Self {
-                filename: self.filename.clone(),
-                template: self.template.clone(),
-                nodes: self.nodes.clone_ref(py),
-                autoescape: self.autoescape,
-            }
         }
     }
 
@@ -510,7 +499,7 @@ user = User(["Lily"])
         use pyo3::types::{PyAnyMethods, PyListMethods};
         use pyo3::IntoPyObject;
 
-        use crate::types::{CloneRef, PyEq};
+        use crate::types::PyEq;
 
         pyo3::prepare_freethreaded_python();
 
@@ -541,7 +530,7 @@ user = User(["Lily"])
             let template = engine
                 .get_template(py, "full_example.html".to_string())
                 .unwrap();
-            let cloned = template.clone_ref(py);
+            let cloned = template.clone();
             assert!(cloned.py_eq(&template, py));
         })
     }

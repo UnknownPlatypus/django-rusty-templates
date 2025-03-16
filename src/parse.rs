@@ -17,20 +17,20 @@ use crate::filters::FilterType;
 use crate::filters::LowerFilter;
 use crate::filters::SafeFilter;
 use crate::filters::SlugifyFilter;
-use crate::lex::START_TAG_LEN;
-use crate::lex::autoescape::{AutoescapeEnabled, AutoescapeError, lex_autoescape_argument};
+use crate::lex::autoescape::{lex_autoescape_argument, AutoescapeEnabled, AutoescapeError};
 use crate::lex::core::{Lexer, TokenType};
 use crate::lex::load::{LoadLexer, LoadToken};
-use crate::lex::tag::{TagLexerError, TagParts, lex_tag};
+use crate::lex::tag::{lex_tag, TagLexerError, TagParts};
 use crate::lex::url::{UrlLexer, UrlLexerError, UrlToken, UrlTokenType};
 use crate::lex::variable::{
-    Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError, lex_variable,
+    lex_variable, Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError,
 };
+use crate::lex::START_TAG_LEN;
 use crate::types::Argument;
 use crate::types::ArgumentType;
+use crate::types::TemplateString;
 use crate::types::Text;
 use crate::types::Variable;
-use crate::types::{CloneRef, TemplateString};
 
 #[cfg(test)]
 use crate::types::PyEq;
@@ -57,7 +57,7 @@ impl ArgumentToken {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TagElement {
     Int(BigInt),
     Float(f64),
@@ -65,19 +65,6 @@ pub enum TagElement {
     TranslatedText(Text),
     Variable(Variable),
     Filter(Box<Filter>),
-}
-
-impl CloneRef for TagElement {
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        match self {
-            Self::Int(int) => Self::Int(int.clone()),
-            Self::Float(float) => Self::Float(*float),
-            Self::Text(text) => Self::Text(*text),
-            Self::TranslatedText(text) => Self::TranslatedText(*text),
-            Self::Variable(variable) => Self::Variable(*variable),
-            Self::Filter(filter) => Self::Filter(Box::new(filter.clone_ref(py))),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -108,25 +95,6 @@ impl PartialEq for FilterType {
             (Self::Safe(_), Self::Safe(_)) => true,
             (Self::Slugify(_), Self::Slugify(_)) => true,
             _ => false,
-        }
-    }
-}
-
-impl CloneRef for FilterType {
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        match self {
-            Self::Add(filter) => Self::Add(AddFilter::new(filter.argument.clone())),
-            Self::AddSlashes(_) => Self::AddSlashes(AddSlashesFilter),
-            Self::Capfirst(_) => Self::Capfirst(CapfirstFilter),
-            Self::Default(filter) => Self::Default(DefaultFilter::new(filter.argument.clone())),
-            Self::Escape(_) => Self::Escape(EscapeFilter),
-            Self::External(external_filter) => Self::External(ExternalFilter::new(
-                external_filter.filter.clone_ref(py),
-                external_filter.argument.clone(),
-            )),
-            Self::Lower(_) => Self::Lower(LowerFilter),
-            Self::Safe(_) => Self::Safe(SafeFilter),
-            Self::Slugify(_) => Self::Slugify(SlugifyFilter),
         }
     }
 }
@@ -163,7 +131,7 @@ fn unexpected_argument(filter: &'static str, right: Argument) -> ParseError {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Filter {
     pub at: (usize, usize),
     pub left: TagElement,
@@ -227,16 +195,6 @@ impl Filter {
     }
 }
 
-impl CloneRef for Filter {
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        Self {
-            at: self.at,
-            left: self.left.clone_ref(py),
-            filter: self.filter.clone_ref(py),
-        }
-    }
-}
-
 #[cfg(test)]
 impl PyEq for Filter {
     fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
@@ -266,23 +224,12 @@ impl UrlToken {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Url {
     pub view_name: TagElement,
     pub args: Vec<TagElement>,
     pub kwargs: Vec<(String, TagElement)>,
     pub variable: Option<String>,
-}
-
-impl CloneRef for Url {
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        Self {
-            view_name: self.view_name.clone_ref(py),
-            args: self.args.clone_ref(py),
-            kwargs: self.kwargs.clone_ref(py),
-            variable: self.variable.clone(),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -295,7 +242,7 @@ impl PyEq for Url {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Tag {
     Autoescape {
         enabled: AutoescapeEnabled,
@@ -303,19 +250,6 @@ pub enum Tag {
     },
     Load,
     Url(Url),
-}
-
-impl CloneRef for Tag {
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        match self {
-            Self::Autoescape { enabled, nodes } => Self::Autoescape {
-                enabled: enabled.clone(),
-                nodes: nodes.clone_ref(py),
-            },
-            Self::Load => Self::Load,
-            Self::Url(url) => Self::Url(url.clone_ref(py)),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -366,25 +300,13 @@ impl EndTag {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokenTree {
     Text(Text),
     TranslatedText(Text),
     Tag(Tag),
     Variable(Variable),
     Filter(Box<Filter>),
-}
-
-impl CloneRef for TokenTree {
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        match self {
-            Self::Text(text) => Self::Text(*text),
-            Self::TranslatedText(text) => Self::TranslatedText(*text),
-            Self::Tag(tag) => Self::Tag(tag.clone_ref(py)),
-            Self::Variable(variable) => Self::Variable(*variable),
-            Self::Filter(filter) => Self::Filter(Box::new(filter.clone_ref(py))),
-        }
-    }
 }
 
 #[cfg(test)]
@@ -1698,91 +1620,6 @@ mod tests {
             let text = Text { at: (0, 3) };
             assert!(TokenTree::TranslatedText(text).py_eq(&TokenTree::TranslatedText(text), py));
             assert!(!TokenTree::Text(text).py_eq(&TokenTree::TranslatedText(text), py));
-        })
-    }
-
-    #[test]
-    fn test_token_tree_clone_ref() {
-        pyo3::prepare_freethreaded_python();
-
-        Python::with_gil(|py| {
-            let text = Text { at: (0, 3) };
-            let translated = TokenTree::TranslatedText(text);
-            let cloned = translated.clone_ref(py);
-            assert!(translated.py_eq(&cloned, py));
-        })
-    }
-
-    #[test]
-    fn test_filter_type_clone_ref() {
-        pyo3::prepare_freethreaded_python();
-
-        Python::with_gil(|py| {
-            let add = FilterType::Add(AddFilter::new(Argument {
-                at: (6, 3),
-                argument_type: ArgumentType::Float(1.1),
-            }));
-            let cloned = add.clone_ref(py);
-            assert_eq!(add, cloned);
-            assert!(add.py_eq(&cloned, py));
-
-            let add_slashes = FilterType::AddSlashes(AddSlashesFilter);
-            let cloned = add_slashes.clone_ref(py);
-            assert_eq!(add_slashes, cloned);
-            assert!(add_slashes.py_eq(&cloned, py));
-
-            let capfirst = FilterType::Capfirst(CapfirstFilter);
-            let cloned = capfirst.clone_ref(py);
-            assert_eq!(capfirst, cloned);
-            assert!(capfirst.py_eq(&cloned, py));
-
-            let safe = FilterType::Safe(SafeFilter);
-            let cloned = safe.clone_ref(py);
-            assert_eq!(safe, cloned);
-            assert!(safe.py_eq(&cloned, py));
-
-            let escape = FilterType::Escape(EscapeFilter);
-            let cloned = escape.clone_ref(py);
-            assert_eq!(escape, cloned);
-            assert!(escape.py_eq(&cloned, py));
-
-            let slugify = FilterType::Slugify(SlugifyFilter);
-            let cloned = slugify.clone_ref(py);
-            assert_eq!(slugify, cloned);
-            assert!(slugify.py_eq(&cloned, py));
-        })
-    }
-
-    #[test]
-    fn test_tag_clone_ref() {
-        pyo3::prepare_freethreaded_python();
-
-        Python::with_gil(|py| {
-            let load = Tag::Load;
-            let cloned = load.clone_ref(py);
-            assert_eq!(load, cloned);
-            assert!(load.py_eq(&cloned, py));
-
-            let url = Tag::Url(Url {
-                view_name: TagElement::Variable(Variable { at: (7, 14) }),
-                args: vec![],
-                kwargs: vec![],
-                variable: None,
-            });
-            let cloned = url.clone_ref(py);
-            assert_eq!(url, cloned);
-            assert!(url.py_eq(&cloned, py));
-
-            let text = Text { at: (0, 3) };
-            let translated = TokenTree::TranslatedText(text);
-            let text = TokenTree::Text(text);
-            let autoescape = Tag::Autoescape {
-                enabled: AutoescapeEnabled::On,
-                nodes: vec![translated, text],
-            };
-            let cloned = autoescape.clone_ref(py);
-            assert_eq!(autoescape, cloned);
-            assert!(autoescape.py_eq(&cloned, py));
         })
     }
 }

@@ -1,8 +1,10 @@
+use std::sync::Arc;
+
 use pyo3::prelude::*;
 
 use crate::types::Argument;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum FilterType {
     Add(AddFilter),
     AddSlashes(AddSlashesFilter),
@@ -15,10 +17,10 @@ pub enum FilterType {
     Slugify(SlugifyFilter),
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AddSlashesFilter;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct AddFilter {
     pub argument: Argument,
 }
@@ -29,10 +31,10 @@ impl AddFilter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CapfirstFilter;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct DefaultFilter {
     pub argument: Argument,
 }
@@ -43,26 +45,29 @@ impl DefaultFilter {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct EscapeFilter;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ExternalFilter {
-    pub filter: Py<PyAny>,
+    pub filter: Arc<Py<PyAny>>,
     pub argument: Option<Argument>,
 }
 
 impl ExternalFilter {
     pub fn new(filter: Py<PyAny>, argument: Option<Argument>) -> Self {
-        Self { filter, argument }
+        Self {
+            filter: Arc::new(filter),
+            argument,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct LowerFilter;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SafeFilter;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SlugifyFilter;

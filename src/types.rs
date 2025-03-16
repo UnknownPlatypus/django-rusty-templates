@@ -1,4 +1,5 @@
 use num_bigint::BigInt;
+#[cfg(test)]
 use pyo3::prelude::*;
 
 #[derive(Clone, Copy)]
@@ -91,31 +92,6 @@ pub enum ArgumentType {
 pub struct Argument {
     pub at: (usize, usize),
     pub argument_type: ArgumentType,
-}
-
-pub trait CloneRef {
-    fn clone_ref(&self, py: Python<'_>) -> Self;
-}
-
-impl<T> CloneRef for Vec<T>
-where
-    T: CloneRef,
-{
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        self.iter().map(|element| element.clone_ref(py)).collect()
-    }
-}
-
-impl<K, V> CloneRef for Vec<(K, V)>
-where
-    K: Clone,
-    V: CloneRef,
-{
-    fn clone_ref(&self, py: Python<'_>) -> Self {
-        self.iter()
-            .map(|(k, v)| (k.clone(), v.clone_ref(py)))
-            .collect()
-    }
 }
 
 #[cfg(test)]
