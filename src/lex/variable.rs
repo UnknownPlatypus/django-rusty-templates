@@ -3,8 +3,8 @@ use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
 use crate::lex::common::{
-    check_variable_attrs, lex_numeric, lex_text, lex_translated, lex_variable_argument,
-    trim_variable, LexerError,
+    LexerError, check_variable_attrs, lex_numeric, lex_text, lex_translated, lex_variable_argument,
+    trim_variable,
 };
 use crate::lex::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 
@@ -138,7 +138,7 @@ impl<'t> FilterLexer<'t> {
                 return Self {
                     rest: "",
                     byte: start + variable.len(),
-                }
+                };
             }
         };
         let variable = &variable[offset..];

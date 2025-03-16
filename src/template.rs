@@ -75,7 +75,11 @@ pub mod django_rusty_templates {
             let library = match py.import(&path).ok_or_isinstance_of::<PyImportError>(py)? {
                 Ok(library) => library,
                 Err(e) => {
-                    let error = format!("Invalid template library specified. ImportError raised when trying to load '{}': {}", path, e.value(py));
+                    let error = format!(
+                        "Invalid template library specified. ImportError raised when trying to load '{}': {}",
+                        path,
+                        e.value(py)
+                    );
                     return Err(InvalidTemplateLibrary::new_err(error));
                 }
             };
@@ -328,8 +332,8 @@ pub mod django_rusty_templates {
 mod tests {
     use super::django_rusty_templates::*;
 
-    use pyo3::types::{PyDict, PyDictMethods, PyString};
     use pyo3::Python;
+    use pyo3::types::{PyDict, PyDictMethods, PyString};
 
     #[test]
     fn test_syntax_error() {
@@ -496,8 +500,8 @@ user = User(["Lily"])
     fn test_clone_template() {
         use std::collections::HashMap;
 
-        use pyo3::types::{PyAnyMethods, PyListMethods};
         use pyo3::IntoPyObject;
+        use pyo3::types::{PyAnyMethods, PyListMethods};
 
         use crate::types::PyEq;
 

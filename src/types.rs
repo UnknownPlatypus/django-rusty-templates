@@ -156,10 +156,14 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            assert!(!vec![TagElement::Int(1.into()), TagElement::Float(2.3)]
-                .py_eq(&vec![TagElement::Int(1.into())], py));
-            assert!(!vec![TagElement::Int(1.into())]
-                .py_eq(&vec![TagElement::Int(1.into()), TagElement::Float(2.3)], py));
+            assert!(
+                !vec![TagElement::Int(1.into()), TagElement::Float(2.3)]
+                    .py_eq(&vec![TagElement::Int(1.into())], py)
+            );
+            assert!(
+                !vec![TagElement::Int(1.into())]
+                    .py_eq(&vec![TagElement::Int(1.into()), TagElement::Float(2.3)], py)
+            );
         })
     }
 
@@ -168,17 +172,19 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            assert!(!vec![
-                ("foo", TagElement::Int(1.into())),
-                ("bar", TagElement::Int(2.into()))
-            ]
-            .py_eq(
-                &vec![
+            assert!(
+                !vec![
                     ("foo", TagElement::Int(1.into())),
-                    ("bar", TagElement::Float(1.0))
-                ],
-                py
-            ))
+                    ("bar", TagElement::Int(2.into()))
+                ]
+                .py_eq(
+                    &vec![
+                        ("foo", TagElement::Int(1.into())),
+                        ("bar", TagElement::Float(1.0))
+                    ],
+                    py
+                )
+            )
         })
     }
 
@@ -187,11 +193,13 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
-            assert!(!vec![
-                ("foo", TagElement::Int(1.into())),
-                ("bar", TagElement::Float(2.3))
-            ]
-            .py_eq(&vec![("foo", TagElement::Int(1.into()))], py));
+            assert!(
+                !vec![
+                    ("foo", TagElement::Int(1.into())),
+                    ("bar", TagElement::Float(2.3))
+                ]
+                .py_eq(&vec![("foo", TagElement::Int(1.into()))], py)
+            );
             assert!(!vec![("foo", TagElement::Int(1.into()))].py_eq(
                 &vec![
                     ("foo", TagElement::Int(1.into())),

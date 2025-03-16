@@ -3,6 +3,8 @@ use std::collections::HashMap;
 
 use pyo3::prelude::*;
 
+use super::types::{Content, Context};
+use super::{Render, RenderResult, Resolve, ResolveResult};
 use crate::error::RenderError;
 use crate::parse::{TagElement, TokenTree};
 use crate::types::Argument;
@@ -10,9 +12,6 @@ use crate::types::ArgumentType;
 use crate::types::TemplateString;
 use crate::types::Text;
 use crate::types::Variable;
-use super::{Render, RenderResult, Resolve, ResolveResult};
-use super::types::{Content, Context};
-
 
 impl Resolve for Variable {
     fn resolve<'t, 'py>(
@@ -43,7 +42,7 @@ impl Resolve for Variable {
                                     key_at: key_at.into(),
                                     object_at: Some(object_at.into()),
                                 }
-                                .into())
+                                .into());
                             }
                         };
                         match variable.get_item(int) {
