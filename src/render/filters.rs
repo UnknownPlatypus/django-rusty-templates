@@ -284,7 +284,7 @@ fn slugify(content: Cow<str>) -> Cow<str> {
         .to_lowercase();
     let content = NON_WORD_RE.replace_all(&content, "");
     let content = content.trim();
-    let content = WHITESPACE_RE.replace_all(&content, "-");
+    let content = WHITESPACE_RE.replace_all(content, "-");
     Cow::Owned(content.to_string())
 }
 
@@ -328,7 +328,6 @@ mod tests {
     use crate::template::django_rusty_templates::{EngineData, Template};
     use crate::types::{Argument, ArgumentType, Text, Variable};
 
-    use pyo3::IntoPyObjectExt;
     use pyo3::types::{PyDict, PyString};
     static MARK_SAFE: GILOnceCell<Py<PyAny>> = GILOnceCell::new();
 
@@ -338,7 +337,7 @@ mod tests {
             None => {
                 let py_mark_safe = py.import("django.utils.safestring")?;
                 let py_mark_safe = py_mark_safe.getattr("mark_safe")?;
-                MARK_SAFE.set(py, py_mark_safe.into());
+                MARK_SAFE.set(py, py_mark_safe.into()).unwrap();
                 MARK_SAFE.get(py).unwrap()
             }
         };

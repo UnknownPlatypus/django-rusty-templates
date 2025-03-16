@@ -793,9 +793,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
 mod tests {
     use super::*;
     use crate::{
-        filters::{
-            AddFilter, AddSlashesFilter, CapfirstFilter, DefaultFilter, ExternalFilter, LowerFilter,
-        },
+        filters::{DefaultFilter, ExternalFilter, LowerFilter},
         template::django_rusty_templates::{EngineData, Template},
     };
     use pyo3::types::{PyDict, PyDictMethods};

@@ -22,7 +22,7 @@ pub struct Argument {
     pub at: (usize, usize),
 }
 
-impl<'t> Argument {
+impl Argument {
     pub fn content_at(&self) -> (usize, usize) {
         match self.argument_type {
             ArgumentType::Variable => self.at,
@@ -42,7 +42,8 @@ impl<'t> Argument {
         }
     }
 
-    pub fn content(&self, template: &'t str) -> &'t str {
+    #[cfg(test)]
+    pub fn content<'t>(&self, template: &'t str) -> &'t str {
         let (start, len) = self.content_at();
         &template[start..start + len]
     }
@@ -54,6 +55,7 @@ pub struct FilterToken {
     pub argument: Option<Argument>,
 }
 
+#[cfg(test)]
 impl<'t> FilterToken {
     pub fn content(&self, template: &'t str) -> &'t str {
         let (start, len) = self.at;
@@ -66,6 +68,7 @@ pub struct VariableToken {
     pub at: (usize, usize),
 }
 
+#[cfg(test)]
 impl<'t> VariableToken {
     pub fn content(&self, template: &'t str) -> &'t str {
         let (start, len) = self.at;
