@@ -128,6 +128,50 @@ def compare(op, left, right):
         return False
 
 
+class Float:
+    def __init__(self, value):
+        self.value = value
+
+    def __repr__(self):
+        return self.value
+
+    def __eq__(self, other):
+        this = float(self.value)
+        if isinstance(other, Float):
+            other = float(other.value)
+        return this == other
+
+    def __ne__(self, other):
+        this = float(self.value)
+        if isinstance(other, Float):
+            other = float(other.value)
+        return this != other
+
+    def __lt__(self, other):
+        this = float(self.value)
+        if isinstance(other, Float):
+            other = float(other.value)
+        return this < other
+
+    def __gt__(self, other):
+        this = float(self.value)
+        if isinstance(other, Float):
+            other = float(other.value)
+        return this > other
+
+    def __le__(self, other):
+        this = float(self.value)
+        if isinstance(other, Float):
+            other = float(other.value)
+        return this <= other
+
+    def __ge__(self, other):
+        this = float(self.value)
+        if isinstance(other, Float):
+            other = float(other.value)
+        return this >= other
+
+
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
@@ -170,8 +214,36 @@ def test_render_op_literal_var(a, b, op):
     assert rust_template.render({"b": b}) == expected
 
 
-@pytest.mark.parametrize("a", ["foo", "", 1, 0, 1.5, -3.7, 10**310, - 10**310])
-@pytest.mark.parametrize("b", ["foo", "", 1, 0, 1.5, -3.7, 10**310, - 10**310])
+@pytest.mark.parametrize(
+    "a",
+    [
+        "foo",
+        "",
+        1,
+        0,
+        1.5,
+        -3.7,
+        10**310,
+        -(10**310),
+        Float("1.0e310"),
+        Float("-1.0e310"),
+    ],
+)
+@pytest.mark.parametrize(
+    "b",
+    [
+        "foo",
+        "",
+        1,
+        0,
+        1.5,
+        -3.7,
+        10**310,
+        -(10**310),
+        Float("1.0e310"),
+        Float("-1.0e310"),
+    ],
+)
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
 def test_render_op_literal_literal(a, b, op):
     template = f"{{% if {a!r} {op} {b!r} %}}truthy{{% else %}}falsey{{% endif %}}"
@@ -180,8 +252,8 @@ def test_render_op_literal_literal(a, b, op):
 
     expected = "truthy" if compare(op, a, b) else "falsey"
 
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert django_template.render({}) == expected, f"Django: {a!r} {op} {b!r}"
+    assert rust_template.render({}) == expected, f"Rust: {a!r} {op} {b!r}"
 
 
 @pytest.mark.parametrize("a", ["foo", 1, "", 0])
@@ -478,7 +550,9 @@ VALID_ATOM = one_of(
     VALID_VARIABLE_NAMES,
 )
 
-VALID_DEFAULT = tuples(VALID_VARIABLE_NAMES, VALID_ATOM).map(lambda t: f"{t[0]}|default:{t[1]}")
+VALID_DEFAULT = tuples(VALID_VARIABLE_NAMES, VALID_ATOM).map(
+    lambda t: f"{t[0]}|default:{t[1]}"
+)
 
 VALID_ATOM = one_of(VALID_ATOM, VALID_DEFAULT)
 
@@ -641,7 +715,9 @@ def test_zero_not_in_zero():
 
 
 def test_text_is_not_not_variable():
-    template = '{% if "õeS" is not not WQWJXO52RWIA0D %}truthy{% else %}falsey{% endif %}'
+    template = (
+        '{% if "õeS" is not not WQWJXO52RWIA0D %}truthy{% else %}falsey{% endif %}'
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -650,7 +726,7 @@ def test_text_is_not_not_variable():
 
 
 def test_none_equal_none_not_in_zero():
-    template = '{% if None == None not in 0.0 %}truthy{% else %}falsey{% endif %}'
+    template = "{% if None == None not in 0.0 %}truthy{% else %}falsey{% endif %}"
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -664,7 +740,10 @@ def test_if_tag_split_by_newline():
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["django"].from_string(template)
 
-    assert str(exc_info.value) == "Invalid block tag on line 2: 'else'. Did you forget to register or load this tag?"
+    assert (
+        str(exc_info.value)
+        == "Invalid block tag on line 2: 'else'. Did you forget to register or load this tag?"
+    )
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["rusty"].from_string(template)
@@ -705,7 +784,10 @@ def test_unexpected_tag_elif():
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["django"].from_string(template)
 
-    assert str(exc_info.value) == "Invalid block tag on line 1: 'elif'. Did you forget to register or load this tag?"
+    assert (
+        str(exc_info.value)
+        == "Invalid block tag on line 1: 'elif'. Did you forget to register or load this tag?"
+    )
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["rusty"].from_string(template)
@@ -727,7 +809,10 @@ def test_unexpected_tag_else():
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["django"].from_string(template)
 
-    assert str(exc_info.value) == "Invalid block tag on line 1: 'else'. Did you forget to register or load this tag?"
+    assert (
+        str(exc_info.value)
+        == "Invalid block tag on line 1: 'else'. Did you forget to register or load this tag?"
+    )
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["rusty"].from_string(template)
@@ -749,7 +834,10 @@ def test_unexpected_tag_endif():
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["django"].from_string(template)
 
-    assert str(exc_info.value) == "Invalid block tag on line 1: 'endif'. Did you forget to register or load this tag?"
+    assert (
+        str(exc_info.value)
+        == "Invalid block tag on line 1: 'endif'. Did you forget to register or load this tag?"
+    )
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["rusty"].from_string(template)
