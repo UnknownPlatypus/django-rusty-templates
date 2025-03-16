@@ -4,7 +4,7 @@ use pyo3::prelude::*;
 
 use crate::types::Argument;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FilterType {
     Add(AddFilter),
     AddSlashes(AddSlashesFilter),
@@ -17,10 +17,10 @@ pub enum FilterType {
     Slugify(SlugifyFilter),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AddSlashesFilter;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AddFilter {
     pub argument: Argument,
 }
@@ -31,10 +31,10 @@ impl AddFilter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CapfirstFilter;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DefaultFilter {
     pub argument: Argument,
 }
@@ -45,7 +45,7 @@ impl DefaultFilter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct EscapeFilter;
 
 #[derive(Clone, Debug)]
@@ -63,11 +63,21 @@ impl ExternalFilter {
     }
 }
 
-#[derive(Clone, Debug)]
+impl PartialEq for ExternalFilter {
+    fn eq(&self, other: &Self) -> bool {
+        // We use `Arc::ptr_eq` here to avoid needing the `py` token for true
+        // equality comparison between two `Py` smart pointers.
+        //
+        // We only use `eq` in tests, so this concession is acceptable here.
+        self.argument.eq(&other.argument) && Arc::ptr_eq(&self.filter, &other.filter)
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct LowerFilter;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SafeFilter;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SlugifyFilter;

@@ -19,9 +19,6 @@ pub mod django_rusty_templates {
     use crate::types::TemplateString;
     use crate::utils::PyResultMethods;
 
-    #[cfg(test)]
-    use crate::types::PyEq;
-
     import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
     import_exception_bound!(django.template.base, VariableDoesNotExist);
     import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
@@ -220,7 +217,7 @@ pub mod django_rusty_templates {
         // TODO render_to_string needs implementation.
     }
 
-    #[derive(Debug, Clone)]
+    #[derive(Debug, Clone, PartialEq)]
     #[pyclass]
     pub struct Template {
         pub filename: Option<PathBuf>,
@@ -291,16 +288,6 @@ pub mod django_rusty_templates {
                 }
             }
             Ok(rendered)
-        }
-    }
-
-    #[cfg(test)]
-    impl PyEq for Template {
-        fn py_eq(&self, other: &Self, py: Python<'_>) -> bool {
-            self.filename == other.filename
-                && self.autoescape == other.autoescape
-                && self.template == other.template
-                && self.nodes.py_eq(&other.nodes, py)
         }
     }
 
@@ -503,8 +490,6 @@ user = User(["Lily"])
         use pyo3::IntoPyObject;
         use pyo3::types::{PyAnyMethods, PyListMethods};
 
-        use crate::types::PyEq;
-
         pyo3::prepare_freethreaded_python();
 
         Python::with_gil(|py| {
@@ -535,7 +520,7 @@ user = User(["Lily"])
                 .get_template(py, "full_example.html".to_string())
                 .unwrap();
             let cloned = template.clone();
-            assert!(cloned.py_eq(&template, py));
+            assert_eq!(cloned, template);
         })
     }
 }
