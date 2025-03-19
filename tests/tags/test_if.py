@@ -851,3 +851,39 @@ def test_unexpected_tag_endif():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_false_not_equal_var():
+    template = "{% if False != inf %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
+def test_var_not_equal_false():
+    template = "{% if inf != False %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
+def test_false_not_equal_default_var():
+    template = "{% if False != foo|default:bar %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
+
+
+def test_default_var_not_equal_false():
+    template = "{% if foo|default:bar != False %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"

@@ -93,7 +93,7 @@ impl Resolve for Argument {
                         .map(|(k, v)| (k, v.bind(py)))
                         .collect();
                     let object = format!("{:?}", context);
-                    return Err(RenderError::VariableDoesNotExist {
+                    return Err(RenderError::ArgumentDoesNotExist {
                         key,
                         object,
                         key_at: variable.at.into(),

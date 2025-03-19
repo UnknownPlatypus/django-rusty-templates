@@ -8,6 +8,7 @@ use pyo3::types::{PyBool, PyDict, PyList, PyNone};
 
 use super::types::{Content, Context};
 use super::{Evaluate, Render, RenderResult, Resolve, ResolveResult};
+use crate::error::{PyRenderError, RenderError};
 use crate::parse::{IfCondition, Tag, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::TemplateString;
@@ -517,8 +518,20 @@ impl Evaluate for IfCondition {
             },
             Self::NotEqual(inner) => match &**inner {
                 (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context).unwrap_or(None);
-                    let right = r.resolve(py, template, context).unwrap_or(None);
+                    let left = match l.resolve(py, template, context) {
+                        Ok(left) => left,
+                        Err(PyRenderError::RenderError(RenderError::ArgumentDoesNotExist {
+                            ..
+                        })) => return false,
+                        _ => None,
+                    };
+                    let right = match r.resolve(py, template, context) {
+                        Ok(left) => left,
+                        Err(PyRenderError::RenderError(RenderError::ArgumentDoesNotExist {
+                            ..
+                        })) => return false,
+                        _ => None,
+                    };
                     left.ne(&right)
                 }
                 (IfCondition::Variable(l), r) => {
@@ -528,7 +541,13 @@ impl Evaluate for IfCondition {
                 }
                 (l, IfCondition::Variable(r)) => {
                     let left = l.evaluate(py, template, context);
-                    let right = r.resolve(py, template, context).unwrap_or(None);
+                    let right = match r.resolve(py, template, context) {
+                        Ok(left) => left,
+                        Err(PyRenderError::RenderError(RenderError::ArgumentDoesNotExist {
+                            ..
+                        })) => return false,
+                        _ => None,
+                    };
                     right.ne(&left)
                 }
                 (l, r) => l.evaluate(py, template, context) != r.evaluate(py, template, context),
