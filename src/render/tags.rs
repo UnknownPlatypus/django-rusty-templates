@@ -295,7 +295,7 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
 impl PyCmp<Option<Content<'_, '_>>> for Option<Content<'_, '_>> {
     fn eq(&self, other: &Option<Content<'_, '_>>) -> bool {
         match (self, other) {
-            (None, None) => true,
+            (None, None) => false,
             (Some(obj), Some(other)) => obj.eq(other),
             (Some(obj), None) | (None, Some(obj)) => match obj {
                 Content::Py(obj) => obj.eq(PyNone::get(obj.py())).unwrap_or(false),

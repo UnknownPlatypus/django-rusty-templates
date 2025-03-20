@@ -887,3 +887,12 @@ def test_default_var_not_equal_false():
 
     assert django_template.render({}) == "falsey"
     assert rust_template.render({}) == "falsey"
+
+
+def test_default_equal_default():
+    template = "{% if foo|default:foo == bar|default:bar %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
