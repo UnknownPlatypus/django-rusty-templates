@@ -295,7 +295,7 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
 impl PyCmp<Option<Content<'_, '_>>> for Option<Content<'_, '_>> {
     fn eq(&self, other: &Option<Content<'_, '_>>) -> bool {
         match (self, other) {
-            (None, None) => false,
+            (None, None) => true,
             (Some(obj), Some(other)) => obj.eq(other),
             (Some(obj), None) | (None, Some(obj)) => match obj {
                 Content::Py(obj) => obj.eq(PyNone::get(obj.py())).unwrap_or(false),
@@ -500,8 +500,20 @@ impl Evaluate for IfCondition {
             Self::Not(inner) => !inner.evaluate(py, template, context),
             Self::Equal(inner) => match &**inner {
                 (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context).unwrap_or(None);
-                    let right = r.resolve(py, template, context).unwrap_or(None);
+                    let left = match l.resolve(py, template, context) {
+                        Ok(left) => left,
+                        Err(PyRenderError::RenderError(RenderError::ArgumentDoesNotExist {
+                            ..
+                        })) => return false,
+                        _ => None,
+                    };
+                    let right = match r.resolve(py, template, context) {
+                        Ok(left) => left,
+                        Err(PyRenderError::RenderError(RenderError::ArgumentDoesNotExist {
+                            ..
+                        })) => return false,
+                        _ => None,
+                    };
                     left.eq(&right)
                 }
                 (IfCondition::Variable(l), r) => {
