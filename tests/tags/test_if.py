@@ -889,6 +889,15 @@ def test_default_var_not_equal_false():
     assert rust_template.render({}) == "falsey"
 
 
+def test_none_not_equal_not_default():
+    template = "{% if None != not foo|default:foo %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
 def test_var_equal_var():
     template = "{% if A == A %}truthy{% else %}falsey{% endif %}"
     django_template = engines["django"].from_string(template)
@@ -914,3 +923,36 @@ def test_not_default_var():
 
     assert django_template.render({}) == "falsey"
     assert rust_template.render({}) == "falsey"
+
+
+def test_not_none_eq_default_var():
+    template = "{% if not None == foo|default:foo %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
+@pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
+def test_render_truthy_op_not_default(op):
+    template = f"{{% if None == None {op} not A|default:A %}}truthy{{% else %}}falsey{{% endif %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    expected = "truthy" if compare(op, True, False) else "falsey"
+
+    assert django_template.render() == expected
+    assert rust_template.render() == expected
+
+
+@pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
+def test_render_falsey_op_not_default(op):
+    template = f"{{% if None != None {op} not A|default:A %}}truthy{{% else %}}falsey{{% endif %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    expected = "truthy" if compare(op, False, False) else "falsey"
+
+    assert django_template.render() == expected
+    assert rust_template.render() == expected

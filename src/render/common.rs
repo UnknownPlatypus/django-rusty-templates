@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 use pyo3::prelude::*;
 
 use super::types::{Content, Context};
-use super::{Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
+use super::{Evaluate, Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
 use crate::error::RenderError;
 use crate::parse::{TagElement, TokenTree};
 use crate::types::Argument;
@@ -133,6 +133,25 @@ impl Resolve for TagElement {
             Self::Filter(filter) => filter.resolve(py, template, context, failures),
             Self::Int(int) => Ok(Some(Content::Int(int.clone()))),
             Self::Float(float) => Ok(Some(Content::Float(*float))),
+        }
+    }
+}
+
+impl Evaluate for TagElement {
+    fn evaluate(
+        &self,
+        py: Python<'_>,
+        template: TemplateString<'_>,
+        context: &mut Context,
+    ) -> Option<bool> {
+        match self.resolve(
+            py,
+            template,
+            context,
+            ResolveFailures::IgnoreVariableDoesNotExist,
+        ) {
+            Ok(inner) => inner.evaluate(py, template, context),
+            Err(_) => None,
         }
     }
 }

@@ -303,7 +303,10 @@ pub mod django_rusty_templates {
             let mut base_context = HashMap::from([
                 ("None".to_string(), py.None()),
                 ("True".to_string(), PyBool::new(py, true).to_owned().into()),
-                ("False".to_string(), PyBool::new(py, false).to_owned().into()),
+                (
+                    "False".to_string(),
+                    PyBool::new(py, false).to_owned().into(),
+                ),
             ]);
             let context = match context {
                 Some(context) => {

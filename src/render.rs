@@ -50,7 +50,7 @@ pub trait Evaluate {
         py: Python<'_>,
         template: TemplateString<'_>,
         context: &mut Context,
-    ) -> Result<bool, PyRenderError>;
+    ) -> Option<bool>;
 }
 
 impl<T> Evaluate for Option<T>
@@ -62,10 +62,10 @@ where
         py: Python<'_>,
         template: TemplateString<'_>,
         context: &mut Context,
-    ) -> Result<bool, PyRenderError> {
+    ) -> Option<bool> {
         match self {
             Some(inner) => inner.evaluate(py, template, context),
-            None => Ok(false),
+            None => Some(false),
         }
     }
 }

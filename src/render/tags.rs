@@ -89,8 +89,8 @@ impl Evaluate for Content<'_, '_> {
         _py: Python<'_>,
         _template: TemplateString<'_>,
         _context: &mut Context,
-    ) -> Result<bool, PyRenderError> {
-        Ok(match self {
+    ) -> Option<bool> {
+        Some(match self {
             Self::Py(obj) => obj.is_truthy().unwrap_or(false),
             Self::String(s) => !s.is_empty(),
             Self::HtmlSafe(s) => !s.is_empty(),
@@ -472,18 +472,77 @@ impl Contains<bool> for Content<'_, '_> {
     }
 }
 
+#[derive(Debug)]
+enum Resolved<'t, 'py> {
+    Content(Option<Content<'t, 'py>>),
+    Evaluate(bool),
+    None,
+}
+
+trait ResolveTuple<'t, 'py> {
+    fn resolve(
+        &self,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> Result<(Resolved<'t, 'py>, Resolved<'t, 'py>), PyRenderError>;
+}
+
+impl<'t, 'py> ResolveTuple<'t, 'py> for (IfCondition, IfCondition) {
+    fn resolve(
+        &self,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> Result<(Resolved<'t, 'py>, Resolved<'t, 'py>), PyRenderError> {
+        const IGNORE: ResolveFailures = ResolveFailures::IgnoreVariableDoesNotExist;
+        Ok(match self {
+            (IfCondition::Variable(l), IfCondition::Variable(r)) => {
+                let left = l.resolve(py, template, context, IGNORE)?;
+                let right = r.resolve(py, template, context, IGNORE)?;
+                (Resolved::Content(left), Resolved::Content(right))
+            }
+            (IfCondition::Variable(l), r) => {
+                let left = l.resolve(py, template, context, IGNORE)?;
+                let right = r.evaluate(py, template, context);
+                match right {
+                    Some(right) => (Resolved::Content(left), Resolved::Evaluate(right)),
+                    None => (Resolved::Content(left), Resolved::None),
+                }
+            }
+            (l, IfCondition::Variable(r)) => {
+                let left = l.evaluate(py, template, context);
+                let right = r.resolve(py, template, context, IGNORE)?;
+                match left {
+                    Some(left) => (Resolved::Evaluate(left), Resolved::Content(right)),
+                    None => (Resolved::None, Resolved::Content(right)),
+                }
+            }
+            (l, r) => {
+                let left = l.evaluate(py, template, context);
+                let right = r.evaluate(py, template, context);
+                match (left, right) {
+                    (Some(left), Some(right)) => {
+                        (Resolved::Evaluate(left), Resolved::Evaluate(right))
+                    }
+                    (Some(left), None) => (Resolved::Evaluate(left), Resolved::None),
+                    (None, Some(right)) => (Resolved::None, Resolved::Evaluate(right)),
+                    (None, None) => (Resolved::None, Resolved::None),
+                }
+            }
+        })
+    }
+}
+
 impl Evaluate for IfCondition {
     fn evaluate(
         &self,
         py: Python<'_>,
         template: TemplateString<'_>,
         context: &mut Context,
-    ) -> Result<bool, PyRenderError> {
-        const IGNORE: ResolveFailures = ResolveFailures::IgnoreVariableDoesNotExist;
-        Ok(match self {
-            Self::Variable(v) => v
-                .resolve(py, template, context, IGNORE)?
-                .evaluate(py, template, context)?,
+    ) -> Option<bool> {
+        Some(match self {
+            Self::Variable(v) => v.evaluate(py, template, context)?,
             Self::And(inner) => {
                 if !inner.0.evaluate(py, template, context)? {
                     false
@@ -499,235 +558,174 @@ impl Evaluate for IfCondition {
                 }
             }
             Self::Not(inner) => !inner.evaluate(py, template, context)?,
-            Self::Equal(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    left.eq(&right)
+            Self::Equal(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => l.eq(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.eq(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.eq(&r),
+                    (Resolved::Content(_), Resolved::None) => todo!(),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l.eq(&r),
+                    (Resolved::Evaluate(l), Resolved::None) => !l,
+                    (Resolved::None, _) => unreachable!(),
                 }
-                (IfCondition::Variable(l), r) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.evaluate(py, template, context)?;
-                    left.eq(&right)
+            }
+            Self::NotEqual(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => l.ne(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.ne(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.ne(&r),
+                    (Resolved::Content(_), Resolved::None) => todo!(),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l.ne(&r),
+                    (Resolved::Evaluate(l), Resolved::None) => l,
+                    (Resolved::None, _) => unreachable!(),
                 }
-                (l, IfCondition::Variable(r)) => {
-                    let left = l.evaluate(py, template, context)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    right.eq(&left)
+            }
+            Self::LessThan(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => l.lt(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.gt(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.lt(&r),
+                    (Resolved::Content(_), Resolved::None) => todo!(),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l < r,
+                    (Resolved::Evaluate(_), Resolved::None) => false,
+                    (Resolved::None, _) => unreachable!(),
                 }
-                (l, r) => {
-                    l.evaluate(py, template, context)? == r.evaluate(py, template, context)?
+            }
+            Self::GreaterThan(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => l.gt(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.lt(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.gt(&r),
+                    (Resolved::Content(_), Resolved::None) => todo!(),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l > r,
+                    (Resolved::Evaluate(l), Resolved::None) => l,
+                    (Resolved::None, _) => unreachable!(),
                 }
-            },
-            Self::NotEqual(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    left.ne(&right)
+            }
+            Self::LessThanEqual(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => l.lte(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.gte(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.lte(&r),
+                    (Resolved::Content(_), Resolved::None) => todo!(),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l <= r,
+                    (Resolved::Evaluate(l), Resolved::None) => !l,
+                    (Resolved::None, _) => unreachable!(),
                 }
-                (IfCondition::Variable(l), r) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.evaluate(py, template, context)?;
-                    left.ne(&right)
+            }
+            Self::GreaterThanEqual(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => l.gte(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.lte(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.gte(&r),
+                    (Resolved::Content(_), Resolved::None) => todo!(),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l >= r,
+                    (Resolved::Evaluate(_), Resolved::None) => true,
+                    (Resolved::None, _) => unreachable!(),
                 }
-                (l, IfCondition::Variable(r)) => {
-                    let left = l.evaluate(py, template, context)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    right.ne(&left)
-                }
-                (l, r) => {
-                    l.evaluate(py, template, context)? != r.evaluate(py, template, context)?
-                }
-            },
-            Self::LessThan(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    left.lt(&right)
-                }
-                (IfCondition::Variable(l), r) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.evaluate(py, template, context)?;
-                    left.lt(&right)
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let left = l.evaluate(py, template, context)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    right.gt(&left)
-                }
-                #[allow(clippy::bool_comparison)] // I find the suggestion harder to understand
-                (l, r) => l.evaluate(py, template, context)? < r.evaluate(py, template, context)?,
-            },
-            Self::GreaterThan(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    left.gt(&right)
-                }
-                (IfCondition::Variable(l), r) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.evaluate(py, template, context)?;
-                    left.gt(&right)
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let left = l.evaluate(py, template, context)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    right.lt(&left)
-                }
-                #[allow(clippy::bool_comparison)] // I find the suggestion harder to understand
-                (l, r) => l.evaluate(py, template, context)? > r.evaluate(py, template, context)?,
-            },
-            Self::LessThanEqual(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    left.lte(&right)
-                }
-                (IfCondition::Variable(l), r) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.evaluate(py, template, context)?;
-                    left.lte(&right)
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let left = l.evaluate(py, template, context)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    right.gte(&left)
-                }
-                (l, r) => {
-                    l.evaluate(py, template, context)? <= r.evaluate(py, template, context)?
-                }
-            },
-            Self::GreaterThanEqual(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    left.gte(&right)
-                }
-                (IfCondition::Variable(l), r) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.evaluate(py, template, context)?;
-                    left.gte(&right)
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let left = l.evaluate(py, template, context)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    right.lte(&left)
-                }
-                (l, r) => {
-                    l.evaluate(py, template, context)? >= r.evaluate(py, template, context)?
-                }
-            },
-            Self::In(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let right = match r.resolve(py, template, context, IGNORE)? {
-                        Some(right) => right,
-                        None => return Ok(false),
-                    };
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    right.contains(left).unwrap_or(false)
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let right = match r.resolve(py, template, context, IGNORE)? {
-                        Some(right) => right,
-                        None => return Ok(false),
-                    };
-                    let left = l.evaluate(py, template, context)?;
-                    right.contains(left).unwrap_or(false)
-                }
-                _ => false,
-            },
-            Self::NotIn(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let right = match r.resolve(py, template, context, IGNORE)? {
-                        Some(right) => right,
-                        None => return Ok(false),
-                    };
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    match right.contains(left) {
-                        Some(b) => !b,
-                        None => false,
+            }
+            Self::In(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(Some(r))) => {
+                        r.contains(l).unwrap_or(false)
                     }
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let right = match r.resolve(py, template, context, IGNORE)? {
-                        Some(right) => right,
-                        None => return Ok(false),
-                    };
-                    let left = l.evaluate(py, template, context)?;
-                    match right.contains(left) {
-                        Some(b) => !b,
-                        None => false,
+                    (Resolved::Evaluate(l), Resolved::Content(Some(r))) => {
+                        r.contains(l).unwrap_or(false)
                     }
+                    _ => false,
                 }
-                _ => false,
-            },
-            Self::Is(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    match (left, right) {
+            }
+            Self::NotIn(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(Some(r))) => {
+                        !(r.contains(l).unwrap_or(true))
+                    }
+                    (Resolved::Evaluate(l), Resolved::Content(Some(r))) => {
+                        !(r.contains(l).unwrap_or(true))
+                    }
+                    _ => false,
+                }
+            }
+            Self::Is(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => match (l, r) {
                         (Some(Content::Py(left)), Some(Content::Py(right))) => left.is(&right),
                         (Some(Content::Py(obj)), None) | (None, Some(Content::Py(obj))) => {
                             obj.is(PyNone::get(py).as_any())
                         }
                         (None, None) => true,
                         _ => false,
-                    }
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let right = match r.resolve(py, template, context, IGNORE)? {
-                        Some(right) => right,
-                        None => return Ok(false),
-                    };
-                    let left = l.evaluate(py, template, context)?;
-                    match right {
-                        Content::Py(right) => right.is(PyBool::new(py, left).as_any()),
+                    },
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => match r {
+                        None => true,
+                        Some(Content::Py(right)) => right.is(PyBool::new(py, l).as_any()),
                         _ => false,
-                    }
+                    },
+                    _ => false,
                 }
-                _ => false,
-            },
-            Self::IsNot(inner) => match &**inner {
-                (IfCondition::Variable(l), IfCondition::Variable(r)) => {
-                    let left = l.resolve(py, template, context, IGNORE)?;
-                    let right = r.resolve(py, template, context, IGNORE)?;
-                    match (left, right) {
+            }
+            Self::IsNot(inner) => {
+                let inner = match inner.resolve(py, template, context) {
+                    Ok(inner) => inner,
+                    Err(_) => return Some(false),
+                };
+                match inner {
+                    (Resolved::Content(l), Resolved::Content(r)) => match (l, r) {
                         (Some(Content::Py(left)), Some(Content::Py(right))) => !left.is(&right),
                         (Some(Content::Py(obj)), None) | (None, Some(Content::Py(obj))) => {
                             !obj.is(PyNone::get(py).as_any())
                         }
                         (None, None) => false,
                         _ => true,
-                    }
-                }
-                (l, IfCondition::Variable(r)) => {
-                    let right = match r.resolve(py, template, context, IGNORE)? {
-                        Some(right) => right,
-                        None => return Ok(true),
-                    };
-                    let left = l.evaluate(py, template, context)?;
-                    match right {
-                        Content::Py(right) => !right.is(PyBool::new(py, left).as_any()),
+                    },
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => match r {
+                        Some(Content::Py(right)) => !right.is(PyBool::new(py, l).as_any()),
                         _ => true,
-                    }
-                }
-                (IfCondition::Variable(l), r) => {
-                    let left = match l.resolve(py, template, context, IGNORE)? {
-                        Some(left) => left,
-                        None => return Ok(true),
-                    };
-                    let right = r.evaluate(py, template, context)?;
-                    match left {
-                        Content::Py(left) => !left.is(PyBool::new(py, right).as_any()),
+                    },
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => match l {
+                        Some(Content::Py(left)) => !left.is(PyBool::new(py, r).as_any()),
                         _ => true,
-                    }
+                    },
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l != r,
+                    _ => todo!(),
                 }
-                (l, r) => {
-                    let left = l.evaluate(py, template, context)?;
-                    let right = r.evaluate(py, template, context)?;
-                    left != right
-                }
-            },
+            }
         })
     }
 }

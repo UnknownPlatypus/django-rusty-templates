@@ -1,6 +1,6 @@
 use crate::lex::common::{
-    lex_numeric, lex_text, lex_translated, lex_variable, text_content_at,
-    translated_text_content_at, LexerError,
+    LexerError, lex_numeric, lex_text, lex_translated, lex_variable, text_content_at,
+    translated_text_content_at,
 };
 use crate::lex::tag::TagParts;
 use crate::types::TemplateString;
