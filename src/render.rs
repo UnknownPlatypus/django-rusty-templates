@@ -14,6 +14,12 @@ use types::{Content, Context};
 pub type ResolveResult<'t, 'py> = Result<Option<Content<'t, 'py>>, PyRenderError>;
 pub type RenderResult<'t> = Result<Cow<'t, str>, PyRenderError>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResolveFailures {
+    Raise,
+    IgnoreVariableDoesNotExist,
+}
+
 /// Trait for resolving a template element into content suitable for
 /// further processing by another template element.
 trait Resolve {
@@ -22,6 +28,7 @@ trait Resolve {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
+        failures: ResolveFailures,
     ) -> ResolveResult<'t, 'py>;
 }
 
@@ -38,8 +45,12 @@ pub trait Render {
 
 /// Trait for evaluating an expression in a boolean context
 pub trait Evaluate {
-    fn evaluate(&self, py: Python<'_>, template: TemplateString<'_>, context: &mut Context)
-        -> bool;
+    fn evaluate(
+        &self,
+        py: Python<'_>,
+        template: TemplateString<'_>,
+        context: &mut Context,
+    ) -> Result<bool, PyRenderError>;
 }
 
 impl<T> Evaluate for Option<T>
@@ -51,10 +62,10 @@ where
         py: Python<'_>,
         template: TemplateString<'_>,
         context: &mut Context,
-    ) -> bool {
+    ) -> Result<bool, PyRenderError> {
         match self {
             Some(inner) => inner.evaluate(py, template, context),
-            None => false,
+            None => Ok(false),
         }
     }
 }
@@ -70,7 +81,7 @@ where
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> RenderResult<'t> {
-        match self.resolve(py, template, context)? {
+        match self.resolve(py, template, context, ResolveFailures::Raise)? {
             Some(content) => Ok(content.render(context)?),
             None => Ok(Cow::Borrowed("")),
         }
