@@ -889,13 +889,17 @@ def test_default_var_not_equal_false():
     assert rust_template.render({}) == "falsey"
 
 
-def test_none_not_equal_not_default():
-    template = "{% if None != not foo|default:foo %}truthy{% else %}falsey{% endif %}"
+@pytest.mark.parametrize("a", [None, True, False])
+@pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
+def test_not_equal_not_default(a, op):
+    template = f"{{% if {a} {op} not foo|default:foo %}}truthy{{% else %}}falsey{{% endif %}}"
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    expected = "truthy" if compare(op, a, False) else "falsey"
+
+    assert django_template.render({"a": a}) == expected
+    assert rust_template.render({"a": a}) == expected
 
 
 def test_var_equal_var():
