@@ -693,7 +693,7 @@ impl Evaluate for IfCondition {
                         _ => false,
                     },
                     (Resolved::Evaluate(l), Resolved::Content(r)) => match r {
-                        None => true,
+                        None => false,
                         Some(Content::Py(right)) => right.is(PyBool::new(py, l).as_any()),
                         _ => false,
                     },

@@ -960,3 +960,12 @@ def test_render_falsey_op_not_default(op):
 
     assert django_template.render() == expected
     assert rust_template.render() == expected
+
+
+def test_render_none_eq_none_is_var():
+    template = "{% if None == None is foo %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
