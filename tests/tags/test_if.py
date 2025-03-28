@@ -892,7 +892,9 @@ def test_default_var_not_equal_false():
 @pytest.mark.parametrize("a", [None, True, False])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
 def test_not_equal_not_default(a, op):
-    template = f"{{% if {a} {op} not foo|default:foo %}}truthy{{% else %}}falsey{{% endif %}}"
+    template = (
+        f"{{% if {a} {op} not foo|default:foo %}}truthy{{% else %}}falsey{{% endif %}}"
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -912,7 +914,9 @@ def test_var_equal_var():
 
 
 def test_default_equal_default():
-    template = "{% if foo|default:foo == bar|default:bar %}truthy{% else %}falsey{% endif %}"
+    template = (
+        "{% if foo|default:foo == bar|default:bar %}truthy{% else %}falsey{% endif %}"
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -987,3 +991,34 @@ def test_render_none_or_default_or_1():
 
     assert django_template.render({}) == "truthy"
     assert rust_template.render({}) == "truthy"
+
+
+@pytest.mark.parametrize("a", ["foo", "bar"])
+@pytest.mark.parametrize("b", ["foo", "bar"])
+@pytest.mark.parametrize("a_format", ["variable", "repr", "safe"])
+@pytest.mark.parametrize("b_format", ["variable", "repr", "safe"])
+@pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
+def test_comparison_autoescape_off(op, a, b, a_format, b_format):
+    context = {"a": a, "b": b}
+    expected = "truthy" if compare(op, a, b) else "falsey"
+
+    if a_format == "repr":
+        a = repr(a)
+    elif a_format == "safe":
+        a = "a|safe"
+    else:
+        a = "a"
+
+    if b_format == "repr":
+        b = repr(b)
+    elif b_format == "safe":
+        b = "b|safe"
+    else:
+        b = "b"
+
+    template = f"{{% autoescape off %}}{{% if {a} {op} {b} %}}truthy{{% else %}}falsey{{% endif %}}{{% endautoescape %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render(context) == expected
+    assert rust_template.render(context) == expected
