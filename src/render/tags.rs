@@ -544,9 +544,9 @@ impl Evaluate for IfCondition {
         Some(match self {
             Self::Variable(v) => v.evaluate(py, template, context)?,
             Self::And(inner) => {
-                let left = inner.0.evaluate(py, template, context);
-                let right = inner.1.evaluate(py, template, context);
-                if !left? { false } else { right? }
+                let left = inner.0.evaluate(py, template, context).unwrap_or(false);
+                let right = inner.1.evaluate(py, template, context).unwrap_or(false);
+                if !left { false } else { right }
             }
             Self::Or(inner) => {
                 let left = inner.0.evaluate(py, template, context);

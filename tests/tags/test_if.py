@@ -993,6 +993,15 @@ def test_render_none_or_default_or_1():
     assert rust_template.render({}) == "truthy"
 
 
+def test_render_default_and_none_or_not_none():
+    template = "{% if A|default:inf and None or not None %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
 @pytest.mark.parametrize("a", ["foo", "bar"])
 @pytest.mark.parametrize("b", ["foo", "bar"])
 @pytest.mark.parametrize("a_format", ["variable", "repr", "safe"])
