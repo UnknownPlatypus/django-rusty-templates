@@ -37,33 +37,20 @@ fn safe_join(directory: &Path, template_name: &str) -> Option<PathBuf> {
     key = "String",      // Use owned String as key
     convert = r##"{ dirname.to_string() }"## // Convert &str to String
 )]
-fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> Result<Vec<String>, PyErr> {
-    // Import django.apps
+fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> Result<Vec<PathBuf>, PyErr> {
     let apps_module = PyModule::import(py, "django.apps")?;
-
-    // Get the 'apps' object
     let apps = apps_module.getattr("apps")?;
-
-    // Call get_app_configs() on apps
     let app_configs = apps.call_method0("get_app_configs")?;
 
-    // Convert to iterator and process each app_config
-    let app_configs_iter = app_configs.try_iter()?;
-
     let mut template_dirs = Vec::new();
-    for app_config_result in app_configs_iter {
-        match app_config_result {
-            Ok(app_config) => {
-                let path = app_config.getattr("path")?;
-                if !path.is_none() {
-                    let path_str: String = path.extract()?;
-                    let template_path = PathBuf::from(path_str).join(dirname);
-                    if template_path.is_dir() {
-                        template_dirs.push(template_path.to_string_lossy().into_owned());
-                    }
-                }
+    for app_config_result in app_configs.try_iter()? {
+        let path = app_config_result?.getattr("path")?;
+        if path.is_truthy()? {
+            let path_str: String = path.extract()?;
+            let template_path = PathBuf::from(path_str).join(dirname);
+            if template_path.is_dir() {
+                template_dirs.push(template_path);
             }
-            Err(e) => return Err(e),
         }
     }
 
@@ -81,6 +68,10 @@ impl FileSystemLoader {
             dirs: dirs.iter().map(PathBuf::from).collect(),
             encoding,
         }
+    }
+
+    pub fn from_pathbuf(dirs: Vec<PathBuf>, encoding: &'static Encoding) -> Self {
+        Self { dirs, encoding }
     }
 
     fn get_template(
@@ -133,14 +124,8 @@ impl AppDirsLoader {
         template_name: &str,
         engine: &EngineData,
     ) -> Result<PyResult<Template>, LoaderError> {
-        let dirs_result = get_app_template_dirs(py, "templates");
-        let dirs = match dirs_result {
-            Ok(dirs) => dirs,
-            Err(e) => Vec::new(),
-        };
-
-        let filesystem_loader = FileSystemLoader::new(dirs, self.encoding);
-
+        let dirs = get_app_template_dirs(py, "templates").unwrap_or_default();
+        let filesystem_loader = FileSystemLoader::from_pathbuf(dirs, self.encoding);
         filesystem_loader.get_template(py, template_name, engine)
     }
 }
@@ -592,7 +577,7 @@ mod tests {
 
             let mut expected = std::env::current_dir().unwrap();
             expected.push("tests/templates");
-            assert_eq!(dirs[0], expected.to_str().unwrap());
+            assert_eq!(dirs[0], expected);
         });
     }
 
