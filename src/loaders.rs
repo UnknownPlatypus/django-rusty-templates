@@ -57,9 +57,9 @@ fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> Result<Vec<PathBuf>, 
     for app_config_result in app_configs.try_iter()? {
         let path = app_config_result?.getattr("path")?;
         if let Some(template_path) = get_app_template_dir(path, dirname)? {
-                template_dirs.push(template_path);
-            }
+            template_dirs.push(template_path);
         }
+    }
 
     Ok(template_dirs)
 }
@@ -131,7 +131,10 @@ impl AppDirsLoader {
         template_name: &str,
         engine: &EngineData,
     ) -> Result<PyResult<Template>, LoaderError> {
-        let dirs = get_app_template_dirs(py, "templates").unwrap_or_default();
+        let dirs = match get_app_template_dirs(py, "templates") {
+            Ok(dirs) => dirs,
+            Err(e) => return Ok(Err(e)),
+        };
         let filesystem_loader = FileSystemLoader::from_pathbuf(dirs, self.encoding);
         filesystem_loader.get_template(py, template_name, engine)
     }
