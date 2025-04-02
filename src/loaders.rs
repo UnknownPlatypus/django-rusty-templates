@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use cached::proc_macro::cached;
 use encoding_rs::Encoding;
 use pyo3::exceptions::PyUnicodeError;
 use pyo3::prelude::*;
@@ -30,6 +31,39 @@ fn safe_join(directory: &Path, template_name: &str) -> Option<PathBuf> {
     }
 }
 
+fn get_app_template_dir(path: Bound<'_, PyAny>, dirname: &str) -> Result<Option<PathBuf>, PyErr> {
+    if path.is_truthy()? {
+        let path_buf: PathBuf = path.extract()?;
+        let template_path = path_buf.join(dirname);
+        if template_path.is_dir() {
+            return Ok(Some(template_path));
+        }
+    }
+    Ok(None)
+}
+
+#[cached(
+    size = 128,          // Cache size
+    result = true,       // Cache Result type
+    key = "String",      // Use owned String as key
+    convert = r##"{ dirname.to_string() }"## // Convert &str to String
+)]
+fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> Result<Vec<PathBuf>, PyErr> {
+    let apps_module = PyModule::import(py, "django.apps")?;
+    let apps = apps_module.getattr("apps")?;
+    let app_configs = apps.call_method0("get_app_configs")?;
+
+    let mut template_dirs = Vec::new();
+    for app_config_result in app_configs.try_iter()? {
+        let path = app_config_result?.getattr("path")?;
+        if let Some(template_path) = get_app_template_dir(path, dirname)? {
+            template_dirs.push(template_path);
+        }
+    }
+
+    Ok(template_dirs)
+}
+
 pub struct FileSystemLoader {
     dirs: Vec<PathBuf>,
     encoding: &'static Encoding,
@@ -41,6 +75,10 @@ impl FileSystemLoader {
             dirs: dirs.iter().map(PathBuf::from).collect(),
             encoding,
         }
+    }
+
+    pub fn from_pathbuf(dirs: Vec<PathBuf>, encoding: &'static Encoding) -> Self {
+        Self { dirs, encoding }
     }
 
     fn get_template(
@@ -78,16 +116,27 @@ impl FileSystemLoader {
     }
 }
 
-pub struct AppDirsLoader {}
+pub struct AppDirsLoader {
+    encoding: &'static Encoding,
+}
 
 impl AppDirsLoader {
+    pub fn new(encoding: &'static Encoding) -> Self {
+        Self { encoding }
+    }
+
     fn get_template(
         &self,
-        _py: Python<'_>,
-        _template_name: &str,
-        _engine: &EngineData,
+        py: Python<'_>,
+        template_name: &str,
+        engine: &EngineData,
     ) -> Result<PyResult<Template>, LoaderError> {
-        todo!()
+        let dirs = match get_app_template_dirs(py, "templates") {
+            Ok(dirs) => dirs,
+            Err(e) => return Ok(Err(e)),
+        };
+        let filesystem_loader = FileSystemLoader::from_pathbuf(dirs, self.encoding);
+        filesystem_loader.get_template(py, template_name, engine)
     }
 }
 
@@ -209,8 +258,26 @@ impl Loader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pyo3::{BoundObject, IntoPyObjectExt};
 
     use quickcheck::quickcheck;
+
+    fn setup_django(py: Python<'_>) {
+        // Import the os module and set the DJANGO_SETTINGS_MODULE environment variable
+        let os_module = PyModule::import(py, "os").unwrap();
+        let environ = os_module.getattr("environ").unwrap();
+        environ
+            .call_method(
+                "setdefault",
+                ("DJANGO_SETTINGS_MODULE", "tests.settings"),
+                None,
+            )
+            .unwrap();
+
+        // Import the django module and call django.setup()
+        let django_module = PyModule::import(py, "django").unwrap();
+        django_module.call_method0("setup").unwrap();
+    }
 
     #[test]
     fn test_filesystem_loader() {
@@ -435,6 +502,156 @@ mod tests {
                 },
             );
         })
+    }
+
+    #[test]
+    fn test_appdirs_loader() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Setup Django
+            setup_django(py);
+
+            let engine = EngineData::empty();
+            let loader = AppDirsLoader::new(encoding_rs::UTF_8);
+            let template = loader
+                .get_template(py, "basic.txt", &engine)
+                .unwrap()
+                .unwrap();
+
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/basic.txt");
+            assert_eq!(template.filename.unwrap(), expected);
+        })
+    }
+
+    #[test]
+    fn test_appdirs_loader_missing_template() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Setup Django
+            setup_django(py);
+
+            let engine = EngineData::empty();
+            let loader = AppDirsLoader::new(encoding_rs::UTF_8);
+            let error = loader.get_template(py, "missing.txt", &engine).unwrap_err();
+
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/missing.txt");
+            assert_eq!(
+                error,
+                LoaderError {
+                    tried: vec![(
+                        expected.display().to_string(),
+                        "Source does not exist".to_string(),
+                    )],
+                },
+            );
+        })
+    }
+
+    #[test]
+    fn test_appdirs_loader_invalid_encoding() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Setup Django
+            setup_django(py);
+
+            let engine = EngineData::empty();
+            let loader = AppDirsLoader::new(encoding_rs::UTF_8);
+            let error = loader
+                .get_template(py, "invalid.txt", &engine)
+                .unwrap()
+                .unwrap_err();
+
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates/invalid.txt");
+            assert_eq!(
+                error.to_string(),
+                format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
+            );
+        })
+    }
+
+    #[test]
+    fn test_get_app_template_dir_special_cases() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Test with None path
+            let none_path = py.None().into_bound(py);
+            let result = get_app_template_dir(none_path, "templates");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), None);
+
+            // Test with invalid type (integer)
+            let invalid = 42.into_bound_py_any(py).unwrap();
+            let result = get_app_template_dir(invalid, "templates");
+            assert!(result.is_err());
+        });
+    }
+
+    #[test]
+    fn test_get_app_template_dir_with_str() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Test with Python string for current directory (nonexistent template)
+            let current_dir = ".".into_bound_py_any(py).unwrap();
+            let result = get_app_template_dir(current_dir, "nonexistent");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), None);
+
+            // Test with Python string for the "tests" directory
+            let tests_dir = "tests".into_bound_py_any(py).unwrap();
+            let result = get_app_template_dir(tests_dir, "templates");
+            assert!(result.is_ok());
+            let expected_path = PathBuf::from("tests").join("templates");
+            assert_eq!(result.unwrap(), Some(expected_path));
+        });
+    }
+
+    #[test]
+    fn test_get_app_template_dir_with_pathlib() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Import pathlib.Path
+            let path_module = py.import("pathlib").unwrap();
+            let path_cls = path_module.getattr("Path").unwrap();
+
+            // Test with pathlib.Path for current directory (nonexistent template)
+            let path_obj = path_cls.call1((".",)).unwrap().into_bound();
+            let result = get_app_template_dir(path_obj, "nonexistent");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), None);
+
+            // Test with pathlib.Path for the "tests" directory
+            let path_obj = path_cls.call1(("tests",)).unwrap().into_bound();
+            let result = get_app_template_dir(path_obj, "templates");
+            assert!(result.is_ok());
+            let expected_path = PathBuf::from("tests").join("templates");
+            assert_eq!(result.unwrap(), Some(expected_path));
+        });
+    }
+
+    #[test]
+    fn test_get_app_template_dirs() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Setup Django
+            setup_django(py);
+
+            let dirs = get_app_template_dirs(py, "templates").unwrap();
+            assert_eq!(dirs.len(), 1);
+
+            let mut expected = std::env::current_dir().unwrap();
+            expected.push("tests/templates");
+            assert_eq!(dirs[0], expected);
+        });
     }
 
     #[test]
