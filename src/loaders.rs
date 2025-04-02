@@ -607,8 +607,6 @@ mod tests {
             // Test with Python string for the "tests" directory
             let tests_dir = "tests".into_bound_py_any(py).unwrap();
             let result = get_app_template_dir(tests_dir, "templates");
-
-            // If tests/templates exists, we should get Some(path), otherwise None
             assert!(result.is_ok());
             let expected_path = PathBuf::from("tests").join("templates");
             assert_eq!(result.unwrap(), Some(expected_path));
@@ -633,8 +631,6 @@ mod tests {
             // Test with pathlib.Path for the "tests" directory
             let path_obj = path_cls.call1(("tests",)).unwrap().into_bound();
             let result = get_app_template_dir(path_obj, "templates");
-
-            // If tests/templates exists, we should get Some(path), otherwise None
             assert!(result.is_ok());
             let expected_path = PathBuf::from("tests").join("templates");
             assert_eq!(result.unwrap(), Some(expected_path));
