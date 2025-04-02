@@ -31,6 +31,17 @@ fn safe_join(directory: &Path, template_name: &str) -> Option<PathBuf> {
     }
 }
 
+fn get_app_template_dir(path: Bound<'_, PyAny>, dirname: &str) -> Result<Option<PathBuf>, PyErr> {
+    if path.is_truthy()? {
+        let path_buf: PathBuf = path.extract()?;
+        let template_path = path_buf.join(dirname);
+        if template_path.is_dir() {
+            return Ok(Some(template_path));
+        }
+    }
+    Ok(None)
+}
+
 #[cached(
     size = 128,          // Cache size
     result = true,       // Cache Result type
@@ -45,14 +56,10 @@ fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> Result<Vec<PathBuf>, 
     let mut template_dirs = Vec::new();
     for app_config_result in app_configs.try_iter()? {
         let path = app_config_result?.getattr("path")?;
-        if path.is_truthy()? {
-            let path_str: String = path.extract()?;
-            let template_path = PathBuf::from(path_str).join(dirname);
-            if template_path.is_dir() {
+        if let Some(template_path) = get_app_template_dir(path, dirname)? {
                 template_dirs.push(template_path);
             }
         }
-    }
 
     Ok(template_dirs)
 }
@@ -248,6 +255,7 @@ impl Loader {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pyo3::{BoundObject, IntoPyObjectExt};
 
     use quickcheck::quickcheck;
 
@@ -562,6 +570,72 @@ mod tests {
                 format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
             );
         })
+    }
+
+    #[test]
+    fn test_get_app_template_dir_special_cases() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Test with None path
+            let none_path = py.None().into_bound(py);
+            let result = get_app_template_dir(none_path, "templates");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), None);
+
+            // Test with invalid type (integer)
+            let invalid = 42.into_bound_py_any(py).unwrap();
+            let result = get_app_template_dir(invalid, "templates");
+            assert!(result.is_err());
+        });
+    }
+
+    #[test]
+    fn test_get_app_template_dir_with_str() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Test with Python string for current directory (nonexistent template)
+            let current_dir = ".".into_bound_py_any(py).unwrap();
+            let result = get_app_template_dir(current_dir, "nonexistent");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), None);
+
+            // Test with Python string for the "tests" directory
+            let tests_dir = "tests".into_bound_py_any(py).unwrap();
+            let result = get_app_template_dir(tests_dir, "templates");
+
+            // If tests/templates exists, we should get Some(path), otherwise None
+            assert!(result.is_ok());
+            let expected_path = PathBuf::from("tests").join("templates");
+            assert_eq!(result.unwrap(), Some(expected_path));
+        });
+    }
+
+    #[test]
+    fn test_get_app_template_dir_with_pathlib() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            // Import pathlib.Path
+            let path_module = py.import("pathlib").unwrap();
+            let path_cls = path_module.getattr("Path").unwrap();
+
+            // Test with pathlib.Path for current directory (nonexistent template)
+            let path_obj = path_cls.call1((".",)).unwrap().into_bound();
+            let result = get_app_template_dir(path_obj, "nonexistent");
+            assert!(result.is_ok());
+            assert_eq!(result.unwrap(), None);
+
+            // Test with pathlib.Path for the "tests" directory
+            let path_obj = path_cls.call1(("tests",)).unwrap().into_bound();
+            let result = get_app_template_dir(path_obj, "templates");
+
+            // If tests/templates exists, we should get Some(path), otherwise None
+            assert!(result.is_ok());
+            let expected_path = PathBuf::from("tests").join("templates");
+            assert_eq!(result.unwrap(), Some(expected_path));
+        });
     }
 
     #[test]
