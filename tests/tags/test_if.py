@@ -1031,3 +1031,12 @@ def test_comparison_autoescape_off(op, a, b, a_format, b_format):
 
     assert django_template.render(context) == expected
     assert rust_template.render(context) == expected
+
+
+def test_string_content_autoescape_off():
+    template = "{% autoescape off %}{% if 'foo' %}truthy{% else %}falsey{% endif %}{% endautoescape %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
