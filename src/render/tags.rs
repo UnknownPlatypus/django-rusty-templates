@@ -690,7 +690,7 @@ impl Evaluate for IfCondition {
                         Some(Content::Py(right)) => right.is(PyBool::new(py, l).as_any()),
                         _ => false,
                     },
-                    _ => false,
+                    _ => unreachable!(),
                 }
             }
             Self::IsNot(inner) => {
