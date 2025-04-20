@@ -1073,3 +1073,17 @@ def test_missing_op_other(op):
 
     assert django_template.render({}) == "falsey"
     assert rust_template.render({}) == "falsey"
+
+
+@pytest.mark.parametrize("number", [2, 2.0])
+@pytest.mark.parametrize("op", ["==", "<", ">", "<=", ">="])
+@pytest.mark.parametrize("boolean", [True, False])
+def test_number_op_boolean(number, op, boolean):
+    expected = "truthy" if compare(op, number, boolean) else "falsey"
+    boolean = not boolean
+    template = f"{{% if {number} {op} not {boolean} %}}truthy{{% else %}}falsey{{% endif %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == expected
+    assert rust_template.render({}) == expected
