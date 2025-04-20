@@ -1097,3 +1097,86 @@ def test_op_with_error(op):
 
     assert django_template.render({}) == "falsey"
     assert rust_template.render({}) == "falsey"
+
+
+@pytest.mark.parametrize("value", [1, 1.0])
+def test_variable_in_value(value):
+    template = f"{{% if foo in {value} %}}truthy{{% else %}}falsey{{% endif %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "foo"}) == "falsey"
+    assert rust_template.render({"foo": "foo"}) == "falsey"
+
+
+@pytest.mark.parametrize("value", ["foo", 1, 1.0])
+def test_missing_in_value(value):
+    template = f"{{% if missing in {value} %}}truthy{{% else %}}falsey{{% endif %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "foo"}) == "falsey"
+    assert rust_template.render({"foo": "foo"}) == "falsey"
+
+
+def test_int_in_string():
+    template = "{% if 1 in 'foo' %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
+
+
+def test_float_in_string():
+    template = "{% if 1.0 in 'foo' %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
+
+
+def test_int_in_variable():
+    template = "{% if 1 in foo %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "foo"}) == "falsey"
+    assert rust_template.render({"foo": "foo"}) == "falsey"
+
+
+def test_float_in_variable():
+    template = "{% if 1.0 in foo %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "foo"}) == "falsey"
+    assert rust_template.render({"foo": "foo"}) == "falsey"
+
+
+def test_string_in_int():
+    template = "{% if 'foo' in 1 %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
+
+
+def test_string_in_float():
+    template = "{% if 'foo' in 1.0 %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
+
+
+def test_string_in_variable():
+    template = "{% if 'foo' in bar %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"bar": "bar"}) == "falsey"
+    assert rust_template.render({"bar": "bar"}) == "falsey"
