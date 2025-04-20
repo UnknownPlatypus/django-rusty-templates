@@ -1180,3 +1180,48 @@ def test_string_in_variable():
 
     assert django_template.render({"bar": "bar"}) == "falsey"
     assert rust_template.render({"bar": "bar"}) == "falsey"
+
+
+def test_missing_is_missing():
+    template = "{% if foo is bar %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
+def test_missing_is_variable():
+    template = "{% if foo is bar %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"bar": ""}) == "falsey"
+    assert rust_template.render({"bar": ""}) == "falsey"
+
+
+def test_variable_is_missing():
+    template = "{% if foo is bar %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": ""}) == "falsey"
+    assert rust_template.render({"foo": ""}) == "falsey"
+
+
+def test_string_is_string():
+    template = "{% if '' is '' %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": ""}) == "falsey"
+    assert rust_template.render({"foo": ""}) == "falsey"
+
+
+def test_expr_is_string():
+    template = "{% if 'foo' == 'foo' is 'bar' %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "falsey"
+    assert rust_template.render({}) == "falsey"
