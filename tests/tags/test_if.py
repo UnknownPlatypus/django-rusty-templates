@@ -1225,3 +1225,39 @@ def test_expr_is_string():
 
     assert django_template.render({}) == "falsey"
     assert rust_template.render({}) == "falsey"
+
+
+def test_expr_is_not_string():
+    template = "{% if 'foo' == 'foo' is not 'bar' %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
+def test_string_is_not_expr():
+    template = "{% if 'foo' is not not 'bar' %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
+def test_bool_is_not_expr():
+    template = "{% if True is not not 'bar' %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"
+
+
+def test_string_is_not_missing():
+    template = "{% if 'foo' is not not bar|default:bar %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "truthy"
+    assert rust_template.render({}) == "truthy"

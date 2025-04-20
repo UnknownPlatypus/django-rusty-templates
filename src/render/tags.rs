@@ -716,7 +716,7 @@ impl Evaluate for IfCondition {
                         _ => true,
                     },
                     (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l != r,
-                    _ => todo!(),
+                    (_, RightResolved::None) => true,
                 }
             }
         })
