@@ -1040,3 +1040,15 @@ def test_string_content_autoescape_off():
 
     assert django_template.render({}) == "truthy"
     assert rust_template.render({}) == "truthy"
+
+
+@pytest.mark.parametrize("a", [repr("foo"), False, "missing"])
+@pytest.mark.parametrize("op", ["==", "!="])
+def test_op_not(a, op):
+    expected = "truthy" if compare(op, a, False) else "falsey"
+    template = f"{{% if {a} {op} not 'bar' %}}truthy{{% else %}}falsey{{% endif %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == expected
+    assert rust_template.render({}) == expected
