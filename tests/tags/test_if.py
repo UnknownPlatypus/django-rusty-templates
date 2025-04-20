@@ -1052,3 +1052,14 @@ def test_op_not(a, op):
 
     assert django_template.render({}) == expected
     assert rust_template.render({}) == expected
+
+
+@pytest.mark.parametrize("op", ["==", "!="])
+def test_comparison_op_not(op):
+    expected = "truthy" if compare(op, True, False) else "falsey"
+    template = f"{{% if 'foo' == 'foo' {op} not 'bar' %}}truthy{{% else %}}falsey{{% endif %}}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == expected
+    assert rust_template.render({}) == expected
