@@ -1,1 +1,4 @@
 {{ greeting|default:_("Welcome") }}
+{% autoescape off %}
+{{ signoff|default:_("Goodbye") }}
+{% endautoescape %}
