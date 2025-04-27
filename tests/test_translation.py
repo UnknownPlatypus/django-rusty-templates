@@ -7,6 +7,7 @@ def test_translate_default():
     expected = "Welcome\n"
 
     assert render("translation.txt", {}, using="django") == expected
+    assert render("translation.txt", {}, using="rusty") == expected
 
 
 def test_translate_missing():
@@ -14,9 +15,11 @@ def test_translate_missing():
 
     with override("fr"):  # Deliberately missing translation
         assert render("translation.txt", {}, using="django") == expected
+        assert render("translation.txt", {}, using="rusty") == expected
 
 
 def test_translate_valid():
     expected = "Willkommen\n"
     with override("de"):
         assert render("translation.txt", {}, using="django") == expected
+        assert render("translation.txt", {}, using="rusty") == expected
