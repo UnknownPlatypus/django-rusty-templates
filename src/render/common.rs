@@ -150,7 +150,7 @@ impl Resolve for TagElement {
     ) -> ResolveResult<'t, 'py> {
         match self {
             Self::Text(text) => text.resolve(py, template, context, failures),
-            Self::TranslatedText(_text) => todo!(),
+            Self::TranslatedText(text) => text.resolve(py, template, context, failures),
             Self::Variable(variable) => variable.resolve(py, template, context, failures),
             Self::Filter(filter) => filter.resolve(py, template, context, failures),
             Self::Int(int) => Ok(Some(Content::Int(int.clone()))),
