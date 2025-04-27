@@ -37,6 +37,8 @@ jobs:
       run: |
         source <(cargo llvm-cov show-env --export-prefix)
         .venv/bin/maturin develop
+    - name: Build translation files
+      run: .venv/bin/python -m django compilemessages
     - name: Lint test files
       run: |
         .venv/bin/ruff check
