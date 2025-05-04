@@ -70,11 +70,8 @@ pub struct FileSystemLoader {
 }
 
 impl FileSystemLoader {
-    pub fn new(dirs: Vec<String>, encoding: &'static Encoding) -> Self {
-        Self {
-            dirs: dirs.iter().map(PathBuf::from).collect(),
-            encoding,
-        }
+    pub fn new(dirs: Vec<PathBuf>, encoding: &'static Encoding) -> Self {
+        Self { dirs, encoding }
     }
 
     pub fn from_pathbuf(dirs: Vec<PathBuf>, encoding: &'static Encoding) -> Self {
@@ -286,7 +283,7 @@ mod tests {
         Python::with_gil(|py| {
             let engine = EngineData::empty();
             let loader =
-                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+                FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
             let template = loader
                 .get_template(py, "basic.txt", &engine)
                 .unwrap()
@@ -305,7 +302,7 @@ mod tests {
         Python::with_gil(|py| {
             let engine = EngineData::empty();
             let loader =
-                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+                FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
             let error = loader.get_template(py, "missing.txt", &engine).unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
@@ -329,7 +326,7 @@ mod tests {
         Python::with_gil(|py| {
             let engine = EngineData::empty();
             let loader =
-                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+                FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
             let error = loader
                 .get_template(py, "invalid.txt", &engine)
                 .unwrap()
@@ -364,7 +361,7 @@ mod tests {
 
             // Create a FileSystemLoader for the CachedLoader
             let filesystem_loader =
-                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+                FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
 
             // Wrap the FileSystemLoader in a CachedLoader
             let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
@@ -407,7 +404,7 @@ mod tests {
         Python::with_gil(|py| {
             let engine = EngineData::empty();
             let filesystem_loader =
-                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+                FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
 
             let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
             let error = cached_loader
@@ -444,7 +441,7 @@ mod tests {
         Python::with_gil(|py| {
             let engine = EngineData::empty();
             let filesystem_loader =
-                FileSystemLoader::new(vec!["tests/templates".to_string()], encoding_rs::UTF_8);
+                FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
 
             let mut cached_loader = CachedLoader::new(vec![Loader::FileSystem(filesystem_loader)]);
             let error = cached_loader
