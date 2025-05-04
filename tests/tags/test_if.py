@@ -1,6 +1,7 @@
 import pytest
 from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
+from django.utils.translation import override
 from hypothesis import given
 from hypothesis.strategies import (
     lists,
@@ -51,6 +52,16 @@ def test_render_if_true_literal():
 
     assert django_template.render({}) == "foo"
     assert rust_template.render({}) == "foo"
+
+
+def test_render_translated_literal():
+    template = "{% if _('Welcome') %}foo{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with override("de"):
+        assert django_template.render({}) == "foo"
+        assert rust_template.render({}) == "foo"
 
 
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0])
