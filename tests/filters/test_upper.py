@@ -12,6 +12,7 @@ def test_upper_string():
     assert django_template.render({"var": var}) == uppered
     assert rust_template.render({"var": var}) == uppered
 
+
 def test_upper_undefined():
     template = "{{ var|upper }}"
     django_template = engines["django"].from_string(template)
@@ -19,6 +20,7 @@ def test_upper_undefined():
 
     assert django_template.render() == ""
     assert rust_template.render() == ""
+
 
 def test_upper_integer():
     template = "{{ var|upper }}"
@@ -29,6 +31,7 @@ def test_upper_integer():
     uppered = "3"
     assert django_template.render({"var": var}) == uppered
     assert rust_template.render({"var": var}) == uppered
+
 
 def test_upper_with_argument():
     template = "{{ var|upper:arg }}"
@@ -51,6 +54,7 @@ def test_upper_with_argument():
 """
     assert str(exc_info.value) == expected
 
+
 def test_upper_unicode():
     template = "{{ var|upper }}"
     django_template = engines["django"].from_string(template)
@@ -69,5 +73,38 @@ def test_upper_html():
 
     var = "<b>foo</b>"
     uppered = "&lt;B&gt;FOO&lt;/B&gt;"
+    assert django_template.render({"var": var}) == uppered
+    assert rust_template.render({"var": var}) == uppered
+
+
+def test_upper_html_safe():
+    template = "{{ var|upper|safe }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    var = "<b>foo</b>"
+    uppered = "<B>FOO</B>"
+    assert django_template.render({"var": var}) == uppered
+    assert rust_template.render({"var": var}) == uppered
+
+
+def test_upper_add_strings():
+    template = "{{ var|upper|add:'bar' }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    var = "foo"
+    uppered = "FOObar"
+    assert django_template.render({"var": var}) == uppered
+    assert rust_template.render({"var": var}) == uppered
+
+
+def test_upper_add_numbers():
+    template = "{{ var|upper|add:4 }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    var = "2"
+    uppered = "6"
     assert django_template.render({"var": var}) == uppered
     assert rust_template.render({"var": var}) == uppered
