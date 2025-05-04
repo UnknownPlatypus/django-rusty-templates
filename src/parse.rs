@@ -35,6 +35,7 @@ use crate::types::Argument;
 use crate::types::ArgumentType;
 use crate::types::TemplateString;
 use crate::types::Text;
+use crate::types::TranslatedText;
 use crate::types::Variable;
 
 impl ArgumentToken {
@@ -52,7 +53,7 @@ impl ArgumentToken {
                     },
                 },
                 ArgumentTokenType::TranslatedText => {
-                    ArgumentType::TranslatedText(Text::new(self.content_at()))
+                    ArgumentType::TranslatedText(TranslatedText::new(self.content_at()))
                 }
             },
         })
@@ -1222,7 +1223,7 @@ mod tests {
             let nodes = parser.parse().unwrap();
 
             let foo = TagElement::Variable(Variable { at: (3, 3) });
-            let baz = Text::new((14, 3));
+            let baz = TranslatedText::new((14, 3));
             let external = get_external_filter(&nodes[0]);
             assert!(external.is_none(py));
             let bar = TokenTree::Filter(Box::new(Filter {
