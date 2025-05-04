@@ -93,10 +93,10 @@ impl Resolve for TranslatedText {
         let django_translation = py.import("django.utils.translation")?;
         let get_text = django_translation.getattr("gettext")?;
         let resolved = get_text.call1((resolved,))?.extract::<String>()?;
-        Ok(Some(match context.autoescape {
-            false => Content::String(Cow::Owned(resolved)),
-            true => Content::HtmlSafe(Cow::Owned(resolved)),
-        }))
+        Ok(Some(Content::String(match context.autoescape {
+            false => ContentString::String(Cow::Owned(resolved)),
+            true => ContentString::HtmlSafe(Cow::Owned(resolved)),
+        })))
     }
 }
 
