@@ -528,9 +528,22 @@ impl Evaluate for IfCondition {
             Self::Or(inner) => {
                 let left = inner.0.evaluate(py, template, context);
                 let right = inner.1.evaluate(py, template, context);
-                if left? { true } else { right.unwrap_or(false) }
+                match left {
+                    None => false,
+                    Some(left) => {
+                        if left {
+                            true
+                        } else {
+                            right.unwrap_or(false)
+                        }
+                    }
+                }
             }
-            Self::Not(inner) => !inner.evaluate(py, template, context)?,
+            Self::Not(inner) => match inner.evaluate(py, template, context) {
+                None => false,
+                Some(true) => false,
+                Some(false) => true,
+            },
             Self::Equal(inner) => {
                 let inner = match inner.resolve(py, template, context) {
                     Ok(inner) => inner,
