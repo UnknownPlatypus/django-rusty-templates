@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -22,13 +23,13 @@ def test_parse_error():
     template_dir = Path("tests/templates").absolute()
     expected = """\
   × Empty variable tag
-   ╭─[%s/parse_error.txt:1:28]
+   ╭─[%s%sparse_error.txt:1:28]
  1 │ This is an empty variable: {{ }}
    ·                            ──┬──
    ·                              ╰── here
    ╰────
 """
-    assert str(excinfo.value) == expected % template_dir
+    assert str(excinfo.value) == expected % (template_dir, os.sep)
 
 
 def test_parse_error_from_string():

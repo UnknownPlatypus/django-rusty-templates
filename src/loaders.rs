@@ -290,7 +290,10 @@ mod tests {
                 .unwrap();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/basic.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\basic.txt");
             assert_eq!(template.filename.unwrap(), expected);
         })
     }
@@ -306,7 +309,10 @@ mod tests {
             let error = loader.get_template(py, "missing.txt", &engine).unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/missing.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\missing.txt");
             assert_eq!(
                 error,
                 LoaderError {
@@ -333,7 +339,10 @@ mod tests {
                 .unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/invalid.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\invalid.txt");
             assert_eq!(
                 error.to_string(),
                 format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
@@ -375,7 +384,10 @@ mod tests {
             // Verify the template filename
             let mut expected_path =
                 std::env::current_dir().expect("Failed to get current directory");
+            #[cfg(not(windows))]
             expected_path.push("tests/templates/basic.txt");
+            #[cfg(windows)]
+            expected_path.push("tests\\templates\\basic.txt");
             assert_eq!(template.filename.unwrap(), expected_path);
 
             // Verify the cache state after first load
@@ -412,7 +424,10 @@ mod tests {
                 .unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/missing.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\missing.txt");
             let expected_err = LoaderError {
                 tried: vec![(
                     expected.display().to_string(),
@@ -450,7 +465,10 @@ mod tests {
                 .unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/invalid.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\invalid.txt");
             assert_eq!(
                 error.to_string(),
                 format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
@@ -517,7 +535,10 @@ mod tests {
                 .unwrap();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/basic.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\basic.txt");
             assert_eq!(template.filename.unwrap(), expected);
         })
     }
@@ -535,7 +556,10 @@ mod tests {
             let error = loader.get_template(py, "missing.txt", &engine).unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/missing.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\missing.txt");
             assert_eq!(
                 error,
                 LoaderError {
@@ -564,7 +588,10 @@ mod tests {
                 .unwrap_err();
 
             let mut expected = std::env::current_dir().unwrap();
+            #[cfg(not(windows))]
             expected.push("tests/templates/invalid.txt");
+            #[cfg(windows)]
+            expected.push("tests\\templates\\invalid.txt");
             assert_eq!(
                 error.to_string(),
                 format!("UnicodeError: Could not open {expected:?} with UTF-8 encoding.")
@@ -655,7 +682,10 @@ mod tests {
     fn test_safe_join_absolute() {
         let path = PathBuf::from("/abc/");
         let joined = safe_join(&path, "def").unwrap();
+        #[cfg(not(windows))]
         assert_eq!(joined, PathBuf::from("/abc/def"));
+        #[cfg(windows)]
+        assert!(joined.ends_with("\\abc\\def"));
     }
 
     #[test]
@@ -750,6 +780,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "Skipping on Windows due to path character restrictions"
+    )]
     fn test_safe_join_matches_django_safe_join() {
         pyo3::prepare_freethreaded_python();
 
