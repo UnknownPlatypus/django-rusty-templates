@@ -94,7 +94,7 @@ jobs:
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
-        pytest --cov --cov-report=xml
+        pytest --cov --cov-report=xml -v
 
     - name: Get rust coverage report
       run: |
