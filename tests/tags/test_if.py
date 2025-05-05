@@ -1005,7 +1005,9 @@ def test_render_none_or_default_or_1():
 
 
 def test_render_default_and_none_or_not_none():
-    template = "{% if A|default:inf and None or not None %}truthy{% else %}falsey{% endif %}"
+    template = (
+        "{% if A|default:inf and None or not None %}truthy{% else %}falsey{% endif %}"
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -1068,7 +1070,9 @@ def test_op_not(a, op):
 @pytest.mark.parametrize("op", ["==", "!="])
 def test_comparison_op_not(op):
     expected = "truthy" if compare(op, True, False) else "falsey"
-    template = f"{{% if 'foo' == 'foo' {op} not 'bar' %}}truthy{{% else %}}falsey{{% endif %}}"
+    template = (
+        f"{{% if 'foo' == 'foo' {op} not 'bar' %}}truthy{{% else %}}falsey{{% endif %}}"
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -1092,7 +1096,9 @@ def test_missing_op_other(op):
 def test_number_op_boolean(number, op, boolean):
     expected = "truthy" if compare(op, number, boolean) else "falsey"
     boolean = not boolean
-    template = f"{{% if {number} {op} not {boolean} %}}truthy{{% else %}}falsey{{% endif %}}"
+    template = (
+        f"{{% if {number} {op} not {boolean} %}}truthy{{% else %}}falsey{{% endif %}}"
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -1266,7 +1272,9 @@ def test_bool_is_not_expr():
 
 
 def test_string_is_not_missing():
-    template = "{% if 'foo' is not not bar|default:bar %}truthy{% else %}falsey{% endif %}"
+    template = (
+        "{% if 'foo' is not not bar|default:bar %}truthy{% else %}falsey{% endif %}"
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 

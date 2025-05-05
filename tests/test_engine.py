@@ -44,12 +44,14 @@ def test_import_libraries_no_register():
 
 
 def test_pathlib_dirs():
-    engine = RustyTemplates({
-        "NAME": "rust",
-        "OPTIONS": {},
-        "DIRS": [Path(settings.BASE_DIR) / "templates"],
-        "APP_DIRS": False,
-    })
+    engine = RustyTemplates(
+        {
+            "NAME": "rust",
+            "OPTIONS": {},
+            "DIRS": [Path(settings.BASE_DIR) / "templates"],
+            "APP_DIRS": False,
+        }
+    )
 
     template = engine.get_template("basic.txt")
     assert template.render({"user": "Lily"}) == "Hello Lily!\n"
