@@ -447,16 +447,9 @@ impl Contains<bool> for Content<'_, '_> {
 }
 
 #[derive(Debug)]
-enum LeftResolved<'t, 'py> {
+enum Resolved<'t, 'py> {
     Content(Option<Content<'t, 'py>>),
     Evaluate(bool),
-}
-
-#[derive(Debug)]
-enum RightResolved<'t, 'py> {
-    Content(Option<Content<'t, 'py>>),
-    Evaluate(bool),
-    None,
 }
 
 trait ResolveTuple<'t, 'py> {
@@ -465,7 +458,7 @@ trait ResolveTuple<'t, 'py> {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<(LeftResolved<'t, 'py>, RightResolved<'t, 'py>), PyRenderError>;
+    ) -> Result<(Resolved<'t, 'py>, Resolved<'t, 'py>), PyRenderError>;
 }
 
 impl<'t, 'py> ResolveTuple<'t, 'py> for (IfCondition, IfCondition) {
@@ -474,38 +467,36 @@ impl<'t, 'py> ResolveTuple<'t, 'py> for (IfCondition, IfCondition) {
         py: Python<'py>,
         template: TemplateString<'t>,
         context: &mut Context,
-    ) -> Result<(LeftResolved<'t, 'py>, RightResolved<'t, 'py>), PyRenderError> {
+    ) -> Result<(Resolved<'t, 'py>, Resolved<'t, 'py>), PyRenderError> {
         const IGNORE: ResolveFailures = ResolveFailures::IgnoreVariableDoesNotExist;
         Ok(match self {
             (IfCondition::Variable(l), IfCondition::Variable(r)) => {
                 let left = l.resolve(py, template, context, IGNORE)?;
                 let right = r.resolve(py, template, context, IGNORE)?;
-                (LeftResolved::Content(left), RightResolved::Content(right))
+                (Resolved::Content(left), Resolved::Content(right))
             }
             (IfCondition::Variable(l), r) => {
                 let left = l.resolve(py, template, context, IGNORE)?;
-                let right = r.evaluate(py, template, context);
-                match right {
-                    Some(right) => (LeftResolved::Content(left), RightResolved::Evaluate(right)),
-                    None => (LeftResolved::Content(left), RightResolved::None),
-                }
+                let right = r
+                    .evaluate(py, template, context)
+                    .expect("Right cannot be an expression that evaluates to None");
+                (Resolved::Content(left), Resolved::Evaluate(right))
             }
             (l, IfCondition::Variable(r)) => {
                 let left = l
                     .evaluate(py, template, context)
                     .expect("Left cannot be an expression that evaluates to None");
                 let right = r.resolve(py, template, context, IGNORE)?;
-                (LeftResolved::Evaluate(left), RightResolved::Content(right))
+                (Resolved::Evaluate(left), Resolved::Content(right))
             }
             (l, r) => {
                 let left = l
                     .evaluate(py, template, context)
                     .expect("Left cannot be an expression that evaluates to None");
-                let right = r.evaluate(py, template, context);
-                match right {
-                    Some(right) => (LeftResolved::Evaluate(left), RightResolved::Evaluate(right)),
-                    None => (LeftResolved::Evaluate(left), RightResolved::None),
-                }
+                let right = r
+                    .evaluate(py, template, context)
+                    .expect("Right cannot be an expression that evaluates to None");
+                (Resolved::Evaluate(left), Resolved::Evaluate(right))
             }
         })
     }
@@ -528,21 +519,32 @@ impl Evaluate for IfCondition {
             Self::Or(inner) => {
                 let left = inner.0.evaluate(py, template, context);
                 let right = inner.1.evaluate(py, template, context);
-                if left? { true } else { right.unwrap_or(false) }
+                match left {
+                    None => false,
+                    Some(left) => {
+                        if left {
+                            true
+                        } else {
+                            right.unwrap_or(false)
+                        }
+                    }
+                }
             }
-            Self::Not(inner) => !inner.evaluate(py, template, context)?,
+            Self::Not(inner) => match inner.evaluate(py, template, context) {
+                None => false,
+                Some(true) => false,
+                Some(false) => true,
+            },
             Self::Equal(inner) => {
                 let inner = match inner.resolve(py, template, context) {
                     Ok(inner) => inner,
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => l.eq(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => r.eq(&l),
-                    (LeftResolved::Content(l), RightResolved::Evaluate(r)) => l.eq(&r),
-                    (LeftResolved::Content(l), RightResolved::None) => l.eq(&false),
-                    (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l.eq(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::None) => !l,
+                    (Resolved::Content(l), Resolved::Content(r)) => l.eq(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.eq(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.eq(&r),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l.eq(&r),
                 }
             }
             Self::NotEqual(inner) => {
@@ -551,12 +553,10 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => l.ne(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => r.ne(&l),
-                    (LeftResolved::Content(l), RightResolved::Evaluate(r)) => l.ne(&r),
-                    (LeftResolved::Content(l), RightResolved::None) => l.ne(&false),
-                    (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l.ne(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::None) => l,
+                    (Resolved::Content(l), Resolved::Content(r)) => l.ne(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.ne(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.ne(&r),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l.ne(&r),
                 }
             }
             Self::LessThan(inner) => {
@@ -565,12 +565,10 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => l.lt(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => r.gt(&l),
-                    (LeftResolved::Content(l), RightResolved::Evaluate(r)) => l.lt(&r),
-                    (LeftResolved::Content(l), RightResolved::None) => l.lt(&false),
-                    (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l < r,
-                    (LeftResolved::Evaluate(_), RightResolved::None) => false,
+                    (Resolved::Content(l), Resolved::Content(r)) => l.lt(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.gt(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.lt(&r),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l < r,
                 }
             }
             Self::GreaterThan(inner) => {
@@ -579,12 +577,10 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => l.gt(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => r.lt(&l),
-                    (LeftResolved::Content(l), RightResolved::Evaluate(r)) => l.gt(&r),
-                    (LeftResolved::Content(l), RightResolved::None) => l.gt(&false),
-                    (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l > r,
-                    (LeftResolved::Evaluate(l), RightResolved::None) => l,
+                    (Resolved::Content(l), Resolved::Content(r)) => l.gt(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.lt(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.gt(&r),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l > r,
                 }
             }
             Self::LessThanEqual(inner) => {
@@ -593,12 +589,10 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => l.lte(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => r.gte(&l),
-                    (LeftResolved::Content(l), RightResolved::Evaluate(r)) => l.lte(&r),
-                    (LeftResolved::Content(l), RightResolved::None) => l.lte(&false),
-                    (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l <= r,
-                    (LeftResolved::Evaluate(l), RightResolved::None) => !l,
+                    (Resolved::Content(l), Resolved::Content(r)) => l.lte(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.gte(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.lte(&r),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l <= r,
                 }
             }
             Self::GreaterThanEqual(inner) => {
@@ -607,12 +601,10 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => l.gte(&r),
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => r.lte(&l),
-                    (LeftResolved::Content(l), RightResolved::Evaluate(r)) => l.gte(&r),
-                    (LeftResolved::Content(l), RightResolved::None) => l.gte(&false),
-                    (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l >= r,
-                    (LeftResolved::Evaluate(_), RightResolved::None) => true,
+                    (Resolved::Content(l), Resolved::Content(r)) => l.gte(&r),
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => r.lte(&l),
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => l.gte(&r),
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l >= r,
                 }
             }
             Self::In(inner) => {
@@ -621,10 +613,10 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(Some(r))) => {
+                    (Resolved::Content(l), Resolved::Content(Some(r))) => {
                         r.contains(l).unwrap_or(false)
                     }
-                    (LeftResolved::Evaluate(l), RightResolved::Content(Some(r))) => {
+                    (Resolved::Evaluate(l), Resolved::Content(Some(r))) => {
                         r.contains(l).unwrap_or(false)
                     }
                     _ => false,
@@ -636,10 +628,10 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(Some(r))) => {
+                    (Resolved::Content(l), Resolved::Content(Some(r))) => {
                         !(r.contains(l).unwrap_or(true))
                     }
-                    (LeftResolved::Evaluate(l), RightResolved::Content(Some(r))) => {
+                    (Resolved::Evaluate(l), Resolved::Content(Some(r))) => {
                         !(r.contains(l).unwrap_or(true))
                     }
                     _ => false,
@@ -651,7 +643,7 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => match (l, r) {
+                    (Resolved::Content(l), Resolved::Content(r)) => match (l, r) {
                         (Some(Content::Py(left)), Some(Content::Py(right))) => left.is(&right),
                         (Some(Content::Py(obj)), None) | (None, Some(Content::Py(obj))) => {
                             obj.is(PyNone::get(py).as_any())
@@ -659,7 +651,7 @@ impl Evaluate for IfCondition {
                         (None, None) => true,
                         _ => false,
                     },
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => match r {
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => match r {
                         None => false,
                         Some(Content::Py(right)) => right.is(PyBool::new(py, l).as_any()),
                         _ => false,
@@ -673,7 +665,7 @@ impl Evaluate for IfCondition {
                     Err(_) => return Some(false),
                 };
                 match inner {
-                    (LeftResolved::Content(l), RightResolved::Content(r)) => match (l, r) {
+                    (Resolved::Content(l), Resolved::Content(r)) => match (l, r) {
                         (Some(Content::Py(left)), Some(Content::Py(right))) => !left.is(&right),
                         (Some(Content::Py(obj)), None) | (None, Some(Content::Py(obj))) => {
                             !obj.is(PyNone::get(py).as_any())
@@ -681,16 +673,15 @@ impl Evaluate for IfCondition {
                         (None, None) => false,
                         _ => true,
                     },
-                    (LeftResolved::Evaluate(l), RightResolved::Content(r)) => match r {
+                    (Resolved::Evaluate(l), Resolved::Content(r)) => match r {
                         Some(Content::Py(right)) => !right.is(PyBool::new(py, l).as_any()),
                         _ => true,
                     },
-                    (LeftResolved::Content(l), RightResolved::Evaluate(r)) => match l {
+                    (Resolved::Content(l), Resolved::Evaluate(r)) => match l {
                         Some(Content::Py(left)) => !left.is(PyBool::new(py, r).as_any()),
                         _ => true,
                     },
-                    (LeftResolved::Evaluate(l), RightResolved::Evaluate(r)) => l != r,
-                    (_, RightResolved::None) => true,
+                    (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l != r,
                 }
             }
         })
