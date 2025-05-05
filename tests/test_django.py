@@ -21,7 +21,6 @@ def test_parse_error():
         get_template("parse_error.txt", using="rusty")
 
     template_dir = Path("tests/templates").absolute()
-    path_separator = '/' if os.name != 'nt' else '\\'
     expected = """\
   × Empty variable tag
    ╭─[%s%sparse_error.txt:1:28]
@@ -30,7 +29,7 @@ def test_parse_error():
    ·                              ╰── here
    ╰────
 """
-    assert str(excinfo.value) == expected % (template_dir, path_separator)
+    assert str(excinfo.value) == expected % (template_dir, os.sep)
 
 
 def test_parse_error_from_string():
