@@ -42,11 +42,8 @@ jobs:
       if: matrix.os == 'windows-latest'
       shell: bash
       run: |
-        LATEST_URL=$(curl -s https://api.github.com/repos/vslavik/gettext-tools-windows/releases/latest |
-          grep "browser_download_url.*zip" |
-          cut -d : -f 2,3 |
-          tr -d \")
-
+        LATEST_URL=$(curl -s "https://api.github.com/repos/vslavik/gettext-tools-windows/releases/latest" |
+          grep -o 'https://github.com/vslavik/gettext-tools-windows/releases/download/[^"]*\.zip')
         curl -L "$LATEST_URL" -o "$RUNNER_TEMP/gettext.zip"
         unzip "$RUNNER_TEMP/gettext.zip" -d "$RUNNER_TEMP/gettext"
         echo "$RUNNER_TEMP/gettext/bin" >> $GITHUB_PATH
