@@ -28,7 +28,7 @@ def test_parse_error():
    ·                              ╰── here
    ╰────
 """
-    assert str(excinfo.value) == expected % template_dir
+    assert str(excinfo.value) == expected % template_dir.as_posix()
 
 
 def test_parse_error_from_string():
