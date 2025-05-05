@@ -682,7 +682,10 @@ mod tests {
     fn test_safe_join_absolute() {
         let path = PathBuf::from("/abc/");
         let joined = safe_join(&path, "def").unwrap();
+        #[cfg(not(windows))]
         assert_eq!(joined, PathBuf::from("/abc/def"));
+        #[cfg(windows)]
+        assert!(joined.ends_with("\\abc\\def"));
     }
 
     #[test]
@@ -777,6 +780,10 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(
+        windows,
+        ignore = "Skipping on Windows due to path character restrictions"
+    )]
     fn test_safe_join_matches_django_safe_join() {
         pyo3::prepare_freethreaded_python();
 
