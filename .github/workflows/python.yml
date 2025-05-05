@@ -29,6 +29,10 @@ jobs:
       if: matrix.os == 'macos-latest'
       run: brew install gettext
 
+    - name: Install gettext for translation testing (Windows)
+      if: matrix.os == 'windows-latest'
+      run: choco install gettext
+
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
       with:
@@ -37,27 +41,58 @@ jobs:
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@cargo-llvm-cov
 
-    - name: Install dependencies
+    - name: Install dependencies (Unix)
+      if: matrix.os != 'windows-latest'
       run: |
         python -m venv .venv
         .venv/bin/python -m pip install --upgrade pip
         .venv/bin/pip install -r requirements.txt
         .venv/bin/pip install pytest-cov
-    - name: Install Django Rusty Templates
+    - name: Install dependencies (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        python -m venv .venv
+        .venv\Scripts\python -m pip install --upgrade pip
+        .venv\Scripts\pip install -r requirements.txt
+        .venv\Scripts\pip install pytest-cov
+    - name: Install Django Rusty Templates (Unix)
+      if: matrix.os != 'windows-latest'
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
         .venv/bin/maturin develop
-    - name: Build translation files
+    - name: Install Django Rusty Templates (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
+        source llvm-cov-env.sh
+        .venv\Scripts\maturin develop
+    - name: Build translation files (Unix)
+      if: matrix.os != 'windows-latest'
       run: .venv/bin/python -m django compilemessages
-    - name: Lint test files
+    - name: Build translation files (Windows)
+      if: matrix.os == 'windows-latest'
+      run: .venv\Scripts\python -m django compilemessages
+    - name: Lint test files (Unix)
+      if: matrix.os != 'windows-latest'
       run: |
         .venv/bin/ruff check
-    - name: Test with pytest
+    - name: Lint test files (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        .venv\Scripts\ruff check
+    - name: Test with pytest (Unix)
+      if: matrix.os != 'windows-latest'
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
         .venv/bin/pytest --cov --cov-report=xml
+    - name: Test with pytest (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
+        source llvm-cov-env.sh
+        .venv\Scripts\pytest --cov --cov-report=xml
     - name: Get rust coverage report
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
