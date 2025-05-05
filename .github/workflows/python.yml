@@ -31,6 +31,7 @@ jobs:
 
     - name: Install gettext for translation testing (Windows)
       if: matrix.os == 'windows-latest'
+      shell: pwsh
       run: |
         $GettextUrl = "https://github.com/vslavik/gettext-tools-windows/releases/download/v0.21.1/gettext-tools-windows-0.21.1.zip"
         $GettextZip = "$env:TEMP\gettext.zip"
@@ -70,10 +71,11 @@ jobs:
         source llvm-cov-env.sh
         .venv/bin/maturin develop
     - name: Install Django Rusty Templates (Windows)
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
+      shell: pwsh
       run: |
-        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
-        source llvm-cov-env.sh
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.ps1
+        . .\llvm-cov-env.ps1
         .venv\Scripts\maturin develop
     - name: Build translation files (Unix)
       if: matrix.os != 'windows-latest'
@@ -96,15 +98,24 @@ jobs:
         source llvm-cov-env.sh
         .venv/bin/pytest --cov --cov-report=xml
     - name: Test with pytest (Windows)
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
+      shell: pwsh
       run: |
-        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
-        source llvm-cov-env.sh
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.ps1
+        . .\llvm-cov-env.ps1
         .venv\Scripts\pytest --cov --cov-report=xml
-    - name: Get rust coverage report
+    - name: Get rust coverage report (Unix)
+      if: runner.os != 'Windows'
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
+        cargo llvm-cov report --codecov --output-path codecov.json
+    - name: Get rust coverage report (Windows)
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.ps1
+        . .\llvm-cov-env.ps1
         cargo llvm-cov report --codecov --output-path codecov.json
     - name: Upload to codecov
       uses: codecov/codecov-action@v5
