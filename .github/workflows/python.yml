@@ -32,11 +32,6 @@ jobs:
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@cargo-llvm-cov
 
-    - name: Setup LLVM coverage environment
-      run: |
-        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
-        echo "source $(pwd)/llvm-cov-env.sh" >> $GITHUB_ENV
-
     - name: Install dependencies
       run: |
         python -m venv .venv
@@ -45,6 +40,7 @@ jobs:
         .venv/bin/pip install pytest-cov
     - name: Install Django Rusty Templates
       run: |
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
         .venv/bin/maturin develop
     - name: Build translation files
@@ -54,10 +50,12 @@ jobs:
         .venv/bin/ruff check
     - name: Test with pytest
       run: |
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
         .venv/bin/pytest --cov --cov-report=xml
     - name: Get rust coverage report
       run: |
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
         cargo llvm-cov report --codecov --output-path codecov.json
     - name: Upload to codecov
