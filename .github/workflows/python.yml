@@ -59,11 +59,12 @@ jobs:
         .venv/bin/pip install pytest-cov
     - name: Install dependencies (Windows)
       if: matrix.os == 'windows-latest'
+      shell: bash
       run: |
         python -m venv .venv
-        .venv\Scripts\python -m pip install --upgrade pip
-        .venv\Scripts\pip install -r requirements.txt
-        .venv\Scripts\pip install pytest-cov
+        .venv/Scripts/python -m pip install --upgrade pip
+        .venv/Scripts/pip install -r requirements.txt
+        .venv/Scripts/pip install pytest-cov
     - name: Install Django Rusty Templates (Unix)
       if: matrix.os != 'windows-latest'
       run: |
@@ -82,7 +83,7 @@ jobs:
       run: .venv/bin/python -m django compilemessages
     - name: Build translation files (Windows)
       if: matrix.os == 'windows-latest'
-      run: .venv\Scripts\python -m django compilemessages
+      run: .venv/Scripts/python -m django compilemessages
     - name: Lint test files (Unix)
       if: matrix.os != 'windows-latest'
       run: |
@@ -90,7 +91,7 @@ jobs:
     - name: Lint test files (Windows)
       if: matrix.os == 'windows-latest'
       run: |
-        .venv\Scripts\ruff check
+        .venv/Scripts/ruff check
     - name: Test with pytest (Unix)
       if: matrix.os != 'windows-latest'
       run: |
@@ -103,7 +104,7 @@ jobs:
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
-        .venv\Scripts\pytest --cov --cov-report=xml
+        .venv/Scripts/pytest --cov --cov-report=xml
     - name: Get rust coverage report (Unix)
       if: runner.os != 'Windows'
       run: |
