@@ -20,6 +20,8 @@ def test_parse_error():
         get_template("parse_error.txt", using="rusty")
 
     template_dir = Path("tests/templates").absolute()
+    # normalize path separators for Windows vs Unix differences
+    template_dir_normalized = str(template_dir).replace('\\', '/')
     expected = """\
   × Empty variable tag
    ╭─[%s/parse_error.txt:1:28]
@@ -28,7 +30,7 @@ def test_parse_error():
    ·                              ╰── here
    ╰────
 """
-    assert str(excinfo.value) == expected % template_dir
+    assert str(excinfo.value) == expected % template_dir_normalized
 
 
 def test_parse_error_from_string():
