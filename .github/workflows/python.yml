@@ -31,7 +31,15 @@ jobs:
 
     - name: Install gettext for translation testing (Windows)
       if: matrix.os == 'windows-latest'
-      run: choco install gettext
+      run: |
+        $GettextUrl = "https://github.com/vslavik/gettext-tools-windows/releases/download/v0.21.1/gettext-tools-windows-0.21.1.zip"
+        $GettextZip = "$env:TEMP\gettext.zip"
+        $GettextDir = "$env:TEMP\gettext"
+
+        Invoke-WebRequest -Uri $GettextUrl -OutFile $GettextZip
+        Expand-Archive -Path $GettextZip -DestinationPath $GettextDir -Force
+
+        echo "$GettextDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
