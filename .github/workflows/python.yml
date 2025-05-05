@@ -12,6 +12,9 @@ jobs:
   build:
 
     runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
     strategy:
       fail-fast: false
       matrix:
@@ -19,7 +22,7 @@ jobs:
         python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-    - name: Configure Git (Windows)
+    - name: Configure Git line-endings (Windows)
       if: runner.os == 'Windows'
       run: |
         git config --global core.autocrlf false
@@ -37,16 +40,16 @@ jobs:
 
     - name: Install gettext for translation testing (Windows)
       if: matrix.os == 'windows-latest'
-      shell: pwsh
+      shell: bash
       run: |
-        $GettextUrl = "https://github.com/vslavik/gettext-tools-windows/releases/download/v0.21.1/gettext-tools-windows-0.21.1.zip"
-        $GettextZip = "$env:TEMP\gettext.zip"
-        $GettextDir = "$env:TEMP\gettext"
+        LATEST_URL=$(curl -s https://api.github.com/repos/vslavik/gettext-tools-windows/releases/latest |
+          grep "browser_download_url.*zip" |
+          cut -d : -f 2,3 |
+          tr -d \")
 
-        Invoke-WebRequest -Uri $GettextUrl -OutFile $GettextZip
-        Expand-Archive -Path $GettextZip -DestinationPath $GettextDir -Force
-
-        echo "$GettextDir\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+        curl -L "$LATEST_URL" -o "$RUNNER_TEMP/gettext.zip"
+        unzip "$RUNNER_TEMP/gettext.zip" -d "$RUNNER_TEMP/gettext"
+        echo "$RUNNER_TEMP/gettext/bin" >> $GITHUB_PATH
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v3
@@ -56,74 +59,52 @@ jobs:
     - name: Install cargo-llvm-cov
       uses: taiki-e/install-action@cargo-llvm-cov
 
-    - name: Install dependencies (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        python -m venv .venv
-        .venv/bin/python -m pip install --upgrade pip
-        .venv/bin/pip install -r requirements.txt
-        .venv/bin/pip install pytest-cov
-    - name: Install dependencies (Windows)
-      if: matrix.os == 'windows-latest'
-      shell: bash
-      run: |
-        python -m venv .venv
-        .venv/Scripts/python -m pip install --upgrade pip
-        .venv/Scripts/pip install -r requirements.txt
-        .venv/Scripts/pip install pytest-cov
-    - name: Install Django Rusty Templates (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
-        source llvm-cov-env.sh
-        .venv/bin/maturin develop
-    - name: Install Django Rusty Templates (Windows)
-      if: runner.os == 'Windows'
-      shell: bash
-      run: |
-        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
-        source llvm-cov-env.sh
-        .venv/Scripts/maturin develop
-    - name: Build translation files (Unix)
-      if: matrix.os != 'windows-latest'
-      run: .venv/bin/python -m django compilemessages
-    - name: Build translation files (Windows)
-      if: matrix.os == 'windows-latest'
-      run: .venv/Scripts/python -m django compilemessages
-    - name: Lint test files (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        .venv/bin/ruff check
-    - name: Lint test files (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        .venv/Scripts/ruff check
-    - name: Test with pytest (Unix)
-      if: matrix.os != 'windows-latest'
-      run: |
-        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
-        source llvm-cov-env.sh
-        .venv/bin/pytest --cov --cov-report=xml
-    - name: Test with pytest (Windows)
-      if: runner.os == 'Windows'
-      shell: bash
-      run: |
-        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
-        source llvm-cov-env.sh
-        .venv/Scripts/pytest --cov --cov-report=xml
-    - name: Get rust coverage report (Unix)
+    - name: Create and activate virtual environment (Unix)
       if: runner.os != 'Windows'
       run: |
+        python -m venv .venv
+        echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV
+        echo "$(pwd)/.venv/Scripts" >> $GITHUB_PATH
+
+    - name: Create and activate virtual environment (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        python -m venv .venv
+        echo "VIRTUAL_ENV=$(pwd)/.venv" >> $GITHUB_ENV
+        echo "$(pwd)/.venv/Scripts" >> $GITHUB_PATH
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -r requirements.txt
+        python -m pip install pytest-cov
+
+    - name: Install Django Rusty Templates
+      run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
-        cargo llvm-cov report --codecov --output-path codecov.json
-    - name: Get rust coverage report (Windows)
-      if: runner.os == 'Windows'
-      shell: bash
+        maturin develop
+
+    - name: Build translation files
+      run: |
+        python -m django compilemessages
+
+    - name: Lint test files
+      run: |
+        ruff check
+
+    - name: Test with pytest
+      run: |
+        cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
+        source llvm-cov-env.sh
+        pytest --cov --cov-report=xml
+
+    - name: Get rust coverage report
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
         source llvm-cov-env.sh
         cargo llvm-cov report --codecov --output-path codecov.json
+
     - name: Upload to codecov
       uses: codecov/codecov-action@v5
       with:
