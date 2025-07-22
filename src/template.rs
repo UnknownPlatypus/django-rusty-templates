@@ -98,18 +98,26 @@ pub mod django_rusty_templates {
 
     #[pyclass]
     pub struct Engine {
+        #[allow(dead_code)]
         dirs: Vec<PathBuf>,
+        #[allow(dead_code)]
         app_dirs: bool,
+        #[allow(dead_code)]
         context_processors: Vec<String>,
+        #[allow(dead_code)]
         debug: bool,
+        #[allow(dead_code)]
         string_if_invalid: String,
+        #[allow(dead_code)]
         encoding: &'static Encoding,
+        #[allow(dead_code)]
         builtins: Vec<String>,
         template_loaders: Vec<Loader>,
         data: EngineData,
     }
 
     impl Engine {
+        #[allow(dead_code)]
         fn find_template_loader<'py>(
             _py: Python<'py>,
             _loader: &str,

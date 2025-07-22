@@ -186,6 +186,7 @@ pub struct LocMemLoader {
 }
 
 impl LocMemLoader {
+    #[allow(dead_code)]
     pub fn new(templates: HashMap<String, String>) -> Self {
         Self { templates }
     }
@@ -231,7 +232,9 @@ pub enum Loader {
     FileSystem(FileSystemLoader),
     AppDirs(AppDirsLoader),
     Cached(CachedLoader),
+    #[allow(dead_code)]
     LocMem(LocMemLoader),
+    #[allow(dead_code)]
     External(ExternalLoader),
 }
 
