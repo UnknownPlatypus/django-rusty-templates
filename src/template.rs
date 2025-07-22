@@ -314,18 +314,14 @@ pub mod django_rusty_templates {
                     PyBool::new(py, false).to_owned().into(),
                 ),
             ]);
-            let context = match context {
-                Some(context) => {
-                    let new_context: HashMap<_, _> = context.extract()?;
-                    base_context.extend(new_context);
-                    base_context
-                }
-                None => base_context,
+            if let Some(context) = context {
+                let new_context: HashMap<_, _> = context.extract()?;
+                base_context.extend(new_context);
             };
             let request = request.map(|request| request.unbind());
             let mut context = Context {
                 request,
-                context,
+                context: base_context,
                 autoescape: self.autoescape,
             };
             self._render(py, &mut context)
