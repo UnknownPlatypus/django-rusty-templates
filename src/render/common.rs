@@ -123,7 +123,7 @@ impl Resolve for Argument {
                             .iter()
                             .map(|(k, v)| (k, v.bind(py)))
                             .collect();
-                        let object = format!("{:?}", context);
+                        let object = format!("{context:?}");
                         return Err(RenderError::ArgumentDoesNotExist {
                             key,
                             object,

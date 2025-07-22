@@ -86,10 +86,8 @@ pub mod django_rusty_templates {
             {
                 Ok(library) => library,
                 Err(_) => {
-                    let error = format!(
-                        "Module '{}' does not have a variable named 'register'",
-                        path
-                    );
+                    let error =
+                        format!("Module '{path}' does not have a variable named 'register'");
                     return Err(InvalidTemplateLibrary::new_err(error));
                 }
             };

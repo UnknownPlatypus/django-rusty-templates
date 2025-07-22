@@ -362,7 +362,7 @@ mod tests {
                 if let Some(Ok(cached_template)) = cache.get(key) {
                     assert_eq!(cached_template.filename.as_ref().unwrap(), expected_path);
                 } else {
-                    panic!("Expected '{}' to be in cache.", key);
+                    panic!("Expected '{key}' to be in cache.");
                 }
             };
 
