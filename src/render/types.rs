@@ -111,10 +111,7 @@ impl<'t, 'py> Content<'t, 'py> {
     pub fn to_bigint(&self) -> Option<BigInt> {
         match self {
             Self::Int(left) => Some(left.clone()),
-            Self::String(left) => match left.as_raw().parse::<BigInt>() {
-                Ok(left) => Some(left),
-                Err(_) => None,
-            },
+            Self::String(left) => left.as_raw().parse::<BigInt>().ok(),
             Self::Float(left) => left.trunc().to_bigint(),
             Self::Py(left) => match left.extract::<BigInt>() {
                 Ok(left) => Some(left),
