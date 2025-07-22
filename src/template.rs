@@ -142,7 +142,7 @@ pub mod django_rusty_templates {
             string_if_invalid: String,
             file_charset: String,
             libraries: Option<Bound<'_, PyAny>>,
-            builtins: Option<Bound<'_, PyAny>>,
+            #[allow(unused_variables)] builtins: Option<Bound<'_, PyAny>>,
             autoescape: bool,
         ) -> PyResult<Self> {
             let dirs = match dirs {
