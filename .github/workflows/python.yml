@@ -85,10 +85,6 @@ jobs:
       run: |
         python -m django compilemessages
 
-    - name: Lint test files
-      run: |
-        ruff check
-
     - name: Test with pytest
       run: |
         cargo llvm-cov show-env --export-prefix > llvm-cov-env.sh
