@@ -317,7 +317,7 @@ pub mod django_rusty_templates {
             let context = match context {
                 Some(context) => {
                     let new_context: HashMap<_, _> = context.extract()?;
-                    base_context.extend(new_context.into_iter());
+                    base_context.extend(new_context);
                     base_context
                 }
                 None => base_context,
