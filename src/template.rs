@@ -86,10 +86,8 @@ pub mod django_rusty_templates {
             {
                 Ok(library) => library,
                 Err(_) => {
-                    let error = format!(
-                        "Module '{}' does not have a variable named 'register'",
-                        path
-                    );
+                    let error =
+                        format!("Module '{path}' does not have a variable named 'register'");
                     return Err(InvalidTemplateLibrary::new_err(error));
                 }
             };
@@ -100,18 +98,26 @@ pub mod django_rusty_templates {
 
     #[pyclass]
     pub struct Engine {
+        #[allow(dead_code)]
         dirs: Vec<PathBuf>,
+        #[allow(dead_code)]
         app_dirs: bool,
+        #[allow(dead_code)]
         context_processors: Vec<String>,
+        #[allow(dead_code)]
         debug: bool,
+        #[allow(dead_code)]
         string_if_invalid: String,
+        #[allow(dead_code)]
         encoding: &'static Encoding,
+        #[allow(dead_code)]
         builtins: Vec<String>,
         template_loaders: Vec<Loader>,
         data: EngineData,
     }
 
     impl Engine {
+        #[allow(dead_code)]
         fn find_template_loader<'py>(
             _py: Python<'py>,
             _loader: &str,
@@ -136,7 +142,7 @@ pub mod django_rusty_templates {
             string_if_invalid: String,
             file_charset: String,
             libraries: Option<Bound<'_, PyAny>>,
-            builtins: Option<Bound<'_, PyAny>>,
+            #[allow(unused_variables)] builtins: Option<Bound<'_, PyAny>>,
             autoescape: bool,
         ) -> PyResult<Self> {
             let dirs = match dirs {
@@ -308,18 +314,14 @@ pub mod django_rusty_templates {
                     PyBool::new(py, false).to_owned().into(),
                 ),
             ]);
-            let context = match context {
-                Some(context) => {
-                    let new_context: HashMap<_, _> = context.extract()?;
-                    base_context.extend(new_context.into_iter());
-                    base_context
-                }
-                None => base_context,
+            if let Some(context) = context {
+                let new_context: HashMap<_, _> = context.extract()?;
+                base_context.extend(new_context);
             };
             let request = request.map(|request| request.unbind());
             let mut context = Context {
                 request,
-                context,
+                context: base_context,
                 autoescape: self.autoescape,
             };
             self._render(py, &mut context)

@@ -186,6 +186,7 @@ pub struct LocMemLoader {
 }
 
 impl LocMemLoader {
+    #[allow(dead_code)]
     pub fn new(templates: HashMap<String, String>) -> Self {
         Self { templates }
     }
@@ -231,7 +232,9 @@ pub enum Loader {
     FileSystem(FileSystemLoader),
     AppDirs(AppDirsLoader),
     Cached(CachedLoader),
+    #[allow(dead_code)]
     LocMem(LocMemLoader),
+    #[allow(dead_code)]
     External(ExternalLoader),
 }
 
@@ -362,7 +365,7 @@ mod tests {
                 if let Some(Ok(cached_template)) = cache.get(key) {
                     assert_eq!(cached_template.filename.as_ref().unwrap(), expected_path);
                 } else {
-                    panic!("Expected '{}' to be in cache.", key);
+                    panic!("Expected '{key}' to be in cache.");
                 }
             };
 

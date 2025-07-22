@@ -62,7 +62,7 @@ impl Resolve for Filter {
         failures: ResolveFailures,
     ) -> ResolveResult<'t, 'py> {
         let left = self.left.resolve(py, template, context, failures)?;
-        let result = match &self.filter {
+        match &self.filter {
             FilterType::Add(filter) => filter.resolve(left, py, template, context),
             FilterType::AddSlashes(filter) => filter.resolve(left, py, template, context),
             FilterType::Capfirst(filter) => filter.resolve(left, py, template, context),
@@ -73,8 +73,7 @@ impl Resolve for Filter {
             FilterType::Safe(filter) => filter.resolve(left, py, template, context),
             FilterType::Slugify(filter) => filter.resolve(left, py, template, context),
             FilterType::Upper(filter) => filter.resolve(left, py, template, context),
-        };
-        result
+        }
     }
 }
 

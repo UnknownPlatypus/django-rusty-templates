@@ -568,6 +568,7 @@ impl Evaluate for IfCondition {
                     (Resolved::Content(l), Resolved::Content(r)) => l.lt(&r),
                     (Resolved::Evaluate(l), Resolved::Content(r)) => r.gt(&l),
                     (Resolved::Content(l), Resolved::Evaluate(r)) => l.lt(&r),
+                    #[allow(clippy::bool_comparison)]
                     (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l < r,
                 }
             }
@@ -580,6 +581,7 @@ impl Evaluate for IfCondition {
                     (Resolved::Content(l), Resolved::Content(r)) => l.gt(&r),
                     (Resolved::Evaluate(l), Resolved::Content(r)) => r.lt(&l),
                     (Resolved::Content(l), Resolved::Evaluate(r)) => l.gt(&r),
+                    #[allow(clippy::bool_comparison)]
                     (Resolved::Evaluate(l), Resolved::Evaluate(r)) => l > r,
                 }
             }
