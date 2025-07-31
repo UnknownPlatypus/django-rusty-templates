@@ -188,6 +188,8 @@ impl Render for TokenTree {
         match self {
             Self::Text(text) => text.render(py, template, context),
             Self::TranslatedText(_text) => todo!(),
+            Self::Int(n) => Ok(n.to_string().into()),
+            Self::Float(f) => Ok(f.to_string().into()),
             Self::Tag(tag) => tag.render(py, template, context),
             Self::Variable(variable) => variable.render(py, template, context),
             Self::Filter(filter) => filter.render(py, template, context),

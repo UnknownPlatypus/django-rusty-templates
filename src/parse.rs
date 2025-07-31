@@ -30,7 +30,8 @@ use crate::lex::load::{LoadLexer, LoadToken};
 use crate::lex::tag::{TagLexerError, TagParts, lex_tag};
 use crate::lex::url::{UrlLexer, UrlLexerError, UrlToken, UrlTokenType};
 use crate::lex::variable::{
-    Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError, lex_variable,
+    Argument as ArgumentToken, ArgumentType as ArgumentTokenType, VariableLexerError,
+    VariableTokenType, lex_variable,
 };
 use crate::types::Argument;
 use crate::types::ArgumentType;
@@ -371,6 +372,8 @@ impl EndTag {
 pub enum TokenTree {
     Text(Text),
     TranslatedText(Text),
+    Int(BigInt),
+    Float(f64),
     Tag(Tag),
     Variable(Variable),
     Filter(Box<Filter>),
@@ -383,8 +386,8 @@ impl From<TagElement> for TokenTree {
             TagElement::TranslatedText(text) => Self::TranslatedText(text),
             TagElement::Variable(variable) => Self::Variable(variable),
             TagElement::Filter(filter) => Self::Filter(filter),
-            TagElement::Int(_) => todo!(),
-            TagElement::Float(_) => todo!(),
+            TagElement::Int(n) => Self::Int(n),
+            TagElement::Float(f) => Self::Float(f),
         }
     }
 }
@@ -699,7 +702,11 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             None => return Err(ParseError::EmptyVariable { at: at.into() }),
             Some(t) => t,
         };
-        let mut var = TagElement::Variable(Variable::new(variable_token.at));
+        let mut var = match variable_token.token_type {
+            VariableTokenType::Variable => TagElement::Variable(Variable::new(variable_token.at)),
+            VariableTokenType::Int(n) => TagElement::Int(n),
+            VariableTokenType::Float(f) => TagElement::Float(f),
+        };
         for filter_token in filter_lexer {
             let filter_token = filter_token?;
             let argument = match filter_token.argument {
