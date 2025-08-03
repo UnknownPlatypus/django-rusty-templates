@@ -1,7 +1,9 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 
+use pyo3::intern;
 use pyo3::prelude::*;
+use pyo3::types::PyString;
 
 use super::types::{Content, ContentString, Context};
 use super::{Evaluate, Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
@@ -13,6 +15,27 @@ use crate::types::TemplateString;
 use crate::types::Text;
 use crate::types::TranslatedText;
 use crate::types::Variable;
+
+fn has_truthy_attr(variable: &Bound<'_, PyAny>, attr: &Bound<'_, PyString>) -> Result<bool, PyErr> {
+    match variable.getattr(attr) {
+        Ok(attr) if attr.is_truthy()? => Ok(true),
+        _ => Ok(false),
+    }
+}
+
+fn resolve_callable(variable: Bound<'_, PyAny>) -> Result<Option<Bound<'_, PyAny>>, PyErr> {
+    if !variable.is_callable() {
+        return Ok(Some(variable));
+    }
+    let py = variable.py();
+    if has_truthy_attr(&variable, intern!(py, "do_not_call_in_templates"))? {
+        return Ok(Some(variable));
+    }
+    if has_truthy_attr(&variable, intern!(py, "alters_data"))? {
+        return Ok(None);
+    }
+    Ok(Some(variable.call0()?))
+}
 
 impl Resolve for Variable {
     fn resolve<'t, 'py>(
@@ -26,6 +49,10 @@ impl Resolve for Variable {
         let (first, mut object_at) = parts.next().expect("Variable names cannot be empty");
         let mut variable = match context.context.get(first) {
             Some(variable) => variable.bind(py).clone(),
+            None => return Ok(None),
+        };
+        variable = match resolve_callable(variable)? {
+            Some(variable) => variable,
             None => return Ok(None),
         };
 
@@ -58,6 +85,10 @@ impl Resolve for Variable {
                         }
                     }
                 },
+            };
+            variable = match resolve_callable(variable)? {
+                Some(variable) => variable,
+                None => return Ok(None),
             };
             object_at.1 += key_at.1 + 1;
         }
@@ -188,6 +219,8 @@ impl Render for TokenTree {
         match self {
             Self::Text(text) => text.render(py, template, context),
             Self::TranslatedText(_text) => todo!(),
+            Self::Int(n) => Ok(n.to_string().into()),
+            Self::Float(f) => Ok(f.to_string().into()),
             Self::Tag(tag) => tag.render(py, template, context),
             Self::Variable(variable) => variable.render(py, template, context),
             Self::Filter(filter) => filter.render(py, template, context),
