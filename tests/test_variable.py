@@ -101,6 +101,28 @@ def test_render_attribute_negative_int():
     assert str(exc_info.value) == expected
 
 
+def test_render_invalid_variable():
+    template = "{{ & }}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert str(exc_info.value) == "Could not parse the remainder: '&' from '&'"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {{ & }}
+   ·    ┬
+   ·    ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
 def test_render_variable_callable():
     template = "{{ foo }}"
     django_template = engines["django"].from_string(template)
