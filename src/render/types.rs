@@ -16,6 +16,16 @@ pub struct Context {
     pub autoescape: bool,
 }
 
+impl Context {
+    pub fn new(context: HashMap<String, Py<PyAny>>, request: Option<Py<PyAny>>, autoescape: bool) -> Self {
+        Self {
+            request,
+            context,
+            autoescape,
+        }
+    }
+}
+
 #[derive(Debug, IntoPyObject)]
 pub enum ContentString<'t> {
     String(Cow<'t, str>),

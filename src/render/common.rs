@@ -210,11 +210,7 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name }}");
             let variable = Variable::new((3, 4));
 
@@ -232,11 +228,7 @@ mod tests {
             let name = PyString::new(py, "Lily");
             data.set_item("name", name).unwrap();
             let context = HashMap::from([("data".to_string(), data.into_any().unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ data.name }}");
             let variable = Variable::new((3, 9));
 
@@ -253,11 +245,7 @@ mod tests {
             let name = PyString::new(py, "Lily");
             let names = PyList::new(py, [name]).unwrap();
             let context = HashMap::from([("names".to_string(), names.into_any().unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ names.0 }}");
             let variable = Variable::new((3, 7));
 
@@ -286,11 +274,7 @@ user = User('Lily')
             .unwrap();
 
             let context = locals.extract().unwrap();
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ user.name }}");
             let variable = Variable::new((3, 9));
 
@@ -306,11 +290,7 @@ user = User('Lily')
         Python::with_gil(|py| {
             let html = PyString::new(py, "<p>Hello World!</p>").into_any().unbind();
             let context = HashMap::from([("html".to_string(), html)]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: true,
-            };
+            let mut context = Context::new(context, None, true);
             let template = TemplateString("{{ html }}");
             let html = Variable::new((3, 4));
 

@@ -319,11 +319,7 @@ pub mod django_rusty_templates {
                 base_context.extend(new_context);
             };
             let request = request.map(|request| request.unbind());
-            let mut context = Context {
-                request,
-                context: base_context,
-                autoescape: self.autoescape,
-            };
+            let mut context = Context::new(base_context, request, self.autoescape);
             self._render(py, &mut context)
         }
     }

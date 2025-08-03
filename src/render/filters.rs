@@ -381,11 +381,7 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|default:'Bryony' }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -579,11 +575,7 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "'hello'").into_any();
             let context = HashMap::from([("quotes".to_string(), name.unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ quotes|addslashes }}");
             let variable = Variable::new((3, 6));
             let filter = Filter {
@@ -641,11 +633,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|default:'Bryony' }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -668,11 +656,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ count|default:12}}");
             let variable = Variable::new((3, 5));
             let filter = Filter {
@@ -695,11 +679,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ count|default:3.5}}");
             let variable = Variable::new((3, 5));
             let filter = Filter {
@@ -723,11 +703,7 @@ mod tests {
         Python::with_gil(|py| {
             let me = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("me".to_string(), me.unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|default:me}}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -751,11 +727,7 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|lower }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -775,11 +747,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|lower }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -799,11 +767,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|default:'Bryony'|lower }}");
             let variable = Variable::new((3, 4));
             let default = Filter {
@@ -832,11 +796,7 @@ mod tests {
         Python::with_gil(|py| {
             let name = PyString::new(py, "Foo").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|upper }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
@@ -856,11 +816,7 @@ mod tests {
 
         Python::with_gil(|py| {
             let context = HashMap::new();
-            let mut context = Context {
-                context,
-                request: None,
-                autoescape: false,
-            };
+            let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|upper }}");
             let variable = Variable::new((3, 4));
             let filter = Filter {
