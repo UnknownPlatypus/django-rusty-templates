@@ -236,6 +236,7 @@ impl ResolveFilter for CenterFilter {
                     return Err(err.into());
                 }
             },
+            Content::Bool(_) => todo!(),
         };
 
         if size <= content.len() {
@@ -302,6 +303,7 @@ impl ResolveFilter for EscapeFilter {
                         encode_quoted_attribute_to_string(&content, &mut encoded);
                         Cow::Owned(encoded)
                     }
+                    Content::Bool(_) => todo!(),
                 },
                 None => Cow::Borrowed(""),
             },
@@ -368,6 +370,7 @@ impl ResolveFilter for SafeFilter {
                         let content = object.str()?.extract::<String>()?;
                         Cow::Owned(content)
                     }
+                    Content::Bool(_) => todo!(),
                 },
                 None => Cow::Borrowed(""),
             },
@@ -416,6 +419,7 @@ impl ResolveFilter for SlugifyFilter {
                     Cow::Owned(content.to_string()),
                 ))),
                 Content::String(content) => Some(content.map_content(slugify)),
+                Content::Bool(_) => todo!(),
             },
             None => "".as_content(),
         };
