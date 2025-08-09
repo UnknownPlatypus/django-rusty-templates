@@ -6,7 +6,6 @@ pub mod django_rusty_templates {
     use std::path::PathBuf;
 
     use encoding_rs::Encoding;
-    use miette::SourceSpan;
     use pyo3::exceptions::{PyAttributeError, PyImportError, PyValueError};
     use pyo3::import_exception_bound;
     use pyo3::intern;
@@ -58,20 +57,16 @@ pub mod django_rusty_templates {
         }
     }
 
-    #[derive(Debug)]
-    struct InvalidArgumentInteger {
-        argument: String,
-        argument_at: SourceSpan,
-    }
-
-    impl From<InvalidArgumentInteger> for PyErr {
-        fn from(err: InvalidArgumentInteger) -> PyErr {
-            PyValueError::new_err(format!(
-                "Couldn't convert argument ({argument}) to integer",
-                argument = err.argument
-            ))
+    impl WithSourceCode for PyValueError {
+        fn with_source_code(
+            err: miette::Report,
+            source: impl miette::SourceCode + 'static,
+        ) -> PyErr {
+            let miette_err = err.with_source_code(source);
+            Self::new_err(format!("{miette_err:?}"))
         }
     }
+
     pub struct EngineData {
         autoescape: bool,
         libraries: HashMap<String, Py<PyAny>>,
@@ -317,15 +312,11 @@ pub mod django_rusty_templates {
                                     self.template.clone(),
                                 ));
                             }
-                            RenderError::InvalidArgumentInteger {
-                                argument,
-                                argument_at,
-                            } => {
-                                return Err(InvalidArgumentInteger {
-                                    argument,
-                                    argument_at,
-                                }
-                                .into());
+                            RenderError::InvalidArgumentInteger { .. } => {
+                                return Err(PyValueError::with_source_code(
+                                    err.into(),
+                                    self.template.clone(),
+                                ));
                             }
                         }
                     }

@@ -71,9 +71,15 @@ def test_argument_not_integer():
             {"foo": "test", "bar": "not an integer"}
         )
 
-    assert "Couldn't convert argument (not an integer) to integer" in str(
-        exc_info.value
-    )
+    expected = """\
+  × Couldn't convert argument (not an integer) to integer
+   ╭────
+ 1 │ {{ foo|center:bar }}
+   ·               ─┬─
+   ·                ╰── argument
+   ╰────
+"""
+    assert str(exc_info.value) == expected
 
 
 def test_center_argument_less_than_string_length(assert_render):
@@ -118,7 +124,15 @@ def test_center_argument_is_inf():
     with pytest.raises(ValueError) as exc_info:
         engines["rusty"].from_string(template).render({"foo": "test", "bar": 1.0e310})
 
-    assert "Couldn't convert argument (inf) to integer" in str(exc_info.value)
+    expected = """\
+  × Couldn't convert argument (inf) to integer
+   ╭────
+ 1 │ {{ foo|center:bar }}
+   ·               ─┬─
+   ·                ╰── argument
+   ╰────
+"""
+    assert str(exc_info.value) == expected
 
 
 def test_center_argument_is_negative_inf():
@@ -132,8 +146,15 @@ def test_center_argument_is_negative_inf():
     with pytest.raises(ValueError) as exc_info:
         engines["rusty"].from_string(template).render({"foo": "test", "bar": -1.0e310})
 
-    expected = "Couldn't convert argument (-inf) to integer"
-    assert expected in str(exc_info.value)
+    expected = """\
+  × Couldn't convert argument (-inf) to integer
+   ╭────
+ 1 │ {{ foo|center:bar }}
+   ·               ─┬─
+   ·                ╰── argument
+   ╰────
+"""
+    assert str(exc_info.value) == expected
 
 
 def test_center_argument_is_negative_integer_as_string(assert_render):
@@ -155,5 +176,12 @@ def test_center_argument_is_negative_float_as_string():
     with pytest.raises(ValueError) as exc_info:
         engines["rusty"].from_string(template).render({"foo": "test", "bar": "-5.5"})
 
-    expected = "Couldn't convert argument (-5.5) to integer"
-    assert expected in str(exc_info.value)
+    expected = """\
+  × Couldn't convert argument (-5.5) to integer
+   ╭────
+ 1 │ {{ foo|center:bar }}
+   ·               ─┬─
+   ·                ╰── argument
+   ╰────
+"""
+    assert str(exc_info.value) == expected
