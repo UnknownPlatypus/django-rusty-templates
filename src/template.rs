@@ -26,7 +26,14 @@ pub mod django_rusty_templates {
     import_exception_bound!(django.template.library, InvalidTemplateLibrary);
     import_exception_bound!(django.urls, NoReverseMatch);
 
-    impl TemplateSyntaxError {
+    trait WithSourceCode {
+        fn with_source_code(
+            err: miette::Report,
+            source: impl miette::SourceCode + 'static,
+        ) -> PyErr;
+    }
+
+    impl WithSourceCode for TemplateSyntaxError {
         fn with_source_code(
             err: miette::Report,
             source: impl miette::SourceCode + 'static,
@@ -36,7 +43,7 @@ pub mod django_rusty_templates {
         }
     }
 
-    impl VariableDoesNotExist {
+    impl WithSourceCode for VariableDoesNotExist {
         fn with_source_code(
             err: miette::Report,
             source: impl miette::SourceCode + 'static,
