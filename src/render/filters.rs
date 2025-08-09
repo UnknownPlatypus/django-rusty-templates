@@ -266,7 +266,7 @@ impl ResolveFilter for CenterFilter {
         }
         if size % 2 == 0 && content.len() % 2 != 0 {
             // If the size is even and the content length is odd, we need to adjust the centering
-            right = (size - content.len() + 1) / 2;
+            right = (size - content.len()).div_ceil(2);
             left = size - content.len() - right;
         } else {
             right = (size - content.len()) / 2;

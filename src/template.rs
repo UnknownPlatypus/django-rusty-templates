@@ -7,7 +7,7 @@ pub mod django_rusty_templates {
 
     use encoding_rs::Encoding;
     use miette::SourceSpan;
-    use pyo3::exceptions::{PyAttributeError, PyImportError, PyTypeError, PyValueError};
+    use pyo3::exceptions::{PyAttributeError, PyImportError, PyValueError};
     use pyo3::import_exception_bound;
     use pyo3::intern;
     use pyo3::prelude::*;
@@ -310,18 +310,8 @@ pub mod django_rusty_templates {
                     Err(err) => {
                         let err = err.try_into_render_error()?;
                         match err {
-                            RenderError::VariableDoesNotExist {
-                                ref key,
-                                ref object,
-                                key_at,
-                                object_at,
-                            }
-                            | RenderError::ArgumentDoesNotExist {
-                                ref key,
-                                ref object,
-                                key_at,
-                                object_at,
-                            } => {
+                            RenderError::VariableDoesNotExist { .. }
+                            | RenderError::ArgumentDoesNotExist { .. } => {
                                 return Err(VariableDoesNotExist::with_source_code(
                                     err.into(),
                                     self.template.clone(),
@@ -332,8 +322,8 @@ pub mod django_rusty_templates {
                                 argument_at,
                             } => {
                                 return Err(InvalidArgumentInteger {
-                                    argument: argument,
-                                    argument_at: argument_at,
+                                    argument,
+                                    argument_at,
                                 }
                                 .into());
                             }
