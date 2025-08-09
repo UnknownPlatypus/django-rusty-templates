@@ -21,6 +21,24 @@ impl PyRenderError {
 
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
 pub enum RenderError {
+    #[error("Couldn't convert argument ({argument}) to integer")]
+    InvalidArgumentInteger {
+        argument: String,
+        #[label("argument")]
+        argument_at: SourceSpan,
+    },
+    #[error("Couldn't convert float ({argument}) to integer")]
+    InvalidArgumentFloat {
+        argument: String,
+        #[label("here")]
+        argument_at: SourceSpan,
+    },
+    #[error("Integer {argument} is too large")]
+    OverflowError {
+        argument: String,
+        #[label("here")]
+        argument_at: SourceSpan,
+    },
     #[error("Failed lookup for key [{key}] in {object}")]
     ArgumentDoesNotExist {
         key: String,

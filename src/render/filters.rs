@@ -2,13 +2,16 @@ use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use html_escape::encode_quoted_attribute_to_string;
+use num_bigint::{BigInt, ToBigInt};
+use num_traits::ToPrimitive;
 use pyo3::prelude::*;
 use pyo3::sync::GILOnceCell;
 use pyo3::types::PyType;
 
+use crate::error::RenderError;
 use crate::filters::{
-    AddFilter, AddSlashesFilter, CapfirstFilter, DefaultFilter, EscapeFilter, ExternalFilter,
-    FilterType, LowerFilter, SafeFilter, SlugifyFilter, UpperFilter,
+    AddFilter, AddSlashesFilter, CapfirstFilter, CenterFilter, DefaultFilter, EscapeFilter,
+    ExternalFilter, FilterType, LowerFilter, SafeFilter, SlugifyFilter, UpperFilter,
 };
 use crate::parse::Filter;
 use crate::render::types::{Content, ContentString, Context};
@@ -66,6 +69,7 @@ impl Resolve for Filter {
             FilterType::Add(filter) => filter.resolve(left, py, template, context),
             FilterType::AddSlashes(filter) => filter.resolve(left, py, template, context),
             FilterType::Capfirst(filter) => filter.resolve(left, py, template, context),
+            FilterType::Center(filter) => filter.resolve(left, py, template, context),
             FilterType::Default(filter) => filter.resolve(left, py, template, context),
             FilterType::Escape(filter) => filter.resolve(left, py, template, context),
             FilterType::External(filter) => filter.resolve(left, py, template, context),
@@ -160,6 +164,98 @@ impl ResolveFilter for CapfirstFilter {
             None => "".as_content(),
         };
         Ok(content)
+    }
+}
+
+fn resolve_bigint(bigint: BigInt, at: (usize, usize)) -> Result<usize, RenderError> {
+    match bigint.to_isize() {
+        Some(n) => Ok(n.max(0) as usize),
+        None => Err(RenderError::OverflowError {
+            argument: bigint.to_string(),
+            argument_at: at.into(),
+        }),
+    }
+}
+
+impl ResolveFilter for CenterFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        let left: usize;
+        let right: usize;
+        let content = match variable {
+            Some(content) => content.render(context)?,
+            None => return Ok("".as_content()),
+        };
+        let arg = self
+            .argument
+            .resolve(py, template, context, ResolveFailures::Raise)?
+            .expect("missing argument in context should already have raised");
+
+        let size = match arg {
+            Content::Int(left) => resolve_bigint(left, self.argument.at)?,
+            Content::String(left) => match left.as_raw().parse::<BigInt>() {
+                Ok(n) => resolve_bigint(n, self.argument.at)?,
+                Err(_) => {
+                    return Err(RenderError::InvalidArgumentInteger {
+                        argument: format!("'{}'", left.as_raw()),
+                        argument_at: self.argument.at.into(),
+                    }
+                    .into());
+                }
+            },
+            Content::Float(left) => match left.trunc().to_bigint() {
+                Some(n) => resolve_bigint(n, self.argument.at)?,
+                None => {
+                    return Err(RenderError::InvalidArgumentFloat {
+                        argument: left.to_string(),
+                        argument_at: self.argument.at.into(),
+                    }
+                    .into());
+                }
+            },
+            Content::Py(left) => match left.extract::<BigInt>() {
+                Ok(left) => resolve_bigint(left, self.argument.at)?,
+                Err(_) => {
+                    let argument = left.to_string();
+                    let argument_at = self.argument.at.into();
+                    let err = match left.extract::<f64>() {
+                        Ok(_) => RenderError::InvalidArgumentFloat {
+                            argument,
+                            argument_at,
+                        },
+                        Err(_) => RenderError::InvalidArgumentInteger {
+                            argument,
+                            argument_at,
+                        },
+                    };
+                    return Err(err.into());
+                }
+            },
+        };
+
+        if size <= content.len() {
+            return Ok(Some(Content::String(ContentString::String(content))));
+        }
+        if size % 2 == 0 && content.len() % 2 != 0 {
+            // If the size is even and the content length is odd, we need to adjust the centering
+            right = (size - content.len()).div_ceil(2);
+            left = size - content.len() - right;
+        } else {
+            right = (size - content.len()) / 2;
+            left = size - content.len() - right;
+        }
+        let mut centered = String::with_capacity(size);
+
+        centered.push_str(&" ".repeat(left));
+        centered.push_str(&content);
+        centered.push_str(&" ".repeat(right));
+
+        Ok(centered.into_content())
     }
 }
 
@@ -624,6 +720,86 @@ mod tests {
 
             let error_string = format!("{error}");
             assert!(error_string.contains("capfirst filter does not take an argument"));
+        })
+    }
+
+    #[test]
+    fn test_render_filter_center() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|center:'11' }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "hello").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "   hello   ");
+
+            let context = PyDict::new(py);
+            context.set_item("var", "django").unwrap();
+            let template_string = "{{ var|center:'15' }}".to_string();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "     django    ");
+
+            let context = PyDict::new(py);
+            context.set_item("var", "django").unwrap();
+            let template_string = "{{ var|center:1 }}".to_string();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "django");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_center_no_argument_return_err() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|center }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "hello").unwrap();
+            let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
+
+            let error_string = format!("{error}");
+
+            assert!(error_string.contains("Expected an argument"));
+        })
+    }
+
+    #[test]
+    fn test_render_filter_center_no_variable() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|center:'11' }}".to_string();
+            let context = PyDict::new(py);
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "");
+        })
+    }
+
+    #[test]
+    fn test_render_filter_center_on_0() {
+        pyo3::prepare_freethreaded_python();
+
+        Python::with_gil(|py| {
+            let engine = EngineData::empty();
+            let template_string = "{{ var|center:0 }}".to_string();
+            let context = PyDict::new(py);
+            context.set_item("var", "hello").unwrap();
+            let template = Template::new_from_string(py, template_string, &engine).unwrap();
+            let result = template.render(py, Some(context), None).unwrap();
+
+            assert_eq!(result, "hello");
         })
     }
 
