@@ -110,7 +110,7 @@ pub enum VariableLexerError {
 pub fn lex_variable(
     variable: &str,
     start: usize,
-) -> Result<Option<(VariableToken, FilterLexer)>, VariableLexerError> {
+) -> Result<Option<(VariableToken, FilterLexer<'_>)>, VariableLexerError> {
     let rest = variable.trim_start();
     if rest.trim().is_empty() {
         return Ok(None);
