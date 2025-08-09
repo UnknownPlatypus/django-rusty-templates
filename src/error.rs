@@ -1,5 +1,6 @@
 use miette::{Diagnostic, SourceSpan};
 use pyo3::prelude::*;
+use pyo3::types::PyInt;
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -21,6 +22,12 @@ impl PyRenderError {
 
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
 pub enum RenderError {
+    #[error("Couldn't convert argument ({argument}) to integer")]
+    InvalidArgumentInteger {
+        argument: String,
+        #[label("argument")]
+        argument_at: SourceSpan,
+    },
     #[error("Failed lookup for key [{key}] in {object}")]
     ArgumentDoesNotExist {
         key: String,
