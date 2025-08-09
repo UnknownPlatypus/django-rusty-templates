@@ -328,7 +328,8 @@ pub mod django_rusty_templates {
                                     self.template.clone(),
                                 ));
                             }
-                            RenderError::OverflowError { .. } => {
+                            RenderError::OverflowError { .. }
+                            | RenderError::InvalidArgumentFloat { .. } => {
                                 return Err(PyOverflowError::with_source_code(
                                     err.into(),
                                     self.template.clone(),

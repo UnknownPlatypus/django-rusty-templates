@@ -211,7 +211,7 @@ impl ResolveFilter for CenterFilter {
             Content::Float(left) => match left.trunc().to_bigint() {
                 Some(n) => resolve_bigint(n, self.argument.at)?,
                 None => {
-                    return Err(RenderError::InvalidArgumentInteger {
+                    return Err(RenderError::InvalidArgumentFloat {
                         argument: left.to_string(),
                         argument_at: self.argument.at.into(),
                     }
@@ -221,11 +221,19 @@ impl ResolveFilter for CenterFilter {
             Content::Py(left) => match left.extract::<BigInt>() {
                 Ok(left) => resolve_bigint(left, self.argument.at)?,
                 Err(_) => {
-                    return Err(RenderError::InvalidArgumentInteger {
-                        argument: left.to_string(),
-                        argument_at: self.argument.at.into(),
-                    }
-                    .into());
+                    let argument = left.to_string();
+                    let argument_at = self.argument.at.into();
+                    let err = match left.extract::<f64>() {
+                        Ok(_) => RenderError::InvalidArgumentFloat {
+                            argument,
+                            argument_at,
+                        },
+                        Err(_) => RenderError::InvalidArgumentInteger {
+                            argument,
+                            argument_at,
+                        },
+                    };
+                    return Err(err.into());
                 }
             },
         };

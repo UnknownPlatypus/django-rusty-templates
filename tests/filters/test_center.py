@@ -114,49 +114,6 @@ def test_center_argument_negative_float(assert_render):
     assert_render(template, context, expected)
 
 
-def test_center_argument_is_inf():
-    template = "{{ foo|center:bar }}"
-    with pytest.raises(OverflowError) as exc_info:
-        engines["django"].from_string(template).render({"foo": "test", "bar": 1.0e310})
-
-    assert str(exc_info.value) == "cannot convert float infinity to integer"
-
-    with pytest.raises(ValueError) as exc_info:
-        engines["rusty"].from_string(template).render({"foo": "test", "bar": 1.0e310})
-
-    expected = """\
-  × Couldn't convert argument (inf) to integer
-   ╭────
- 1 │ {{ foo|center:bar }}
-   ·               ─┬─
-   ·                ╰── argument
-   ╰────
-"""
-    assert str(exc_info.value) == expected
-
-
-def test_center_argument_is_negative_inf():
-    template = "{{ foo|center:bar }}"
-    expected = "float is infinite"
-    with pytest.raises(OverflowError) as exc_info:
-        engines["django"].from_string(template).render({"foo": "test", "bar": -1.0e310})
-
-    assert str(exc_info.value) == "cannot convert float infinity to integer"
-
-    with pytest.raises(ValueError) as exc_info:
-        engines["rusty"].from_string(template).render({"foo": "test", "bar": -1.0e310})
-
-    expected = """\
-  × Couldn't convert argument (-inf) to integer
-   ╭────
- 1 │ {{ foo|center:bar }}
-   ·               ─┬─
-   ·                ╰── argument
-   ╰────
-"""
-    assert str(exc_info.value) == expected
-
-
 def test_center_argument_is_negative_integer_as_string(assert_render):
     template = "{{ foo|center:'-5' }}"
     context = {"foo": "test"}
@@ -382,6 +339,94 @@ def test_center_argument_float_smaller_than_isize_min():
  1 │ {{ foo|center:-9223372036854776833.0 }}
    ·               ───────────┬──────────
    ·                          ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_float_inf():
+    template = "{{ foo|center:1e310 }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "cannot convert float infinity to integer"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Couldn't convert float (inf) to integer
+   ╭────
+ 1 │ {{ foo|center:1e310 }}
+   ·               ──┬──
+   ·                 ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_float_negative_inf():
+    template = "{{ foo|center:-1e310 }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "cannot convert float infinity to integer"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Couldn't convert float (-inf) to integer
+   ╭────
+ 1 │ {{ foo|center:-1e310 }}
+   ·               ───┬──
+   ·                  ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_float_inf_python():
+    template = "{{ foo|center:width }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test", "width": float("inf")})
+
+    assert str(exc_info.value) == "cannot convert float infinity to integer"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test", "width": float("inf")})
+
+    expected = """\
+  × Couldn't convert float (inf) to integer
+   ╭────
+ 1 │ {{ foo|center:width }}
+   ·               ──┬──
+   ·                 ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_float_negative_inf_python():
+    template = "{{ foo|center:width }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test", "width": float("-inf")})
+
+    assert str(exc_info.value) == "cannot convert float infinity to integer"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test", "width": float("-inf")})
+
+    expected = """\
+  × Couldn't convert float (-inf) to integer
+   ╭────
+ 1 │ {{ foo|center:width }}
+   ·               ──┬──
+   ·                 ╰── here
    ╰────
 """
     assert str(exc_info.value) == expected
