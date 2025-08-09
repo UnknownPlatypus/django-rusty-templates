@@ -17,7 +17,11 @@ pub struct Context {
 }
 
 impl Context {
-    pub fn new(context: HashMap<String, Py<PyAny>>, request: Option<Py<PyAny>>, autoescape: bool) -> Self {
+    pub fn new(
+        context: HashMap<String, Py<PyAny>>,
+        request: Option<Py<PyAny>>,
+        autoescape: bool,
+    ) -> Self {
         Self {
             request,
             context,
