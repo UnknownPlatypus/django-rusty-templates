@@ -776,30 +776,30 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
     ) -> Result<TokenTree, PyParseError> {
         let tokens: Vec<_> = LoadLexer::new(self.template, parts).collect();
         let mut rev = tokens.iter().rev();
-        if let (Some(last), Some(prev)) = (rev.next(), rev.next()) {
-            if self.template.content(prev.at) == "from" {
-                let library = last.load_library(self.py, self.libraries, self.template)?;
-                let filters = self.get_filters(library)?;
-                let tags = self.get_tags(library)?;
-                for token in rev {
-                    let content = self.template.content(token.at);
-                    if let Some(filter) = filters.get(content) {
-                        self.external_filters
-                            .insert(content.to_string(), filter.clone());
-                    } else if let Some(tag) = tags.get(content) {
-                        self.external_tags.insert(content.to_string(), tag.clone());
-                    } else {
-                        return Err(ParseError::MissingFilterTag {
-                            library: self.template.content(last.at).to_string(),
-                            library_at: last.at.into(),
-                            tag: content.to_string(),
-                            tag_at: token.at.into(),
-                        }
-                        .into());
+        if let (Some(last), Some(prev)) = (rev.next(), rev.next())
+            && self.template.content(prev.at) == "from"
+        {
+            let library = last.load_library(self.py, self.libraries, self.template)?;
+            let filters = self.get_filters(library)?;
+            let tags = self.get_tags(library)?;
+            for token in rev {
+                let content = self.template.content(token.at);
+                if let Some(filter) = filters.get(content) {
+                    self.external_filters
+                        .insert(content.to_string(), filter.clone());
+                } else if let Some(tag) = tags.get(content) {
+                    self.external_tags.insert(content.to_string(), tag.clone());
+                } else {
+                    return Err(ParseError::MissingFilterTag {
+                        library: self.template.content(last.at).to_string(),
+                        library_at: last.at.into(),
+                        tag: content.to_string(),
+                        tag_at: token.at.into(),
                     }
+                    .into());
                 }
-                return Ok(TokenTree::Tag(Tag::Load));
             }
+            return Ok(TokenTree::Tag(Tag::Load));
         }
         for token in tokens {
             let library = token.load_library(self.py, self.libraries, self.template)?;
