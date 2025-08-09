@@ -68,7 +68,8 @@ pub mod django_rusty_templates {
         fn from(err: InvalidArgumentInteger) -> PyErr {
             PyValueError::new_err(format!(
                 "Couldn't convert argument ({argument}) to integer",
-                argument = err.argument))
+                argument = err.argument
+            ))
         }
     }
     pub struct EngineData {
@@ -309,16 +310,33 @@ pub mod django_rusty_templates {
                     Err(err) => {
                         let err = err.try_into_render_error()?;
                         match err {
-                            RenderError::VariableDoesNotExist {ref key, ref object, key_at, object_at} |
-                            RenderError::ArgumentDoesNotExist {ref key, ref object, key_at, object_at} => {
+                            RenderError::VariableDoesNotExist {
+                                ref key,
+                                ref object,
+                                key_at,
+                                object_at,
+                            }
+                            | RenderError::ArgumentDoesNotExist {
+                                ref key,
+                                ref object,
+                                key_at,
+                                object_at,
+                            } => {
                                 return Err(VariableDoesNotExist::with_source_code(
                                     err.into(),
                                     self.template.clone(),
-                                ))
-                            },
-                            RenderError::InvalidArgumentInteger {argument, argument_at} => {
-                                return Err(InvalidArgumentInteger {argument: argument, argument_at: argument_at}.into())
-                            },
+                                ));
+                            }
+                            RenderError::InvalidArgumentInteger {
+                                argument,
+                                argument_at,
+                            } => {
+                                return Err(InvalidArgumentInteger {
+                                    argument: argument,
+                                    argument_at: argument_at,
+                                }
+                                .into());
+                            }
                         }
                     }
                 }
