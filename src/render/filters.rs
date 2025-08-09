@@ -1,16 +1,14 @@
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
-use num_bigint::Sign;
-
 use html_escape::encode_quoted_attribute_to_string;
+use num_bigint::{BigInt, ToBigInt};
 use num_traits::ToPrimitive;
-use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::sync::GILOnceCell;
-use pyo3::types::{PyInt, PyType};
+use pyo3::types::PyType;
 
-use crate::error::{PyRenderError, RenderError};
+use crate::error::RenderError;
 use crate::filters::{
     AddFilter, AddSlashesFilter, CapfirstFilter, CenterFilter, DefaultFilter, EscapeFilter,
     ExternalFilter, FilterType, LowerFilter, SafeFilter, SlugifyFilter, UpperFilter,
@@ -169,6 +167,16 @@ impl ResolveFilter for CapfirstFilter {
     }
 }
 
+fn resolve_bigint(bigint: BigInt, at: (usize, usize)) -> Result<usize, RenderError> {
+    match bigint.to_isize() {
+        Some(n) => Ok(n.max(0) as usize),
+        None => Err(RenderError::OverflowError {
+            argument: bigint.to_string(),
+            argument_at: at.into(),
+        }),
+    }
+}
+
 impl ResolveFilter for CenterFilter {
     fn resolve<'t, 'py>(
         &self,
@@ -188,78 +196,39 @@ impl ResolveFilter for CenterFilter {
             .resolve(py, template, context, ResolveFailures::Raise)?
             .expect("missing argument in context should already have raised");
 
-        let arg_size = match arg {
-            Content::Int(left) => match left.sign() {
-                Sign::Minus | Sign::NoSign => Ok(0),
-                Sign::Plus => {
-                    let result = left.to_usize();
-                    match result {
-                        Some(res) => Ok(res),
-                        None => {
-                            return Err(PyRenderError::PyErr(PyValueError::new_err(
-                                "integer is too big",
-                            )));
-                        }
-                    }
-                }
-            },
-            Content::String(left) => match left.as_raw().parse::<i64>() {
-                Ok(left) => {
-                    if left <= 0 {
-                        return Ok(Some(Content::String(ContentString::String(content))));
-                    }
-                    match left.to_usize() {
-                        Some(left) => Ok(left),
-                        None => {
-                            return Err(RenderError::InvalidArgumentInteger {
-                                argument: left.to_string(),
-                                argument_at: self.argument.at.into(),
-                            }
-                            .into());
-                        }
-                    }
-                }
+        let size = match arg {
+            Content::Int(left) => resolve_bigint(left, self.argument.at)?,
+            Content::String(left) => match left.as_raw().parse::<BigInt>() {
+                Ok(n) => resolve_bigint(n, self.argument.at)?,
                 Err(_) => {
                     return Err(RenderError::InvalidArgumentInteger {
-                        argument: left.as_raw().to_string(),
+                        argument: format!("'{}'", left.as_raw()),
                         argument_at: self.argument.at.into(),
                     }
                     .into());
                 }
             },
-            Content::Float(left) => {
-                let result = left.trunc();
-                if result <= 0f64 {
-                    return Ok(Some(Content::String(ContentString::String(content))));
-                }
-                if result.is_infinite() {
+            Content::Float(left) => match left.trunc().to_bigint() {
+                Some(n) => resolve_bigint(n, self.argument.at)?,
+                None => {
                     return Err(RenderError::InvalidArgumentInteger {
                         argument: left.to_string(),
                         argument_at: self.argument.at.into(),
                     }
                     .into());
                 }
-                match left.to_usize() {
-                    Some(left) => Ok(left),
-                    None => Err(PyRenderError::PyErr(PyValueError::new_err("float is NaN"))),
-                }
-            }
-            Content::Py(left) => match left.extract::<usize>() {
-                Ok(left) => Ok(left),
+            },
+            Content::Py(left) => match left.extract::<BigInt>() {
+                Ok(left) => resolve_bigint(left, self.argument.at)?,
                 Err(_) => {
-                    let int = PyType::new::<PyInt>(left.py());
-                    match int.call1((left.clone(),)) {
-                        Ok(left) => Ok(left.extract::<usize>()?),
-                        Err(_) => Err(RenderError::InvalidArgumentInteger {
-                            argument: left.to_string(),
-                            argument_at: self.argument.at.into(),
-                        }
-                        .into()),
+                    return Err(RenderError::InvalidArgumentInteger {
+                        argument: left.to_string(),
+                        argument_at: self.argument.at.into(),
                     }
+                    .into());
                 }
             },
         };
-        let size = arg_size?;
 
         if size <= content.len() {
             return Ok(Some(Content::String(ContentString::String(content))));

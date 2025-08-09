@@ -185,3 +185,203 @@ def test_center_argument_is_negative_float_as_string():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_center_argument_int_bigger_than_isize_max():
+    template = "{{ foo|center:9223372036854775808 }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Integer 9223372036854775808 is too large
+   ╭────
+ 1 │ {{ foo|center:9223372036854775808 }}
+   ·               ─────────┬─────────
+   ·                        ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_int_smaller_than_isize_min():
+    template = "{{ foo|center:-9223372036854775809 }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Integer -9223372036854775809 is too large
+   ╭────
+ 1 │ {{ foo|center:-9223372036854775809 }}
+   ·               ──────────┬─────────
+   ·                         ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_int_bigger_than_isize_max_string():
+    template = "{{ foo|center:'9223372036854775808' }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Integer 9223372036854775808 is too large
+   ╭────
+ 1 │ {{ foo|center:'9223372036854775808' }}
+   ·               ──────────┬──────────
+   ·                         ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_int_smaller_than_isize_min_string():
+    template = "{{ foo|center:'-9223372036854775809' }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Integer -9223372036854775809 is too large
+   ╭────
+ 1 │ {{ foo|center:'-9223372036854775809' }}
+   ·               ───────────┬──────────
+   ·                          ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_int_bigger_than_isize_max_python():
+    template = "{{ foo|center:width }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test", "width": 9223372036854775808})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test", "width": 9223372036854775808})
+
+    expected = """\
+  × Integer 9223372036854775808 is too large
+   ╭────
+ 1 │ {{ foo|center:width }}
+   ·               ──┬──
+   ·                 ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_int_smaller_than_isize_min_python():
+    template = "{{ foo|center:width }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test", "width": -9223372036854775809})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test", "width": -9223372036854775809})
+
+    expected = """\
+  × Integer -9223372036854775809 is too large
+   ╭────
+ 1 │ {{ foo|center:width }}
+   ·               ──┬──
+   ·                 ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_string():
+    template = "{{ foo|center:'foo' }}"
+
+    with pytest.raises(ValueError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "invalid literal for int() with base 10: 'foo'"
+
+    with pytest.raises(ValueError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Couldn't convert argument ('foo') to integer
+   ╭────
+ 1 │ {{ foo|center:'foo' }}
+   ·               ──┬──
+   ·                 ╰── argument
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_float_bigger_than_isize_max():
+    template = "{{ foo|center:9223372036854775808.0 }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Integer 9223372036854775808 is too large
+   ╭────
+ 1 │ {{ foo|center:9223372036854775808.0 }}
+   ·               ──────────┬──────────
+   ·                         ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_center_argument_float_smaller_than_isize_min():
+    # Note this float literal is equivalent to -9223372036854777856.0
+    # because of limitations of float accuracy
+    template = "{{ foo|center:-9223372036854776833.0 }}"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["django"].from_string(template).render({"foo": "test"})
+
+    assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
+
+    with pytest.raises(OverflowError) as exc_info:
+        engines["rusty"].from_string(template).render({"foo": "test"})
+
+    expected = """\
+  × Integer -9223372036854777856 is too large
+   ╭────
+ 1 │ {{ foo|center:-9223372036854776833.0 }}
+   ·               ───────────┬──────────
+   ·                          ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected

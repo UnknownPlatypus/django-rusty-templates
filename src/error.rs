@@ -27,6 +27,12 @@ pub enum RenderError {
         #[label("argument")]
         argument_at: SourceSpan,
     },
+    #[error("Integer {argument} is too large")]
+    OverflowError {
+        argument: String,
+        #[label("here")]
+        argument_at: SourceSpan,
+    },
     #[error("Failed lookup for key [{key}] in {object}")]
     ArgumentDoesNotExist {
         key: String,
