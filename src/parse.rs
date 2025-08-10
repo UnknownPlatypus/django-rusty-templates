@@ -24,7 +24,7 @@ use crate::lex::START_TAG_LEN;
 use crate::lex::autoescape::{AutoescapeEnabled, AutoescapeError, lex_autoescape_argument};
 use crate::lex::common::LexerError;
 use crate::lex::core::{Lexer, TokenType};
-use crate::lex::forloop::{ForLexer, ForLexerError, ForToken, ForTokenType};
+use crate::lex::forloop::{ForLexer, ForLexerError, ForLexerInError, ForTokenType};
 use crate::lex::ifcondition::{
     IfConditionAtom, IfConditionLexer, IfConditionOperator, IfConditionTokenType,
 };
@@ -345,14 +345,10 @@ fn parse_for_loop(
     parts: TagParts,
     at: (usize, usize),
 ) -> Result<(ForIterable, ForNames, bool), ParseError> {
-    let mut lexer = ForLexer::new(parser.template, parts).peekable();
+    let mut lexer = ForLexer::new(parser.template, parts);
     let mut variable_names = Vec::new();
-    while let Some(Ok(ForToken {
-        token_type: ForTokenType::VariableName,
-        ..
-    })) = lexer.peek()
-    {
-        variable_names.push(lexer.next().expect("Token is Some").expect("Token is Ok"))
+    while let Some(token) = lexer.lex_variable_name() {
+        variable_names.push(token?);
     }
     if variable_names.is_empty() {
         return Err(ForParseError::MissingVariableNames { at: at.into() }.into());
@@ -363,22 +359,18 @@ fn parse_for_loop(
         .expect("Variables has at least one element");
     let variables_at = (variables_start, last.at.0 - variables_start + last.at.1);
 
-    match lexer.next().expect("A missing in is an Err") {
-        Ok(ForToken {
-            token_type: ForTokenType::In,
-            ..
-        }) => {}
-        Ok(_) => unreachable!(),
-        Err(ForLexerError::MissingIn { at }) => {
+    match lexer.lex_in() {
+        Ok(()) => {}
+        Err(ForLexerInError::MissingIn { at }) => {
             let name = variable_names
                 .last()
                 .expect("variable_names has one element");
             if parser.template.content(name.at) == "in" {
                 return Err(ForParseError::MissingVariableBeforeIn { at: name.at.into() }.into());
             }
-            return Err(ForLexerError::MissingIn { at }.into());
+            return Err(ForLexerInError::MissingIn { at }.into());
         }
-        Err(ForLexerError::MissingComma { at }) => {
+        Err(ForLexerInError::MissingComma { at }) => {
             if variable_names.len() >= 2 {
                 let names = variable_names
                     .last_chunk::<2>()
@@ -399,38 +391,12 @@ fn parse_for_loop(
                     );
                 }
             }
-            return Err(ForLexerError::MissingComma { at }.into());
+            return Err(ForLexerInError::MissingComma { at }.into());
         }
-        Err(e) => return Err(e.into()),
     }
 
-    let expression = match lexer.next().expect("A missing expression is an Err") {
-        Ok(token) => token,
-        Err(ForLexerError::MissingIn { at }) => {
-            let name = variable_names
-                .last()
-                .expect("variable_names has one element");
-            if parser.template.content(name.at) == "in" {
-                return Err(ForParseError::MissingVariableBeforeIn { at: name.at.into() }.into());
-            }
-            return Err(ForLexerError::MissingIn { at }.into());
-        }
-        Err(e) => return Err(e.into()),
-    };
-    let reversed = match lexer.next() {
-        Some(Ok(ForToken {
-            token_type: ForTokenType::Reversed,
-            ..
-        })) => true,
-        Some(Ok(_)) => unreachable!(),
-        Some(Err(e)) => return Err(e.into()),
-        None => false,
-    };
-    match lexer.next() {
-        Some(Err(e)) => return Err(e.into()),
-        Some(Ok(_)) => unreachable!(),
-        None => {}
-    }
+    let expression = lexer.lex_expression()?;
+    let reversed = lexer.lex_reversed()?;
     let variable_names = variable_names
         .iter()
         .map(|token| parser.template.content(token.at).to_string())
@@ -444,7 +410,6 @@ fn parse_for_loop(
         ForTokenType::Variable => {
             parser.parse_variable(expression_content, expression.at, expression.at.0)?
         }
-        _ => unreachable!(),
     };
     Ok((
         ForIterable {
@@ -597,6 +562,9 @@ pub enum ParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ForLexerError(#[from] ForLexerError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    ForLexerInError(#[from] ForLexerInError),
     #[allow(clippy::enum_variant_names)]
     #[error(transparent)]
     #[diagnostic(transparent)]
