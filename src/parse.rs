@@ -359,40 +359,25 @@ fn parse_for_loop(
         .expect("Variables has at least one element");
     let variables_at = (variables_start, last.at.0 - variables_start + last.at.1);
 
-    match lexer.lex_in() {
-        Ok(()) => {}
-        Err(ForLexerInError::MissingIn { at }) => {
-            let name = variable_names
-                .last()
-                .expect("variable_names has one element");
-            if parser.template.content(name.at) == "in" {
-                return Err(ForParseError::MissingVariableBeforeIn { at: name.at.into() }.into());
-            }
-            return Err(ForLexerInError::MissingIn { at }.into());
-        }
-        Err(ForLexerInError::MissingComma { at }) => {
-            if variable_names.len() >= 2 {
-                let names = variable_names
-                    .last_chunk::<2>()
-                    .expect("variable_names has at least two elements");
-                if parser.template.content(names[1].at) == "in" {
-                    return Err(ForParseError::MissingVariable {
-                        at: names[0].at.into(),
-                    }
-                    .into());
-                }
-            } else {
-                let name = variable_names
-                    .last()
-                    .expect("variable_names has one element");
-                if parser.template.content(name.at) == "in" {
-                    return Err(
-                        ForParseError::MissingVariableBeforeIn { at: name.at.into() }.into(),
-                    );
+    if let Err(error) = lexer.lex_in() {
+        let len = variable_names.len();
+        let last_name = parser.template.content(last.at);
+        match error {
+            ForLexerInError::MissingComma { .. } if len >= 2 => {
+                if last_name == "in" {
+                    let previous = &variable_names[len - 2];
+                    let at = previous.at.into();
+                    return Err(ForParseError::MissingVariable { at }.into());
                 }
             }
-            return Err(ForLexerInError::MissingComma { at }.into());
+            _ => {
+                if last_name == "in" {
+                    let at = last.at.into();
+                    return Err(ForParseError::MissingVariableBeforeIn { at }.into());
+                }
+            }
         }
+        return Err(error.into());
     }
 
     let expression = lexer.lex_expression()?;
