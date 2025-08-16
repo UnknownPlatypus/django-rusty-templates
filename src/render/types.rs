@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::iter::zip;
 
@@ -71,10 +72,11 @@ impl Context {
         self.context.get(key)?.last()
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = (&String, &Py<PyAny>)> {
-        self.context
+    pub fn display(&self, py: Python<'_>) -> String {
+        let context: BTreeMap<_, _> = self.context
             .iter()
-            .filter_map(|(k, v)| Some((k, v.last()?)))
+            .filter_map(|(k, v)| Some((k, v.last()?.bind(py)))).collect();
+        format!("{context:?}")
     }
 
     fn _insert(&mut self, key: String, value: Bound<'_, PyAny>, replace: bool) {

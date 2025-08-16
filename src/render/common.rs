@@ -1,5 +1,4 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 
 use pyo3::intern;
 use pyo3::prelude::*;
@@ -185,9 +184,7 @@ impl Resolve for Argument {
                     Some(content) => content,
                     None => {
                         let key = template.content(variable.at).to_string();
-                        let context: BTreeMap<&String, &Bound<'py, PyAny>> =
-                            context.iter().map(|(k, v)| (k, v.bind(py))).collect();
-                        let object = format!("{context:?}");
+                        let object = context.display(py);
                         return Err(RenderError::ArgumentDoesNotExist {
                             key,
                             object,
