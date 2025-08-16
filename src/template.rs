@@ -552,7 +552,7 @@ user = User(["Lily"])
             let cwd = std::env::current_dir().unwrap();
             let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
             let sys_path = sys_path.downcast().unwrap();
-            sys_path.append(cwd).unwrap();
+            sys_path.append(cwd.to_string_lossy()).unwrap();
             let mut engine = Engine::new(
                 py,
                 Some(vec!["tests/templates"].into_pyobject(py).unwrap()),
