@@ -312,6 +312,28 @@ def test_render_for_loop_empty():
     assert rust_template.render({}) == expected
 
 
+def test_render_for_loop_shadowing_context():
+    template = "{{ x }}{% for x in y %}{{ x }}{% for x in z %}{{ x }}{% endfor %}{{ x }}{% endfor %}{{ x }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    context = {"x": 1, "y": [2], "z": [3]}
+    expected = "12321"
+    assert django_template.render(context) == expected
+    assert rust_template.render(context) == expected
+
+
+def test_render_for_loop_url_shadowing():
+    template = "{{ x }}{% for x in y %}{{ x }}{% url 'home' as x %}{{ x }}{% endfor %}{{ x }}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    context = {"x": 1, "y": [2]}
+    expected = "12/1"
+    assert django_template.render(context) == expected
+    assert rust_template.render(context) == expected
+
+
 def test_render_in_in_in():
     template = "{% for in in in %}{{ in }}\n{% endfor %}"
     django_template = engines["django"].from_string(template)

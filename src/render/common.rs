@@ -49,7 +49,7 @@ impl Resolve for Variable {
     ) -> ResolveResult<'t, 'py> {
         let mut parts = self.parts(template);
         let (first, mut object_at) = parts.next().expect("Variable names cannot be empty");
-        let mut variable = match context.context.get(first) {
+        let mut variable = match context.get(first) {
             Some(variable) => variable.bind(py).clone(),
             None => return Ok(None),
         };
@@ -185,11 +185,8 @@ impl Resolve for Argument {
                     Some(content) => content,
                     None => {
                         let key = template.content(variable.at).to_string();
-                        let context: BTreeMap<&String, &Bound<'py, PyAny>> = context
-                            .context
-                            .iter()
-                            .map(|(k, v)| (k, v.bind(py)))
-                            .collect();
+                        let context: BTreeMap<&String, &Bound<'py, PyAny>> =
+                            context.iter().map(|(k, v)| (k, v.bind(py))).collect();
                         let object = format!("{context:?}");
                         return Err(RenderError::ArgumentDoesNotExist {
                             key,

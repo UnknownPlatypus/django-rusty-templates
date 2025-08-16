@@ -74,7 +74,7 @@ impl Resolve for Url {
             None => Ok(Some(Content::Py(url?))),
             Some(variable) => match url.ok_or_isinstance_of::<NoReverseMatch>(py)? {
                 Ok(url) => {
-                    context.context.insert(variable.clone(), url.unbind());
+                    context.insert(variable.clone(), url);
                     Ok(None)
                 }
                 Err(_) => Ok(None),
@@ -745,16 +745,18 @@ impl For {
             list.reverse();
         }
         context.push_for_loop(list.len());
-        for values in list {
+        for (index, values) in list.into_iter().enumerate() {
             context.push_variables(
                 &self.variables.names,
                 self.variables.at,
                 values?,
                 self.iterable.at,
+                index,
             )?;
             parts.push(self.body.render(py, template, context)?);
             context.increment_for_loop();
         }
+        context.pop_variables(&self.variables.names);
         context.pop_for_loop();
         Ok(Cow::Owned(parts.join("")))
     }
@@ -777,12 +779,13 @@ impl For {
 
         let variable = &self.variables.names[0];
         context.push_for_loop(chars.len());
-        for c in chars {
+        for (index, c) in chars.into_iter().enumerate() {
             let c = PyString::new(py, &c.to_string());
-            context.push_variable(variable.clone(), c.into_any());
+            context.push_variable(variable.clone(), c.into_any(), index);
             parts.push(self.body.render(py, template, context)?);
             context.increment_for_loop();
         }
+        context.pop_variable(variable);
         context.pop_for_loop();
         Ok(Cow::Owned(parts.join("")))
     }

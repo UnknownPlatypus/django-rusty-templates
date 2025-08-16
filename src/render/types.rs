@@ -46,10 +46,10 @@ impl ForLoop {
 
 #[derive(Debug)]
 pub struct Context {
+    context: HashMap<String, Vec<Py<PyAny>>>,
+    loops: Vec<ForLoop>,
     pub request: Option<Py<PyAny>>,
-    pub context: HashMap<String, Py<PyAny>>,
     pub autoescape: bool,
-    pub loops: Vec<ForLoop>,
 }
 
 impl Context {
@@ -58,6 +58,7 @@ impl Context {
         request: Option<Py<PyAny>>,
         autoescape: bool,
     ) -> Self {
+        let context = context.into_iter().map(|(k, v)| (k, vec![v])).collect();
         Self {
             request,
             context,
@@ -66,8 +67,45 @@ impl Context {
         }
     }
 
-    pub fn push_variable(&mut self, name: String, value: Bound<'_, PyAny>) {
-        self.context.insert(name, value.unbind());
+    pub fn get(&self, key: &str) -> Option<&Py<PyAny>> {
+        self.context.get(key)?.last()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &Py<PyAny>)> {
+        self.context
+            .iter()
+            .filter_map(|(k, v)| Some((k, v.last()?)))
+    }
+
+    fn _insert(&mut self, key: String, value: Bound<'_, PyAny>, replace: bool) {
+        let value = value.unbind();
+        match self.context.entry(key) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => {
+                let values = entry.get_mut();
+                if replace {
+                    values.pop();
+                }
+                values.push(value);
+            }
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(vec![value]);
+            }
+        }
+    }
+
+    pub fn insert(&mut self, key: String, value: Bound<'_, PyAny>) {
+        self._insert(key, value, true)
+    }
+
+    pub fn push_variable(&mut self, name: String, value: Bound<'_, PyAny>, index: usize) {
+        let replace = index!=0;
+        self._insert(name, value, replace);
+    }
+
+    pub fn pop_variable(&mut self, name: &str) {
+        if let Some(values) = self.context.get_mut(name) {
+            values.pop();
+        }
     }
 
     pub fn push_variables(
@@ -76,14 +114,15 @@ impl Context {
         names_at: (usize, usize),
         values: Bound<'_, PyAny>,
         values_at: (usize, usize),
+        index: usize,
     ) -> Result<(), PyRenderError> {
         if names.len() == 1 {
-            self.push_variable(names[0].clone(), values);
+            self.push_variable(names[0].clone(), values, index);
         } else {
             let values: Vec<_> = values.try_iter()?.collect();
             if names.len() == values.len() {
                 for (name, value) in zip(names, values) {
-                    self.context.insert(name.clone(), value?.unbind());
+                    self.push_variable(name.clone(), value?, index);
                 }
             } else {
                 return Err(RenderError::TupleUnpackError {
@@ -96,6 +135,12 @@ impl Context {
             }
         }
         Ok(())
+    }
+
+    pub fn pop_variables(&mut self, names: &Vec<String>) {
+        for name in names {
+            self.pop_variable(name)
+        }
     }
 
     pub fn push_for_loop(&mut self, len: usize) {
