@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use num_bigint::BigInt;
+use num_bigint::{BigInt, Sign};
 use num_traits::cast::ToPrimitive;
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
@@ -95,7 +95,7 @@ impl Evaluate for Content<'_, '_> {
             Self::String(s) => !s.as_raw().is_empty(),
             Self::Float(f) => *f != 0.0,
             Self::Int(n) => *n != BigInt::ZERO,
-            Self::Bool(_) => todo!(),
+            Self::Bool(b) => *b,
         })
     }
 }
@@ -122,12 +122,20 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
             (Self::Py(obj), Content::Py(other)) => obj.eq(other).unwrap_or(false),
             (Self::Py(obj), Content::Float(other)) => obj.eq(other).unwrap_or(false),
             (Self::Py(obj), Content::Int(other)) => obj.eq(other).unwrap_or(false),
+            (Self::Py(obj), Content::Bool(other)) => obj.eq(other).unwrap_or(false),
             (Self::Py(obj), Content::String(other)) => obj.eq(other.as_raw()).unwrap_or(false),
             (Self::Float(obj), Content::Py(other)) => other.eq(obj).unwrap_or(false),
             (Self::Int(obj), Content::Py(other)) => other.eq(obj).unwrap_or(false),
             (Self::String(obj), Content::Py(other)) => other.eq(obj.as_raw()).unwrap_or(false),
+            (Self::Bool(obj), Content::Py(other)) => other.eq(obj).unwrap_or(false),
             (Self::Float(obj), Content::Float(other)) => obj == other,
             (Self::Int(obj), Content::Int(other)) => obj == other,
+            (Self::Int(obj), Content::Bool(other)) => u8::try_from(obj)
+                .map(|o| o == *other as u8)
+                .unwrap_or(false),
+            (Self::Bool(obj), Content::Int(other)) => u8::try_from(other)
+                .map(|o| o == *obj as u8)
+                .unwrap_or(false),
             (Self::Float(obj), Content::Int(other)) => {
                 match other.to_f64().expect("BigInt to f64 is always possible") {
                     f64::INFINITY => false,
@@ -142,7 +150,16 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
                     obj => obj == *other,
                 }
             }
+            (Self::Float(obj), Content::Bool(other)) => match other {
+                true => *obj == 1.0,
+                false => *obj == 0.0,
+            },
+            (Self::Bool(obj), Content::Float(other)) => match obj {
+                true => *other == 1.0,
+                false => *other == 0.0,
+            },
             (Self::String(obj), Content::String(other)) => obj.as_raw() == other.as_raw(),
+            (Self::Bool(obj), Content::Bool(other)) => obj == other,
             _ => false,
         }
     }
@@ -152,12 +169,22 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
             (Self::Py(obj), Content::Py(other)) => obj.lt(other).unwrap_or(false),
             (Self::Py(obj), Content::Float(other)) => obj.lt(other).unwrap_or(false),
             (Self::Py(obj), Content::Int(other)) => obj.lt(other).unwrap_or(false),
+            (Self::Py(obj), Content::Bool(other)) => obj.lt(other).unwrap_or(false),
             (Self::Py(obj), Content::String(other)) => obj.lt(other.as_raw()).unwrap_or(false),
             (Self::Float(obj), Content::Py(other)) => other.gt(obj).unwrap_or(false),
             (Self::Int(obj), Content::Py(other)) => other.gt(obj).unwrap_or(false),
             (Self::String(obj), Content::Py(other)) => other.gt(obj.as_raw()).unwrap_or(false),
+            (Self::Bool(obj), Content::Py(other)) => other.gt(obj).unwrap_or(false),
             (Self::Float(obj), Content::Float(other)) => obj < other,
             (Self::Int(obj), Content::Int(other)) => obj < other,
+            (Self::Int(obj), Content::Bool(other)) => match obj.sign() {
+                Sign::Minus => true,
+                _ => u8::try_from(obj).map(|o| o < *other as u8).unwrap_or(false),
+            },
+            (Self::Bool(obj), Content::Int(other)) => match other.sign() {
+                Sign::Minus => false,
+                _ => u8::try_from(other).map(|o| o > *obj as u8).unwrap_or(true),
+            },
             (Self::Float(obj), Content::Int(other)) => {
                 match other.to_f64().expect("BigInt to f64 is always possible") {
                     f64::INFINITY => obj.is_finite() || *obj == f64::NEG_INFINITY,
@@ -172,7 +199,16 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
                     obj => obj < *other,
                 }
             }
+            (Self::Float(obj), Content::Bool(other)) => match other {
+                true => *obj < 1.0,
+                false => *obj < 0.0,
+            },
+            (Self::Bool(obj), Content::Float(other)) => match obj {
+                true => *other > 1.0,
+                false => *other > 0.0,
+            },
             (Self::String(obj), Content::String(other)) => obj.as_raw() < other.as_raw(),
+            (Self::Bool(obj), Content::Bool(other)) => obj < other,
             _ => false,
         }
     }
@@ -182,12 +218,22 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
             (Self::Py(obj), Content::Py(other)) => obj.gt(other).unwrap_or(false),
             (Self::Py(obj), Content::Float(other)) => obj.gt(other).unwrap_or(false),
             (Self::Py(obj), Content::Int(other)) => obj.gt(other).unwrap_or(false),
+            (Self::Py(obj), Content::Bool(other)) => obj.gt(other).unwrap_or(false),
             (Self::Py(obj), Content::String(other)) => obj.gt(other.as_raw()).unwrap_or(false),
             (Self::Float(obj), Content::Py(other)) => other.lt(obj).unwrap_or(false),
             (Self::Int(obj), Content::Py(other)) => other.lt(obj).unwrap_or(false),
             (Self::String(obj), Content::Py(other)) => other.lt(obj.as_raw()).unwrap_or(false),
+            (Self::Bool(obj), Content::Py(other)) => other.lt(obj).unwrap_or(false),
             (Self::Float(obj), Content::Float(other)) => obj > other,
             (Self::Int(obj), Content::Int(other)) => obj > other,
+            (Self::Int(obj), Content::Bool(other)) => match obj.sign() {
+                Sign::Minus => false,
+                _ => u8::try_from(obj).map(|o| o > *other as u8).unwrap_or(true),
+            },
+            (Self::Bool(obj), Content::Int(other)) => match other.sign() {
+                Sign::Minus => true,
+                _ => u8::try_from(other).map(|o| o < *obj as u8).unwrap_or(false),
+            },
             (Self::Float(obj), Content::Int(other)) => {
                 match other.to_f64().expect("BigInt to f64 is always possible") {
                     f64::INFINITY => *obj == f64::INFINITY,
@@ -202,7 +248,16 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
                     obj => obj > *other,
                 }
             }
+            (Self::Float(obj), Content::Bool(other)) => match other {
+                true => *obj > 1.0,
+                false => *obj > 0.0,
+            },
+            (Self::Bool(obj), Content::Float(other)) => match obj {
+                true => *other < 1.0,
+                false => *other < 0.0,
+            },
             (Self::String(obj), Content::String(other)) => obj.as_raw() > other.as_raw(),
+            (Self::Bool(obj), Content::Bool(other)) => obj > other,
             _ => false,
         }
     }
@@ -212,12 +267,24 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
             (Self::Py(obj), Content::Py(other)) => obj.le(other).unwrap_or(false),
             (Self::Py(obj), Content::Float(other)) => obj.le(other).unwrap_or(false),
             (Self::Py(obj), Content::Int(other)) => obj.le(other).unwrap_or(false),
+            (Self::Py(obj), Content::Bool(other)) => obj.le(other).unwrap_or(false),
             (Self::Py(obj), Content::String(other)) => obj.le(other.as_raw()).unwrap_or(false),
             (Self::Float(obj), Content::Py(other)) => other.ge(obj).unwrap_or(false),
             (Self::Int(obj), Content::Py(other)) => other.ge(obj).unwrap_or(false),
+            (Self::Bool(obj), Content::Py(other)) => other.ge(obj).unwrap_or(false),
             (Self::String(obj), Content::Py(other)) => other.ge(obj.as_raw()).unwrap_or(false),
             (Self::Float(obj), Content::Float(other)) => obj <= other,
             (Self::Int(obj), Content::Int(other)) => obj <= other,
+            (Self::Int(obj), Content::Bool(other)) => match obj.sign() {
+                Sign::Minus => true,
+                _ => u8::try_from(obj)
+                    .map(|o| o <= *other as u8)
+                    .unwrap_or(false),
+            },
+            (Self::Bool(obj), Content::Int(other)) => match other.sign() {
+                Sign::Minus => false,
+                _ => u8::try_from(other).map(|o| o >= *obj as u8).unwrap_or(true),
+            },
             (Self::Float(obj), Content::Int(other)) => {
                 match other.to_f64().expect("BigInt to f64 is always possible") {
                     f64::INFINITY => obj.is_finite() || *obj == f64::NEG_INFINITY,
@@ -232,7 +299,16 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
                     obj => obj <= *other,
                 }
             }
+            (Self::Float(obj), Content::Bool(other)) => match other {
+                true => *obj <= 1.0,
+                false => *obj <= 0.0,
+            },
+            (Self::Bool(obj), Content::Float(other)) => match obj {
+                true => *other >= 1.0,
+                false => *other >= 0.0,
+            },
             (Self::String(obj), Content::String(other)) => obj.as_raw() <= other.as_raw(),
+            (Self::Bool(obj), Content::Bool(other)) => obj <= other,
             _ => false,
         }
     }
@@ -242,12 +318,24 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
             (Self::Py(obj), Content::Py(other)) => obj.ge(other).unwrap_or(false),
             (Self::Py(obj), Content::Float(other)) => obj.ge(other).unwrap_or(false),
             (Self::Py(obj), Content::Int(other)) => obj.ge(other).unwrap_or(false),
+            (Self::Py(obj), Content::Bool(other)) => obj.ge(other).unwrap_or(false),
             (Self::Py(obj), Content::String(other)) => obj.ge(other.as_raw()).unwrap_or(false),
             (Self::Float(obj), Content::Py(other)) => other.le(obj).unwrap_or(false),
             (Self::Int(obj), Content::Py(other)) => other.le(obj).unwrap_or(false),
+            (Self::Bool(obj), Content::Py(other)) => other.le(obj).unwrap_or(false),
             (Self::String(obj), Content::Py(other)) => other.le(obj.as_raw()).unwrap_or(false),
             (Self::Float(obj), Content::Float(other)) => obj >= other,
             (Self::Int(obj), Content::Int(other)) => obj >= other,
+            (Self::Int(obj), Content::Bool(other)) => match obj.sign() {
+                Sign::Minus => false,
+                _ => u8::try_from(obj).map(|o| o >= *other as u8).unwrap_or(true),
+            },
+            (Self::Bool(obj), Content::Int(other)) => match other.sign() {
+                Sign::Minus => true,
+                _ => u8::try_from(other)
+                    .map(|o| o <= *obj as u8)
+                    .unwrap_or(false),
+            },
             (Self::Float(obj), Content::Int(other)) => {
                 match other.to_f64().expect("BigInt to f64 is always possible") {
                     f64::INFINITY => *obj == f64::INFINITY,
@@ -262,7 +350,16 @@ impl PyCmp<Content<'_, '_>> for Content<'_, '_> {
                     obj => obj >= *other,
                 }
             }
+            (Self::Float(obj), Content::Bool(other)) => match other {
+                true => *obj >= 1.0,
+                false => *obj >= 0.0,
+            },
+            (Self::Bool(obj), Content::Float(other)) => match obj {
+                true => *other <= 1.0,
+                false => *other <= 0.0,
+            },
             (Self::String(obj), Content::String(other)) => obj.as_raw() >= other.as_raw(),
+            (Self::Bool(obj), Content::Bool(other)) => obj >= other,
             _ => false,
         }
     }
