@@ -8,7 +8,7 @@ use pyo3::types::{PyBool, PyDict, PyList, PyNone, PyString};
 
 use super::types::{Content, ContentString, Context};
 use super::{Evaluate, Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
-use crate::error::PyRenderError;
+use crate::error::{PyRenderError, RenderError};
 use crate::parse::{For, IfCondition, Tag, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::TemplateString;
@@ -769,7 +769,13 @@ impl For {
         context: &mut Context,
     ) -> RenderResult<'t> {
         if self.variables.names.len() > 1 {
-            todo!()
+            return Err(RenderError::TupleUnpackError {
+                expected_count: self.variables.names.len(),
+                actual_count: 1,
+                expected_at: self.variables.at.into(),
+                actual_at: self.iterable.at.into(),
+            }
+            .into());
         }
         let mut parts = Vec::new();
         let mut chars: Vec<_> = string.chars().collect();

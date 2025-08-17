@@ -720,6 +720,33 @@ def test_render_for_loop_unpack_tuple_mismatch():
     assert str(exc_info.value) == expected
 
 
+def test_render_for_loop_unpack_string():
+    template = "{% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    l = [(1, 2, 3), ("foo", "bar")]
+
+    with pytest.raises(ValueError) as exc_info:
+        django_template.render({"l": l})
+
+    assert str(exc_info.value) == "Need 2 values to unpack in for loop; got 1. "
+
+    with pytest.raises(ValueError) as exc_info:
+        rust_template.render({"l": l})
+
+    expected = """\
+  × Need 2 values to unpack; got 1.
+   ╭────
+ 1 │ {% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}
+   ·        ──┬─    ──┬──
+   ·          │       ╰── from here
+   ·          ╰── unpacked here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
 def test_render_for_loop_invalid_variable():
     template = "{% for x in _a %}{{ x }}{% endfor %}"
 
