@@ -726,7 +726,10 @@ def test_render_for_loop_invalid_variable():
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["django"].from_string(template)
 
-    assert str(exc_info.value) == "Variables and attributes may not begin with underscores: '_a'"
+    assert (
+        str(exc_info.value)
+        == "Variables and attributes may not begin with underscores: '_a'"
+    )
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["rusty"].from_string(template)
@@ -737,6 +740,56 @@ def test_render_for_loop_invalid_variable():
  1 │ {% for x in _a %}{{ x }}{% endfor %}
    ·             ─┬
    ·              ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_render_empty_tag():
+    template = "{% empty %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert (
+        str(exc_info.value)
+        == "Invalid block tag on line 1: 'empty'. Did you forget to register or load this tag?"
+    )
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Unexpected tag empty
+   ╭────
+ 1 │ {% empty %}
+   · ─────┬─────
+   ·      ╰── unexpected tag
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_render_endfor_tag():
+    template = "{% endfor %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert (
+        str(exc_info.value)
+        == "Invalid block tag on line 1: 'endfor'. Did you forget to register or load this tag?"
+    )
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Unexpected tag endfor
+   ╭────
+ 1 │ {% endfor %}
+   · ──────┬─────
+   ·       ╰── unexpected tag
    ╰────
 """
     assert str(exc_info.value) == expected
