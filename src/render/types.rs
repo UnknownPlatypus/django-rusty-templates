@@ -73,9 +73,11 @@ impl Context {
     }
 
     pub fn display(&self, py: Python<'_>) -> String {
-        let context: BTreeMap<_, _> = self.context
+        let context: BTreeMap<_, _> = self
+            .context
             .iter()
-            .filter_map(|(k, v)| Some((k, v.last()?.bind(py)))).collect();
+            .filter_map(|(k, v)| Some((k, v.last()?.bind(py))))
+            .collect();
         format!("{context:?}")
     }
 
@@ -100,7 +102,7 @@ impl Context {
     }
 
     pub fn push_variable(&mut self, name: String, value: Bound<'_, PyAny>, index: usize) {
-        let replace = index!=0;
+        let replace = index != 0;
         self._insert(name, value, replace);
     }
 

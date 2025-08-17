@@ -22,7 +22,7 @@ use crate::filters::SlugifyFilter;
 use crate::filters::UpperFilter;
 use crate::lex::START_TAG_LEN;
 use crate::lex::autoescape::{AutoescapeEnabled, AutoescapeError, lex_autoescape_argument};
-use crate::lex::common::LexerError;
+use crate::lex::common::{LexerError, text_content_at, translated_text_content_at};
 use crate::lex::core::{Lexer, TokenType};
 use crate::lex::forloop::{ForLexer, ForLexerError, ForLexerInError, ForTokenType};
 use crate::lex::ifcondition::{
@@ -380,26 +380,29 @@ fn parse_for_loop(
         return Err(error.into());
     }
 
-    let expression = lexer.lex_expression()?;
+    let expression_token = lexer.lex_expression()?;
     let reversed = lexer.lex_reversed()?;
     let variable_names = variable_names
         .iter()
         .map(|token| parser.template.content(token.at).to_string())
         .collect();
-    let expression_content = parser.template.content(expression.at);
-    let expression_at = expression.at;
-    let expression = match expression.token_type {
-        ForTokenType::Numeric => parse_numeric(expression_content, expression.at)?,
-        ForTokenType::Text => TagElement::Text(Text::new(expression.at)),
-        ForTokenType::TranslatedText => TagElement::TranslatedText(Text::new(expression.at)),
-        ForTokenType::Variable => {
-            parser.parse_variable(expression_content, expression.at, expression.at.0)?
+    let expression_content = parser.template.content(expression_token.at);
+    let expression = match expression_token.token_type {
+        ForTokenType::Numeric => parse_numeric(expression_content, expression_token.at)?,
+        ForTokenType::Text => TagElement::Text(Text::new(text_content_at(expression_token.at))),
+        ForTokenType::TranslatedText => {
+            TagElement::TranslatedText(Text::new(translated_text_content_at(expression_token.at)))
         }
+        ForTokenType::Variable => parser.parse_variable(
+            expression_content,
+            expression_token.at,
+            expression_token.at.0,
+        )?,
     };
     Ok((
         ForIterable {
             iterable: expression,
-            at: expression_at,
+            at: expression_token.at,
         },
         ForNames {
             names: variable_names,

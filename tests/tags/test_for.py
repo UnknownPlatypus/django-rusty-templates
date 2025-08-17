@@ -27,6 +27,26 @@ def test_render_for_loop_reversed():
     assert rust_template.render({"y": y}) == expected
 
 
+def test_render_for_loop_string():
+    template = "{% for x in 'y' %}{{ x }}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    expected = "y"
+    assert django_template.render() == expected
+    assert rust_template.render() == expected
+
+
+def test_render_for_loop_translated_string():
+    template = "{% for x in _('y') %}{{ x }}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    expected = "y"
+    assert django_template.render() == expected
+    assert rust_template.render() == expected
+
+
 def test_render_for_loop_filter():
     template = "{% for x in y|upper %}{{ x }}{% endfor %}"
     django_template = engines["django"].from_string(template)
@@ -324,7 +344,9 @@ def test_render_for_loop_shadowing_context():
 
 
 def test_render_for_loop_url_shadowing():
-    template = "{{ x }}{% for x in y %}{{ x }}{% url 'home' as x %}{{ x }}{% endfor %}{{ x }}"
+    template = (
+        "{{ x }}{% for x in y %}{{ x }}{% url 'home' as x %}{{ x }}{% endfor %}{{ x }}"
+    )
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
@@ -567,6 +589,31 @@ def test_unexpected_expression_before_in():
  1 │ {% for x y in l %}{% endfor %}
    ·          ┬
    ·          ╰── unexpected expression
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_unexpected_expression_before_in_longer():
+    template = "{% for x, y, z w in l %}{% endfor %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert (
+        str(exc_info.value)
+        == "'for' tag received an invalid argument: for x, y, z w in l"
+    )
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Unexpected expression in for loop. Did you miss a comma when unpacking?
+   ╭────
+ 1 │ {% for x, y, z w in l %}{% endfor %}
+   ·                ┬
+   ·                ╰── unexpected expression
    ╰────
 """
     assert str(exc_info.value) == expected
