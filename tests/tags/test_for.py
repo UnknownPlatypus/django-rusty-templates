@@ -718,3 +718,25 @@ def test_render_for_loop_unpack_tuple_mismatch():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_render_for_loop_invalid_variable():
+    template = "{% for x in _a %}{{ x }}{% endfor %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert str(exc_info.value) == "Variables and attributes may not begin with underscores: '_a'"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% for x in _a %}{{ x }}{% endfor %}
+   ·             ─┬
+   ·              ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
