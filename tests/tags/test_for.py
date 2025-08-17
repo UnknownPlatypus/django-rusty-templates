@@ -47,6 +47,29 @@ def test_render_for_loop_translated_string():
     assert rust_template.render() == expected
 
 
+def test_render_for_loop_numeric():
+    template = "{% for x in 1 %}{{ x }}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+
+    with pytest.raises(TypeError) as exc_info:
+        django_template.render()
+
+    assert str(exc_info.value) == "'int' object is not iterable"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × 1 is not iterable
+   ╭────
+ 1 │ {% for x in 1 %}{{ x }}{% endfor %}
+   ·             ┬
+   ·             ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
 def test_render_for_loop_filter():
     template = "{% for x in y|upper %}{{ x }}{% endfor %}"
     django_template = engines["django"].from_string(template)

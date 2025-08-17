@@ -388,7 +388,12 @@ fn parse_for_loop(
         .collect();
     let expression_content = parser.template.content(expression_token.at);
     let expression = match expression_token.token_type {
-        ForTokenType::Numeric => parse_numeric(expression_content, expression_token.at)?,
+        ForTokenType::Numeric => {
+            return Err(ParseError::NotIterable {
+                literal: expression_content.to_string(),
+                at: expression_token.at.into(),
+            });
+        }
         ForTokenType::Text => TagElement::Text(Text::new(text_content_at(expression_token.at))),
         ForTokenType::TranslatedText => {
             TagElement::TranslatedText(Text::new(translated_text_content_at(expression_token.at)))
@@ -557,6 +562,12 @@ pub enum ParseError {
     #[error(transparent)]
     #[diagnostic(transparent)]
     ForParseError(#[from] ForParseError),
+    #[error("{literal} is not iterable")]
+    NotIterable {
+        literal: String,
+        #[label("here")]
+        at: SourceSpan,
+    },
     #[error(transparent)]
     #[diagnostic(transparent)]
     UrlLexerError(#[from] UrlLexerError),
