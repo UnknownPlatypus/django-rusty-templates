@@ -1136,6 +1136,15 @@ def test_missing_in_value(value):
     assert rust_template.render({"foo": "foo"}) == "falsey"
 
 
+def test_value_in_missing():
+    template = "{% if foo in missing %}truthy{% else %}falsey{% endif %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"foo": "foo"}) == "falsey"
+    assert rust_template.render({"foo": "foo"}) == "falsey"
+
+
 def test_int_in_string():
     template = "{% if 1 in 'foo' %}truthy{% else %}falsey{% endif %}"
     django_template = engines["django"].from_string(template)
