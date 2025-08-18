@@ -8,7 +8,7 @@ use num_bigint::{BigInt, ToBigInt};
 use pyo3::exceptions::PyAttributeError;
 use pyo3::intern;
 use pyo3::prelude::*;
-use pyo3::types::{PyDict, PyInt, PyString, PyType};
+use pyo3::types::{PyBool, PyDict, PyInt, PyString, PyType};
 
 use crate::error::{PyRenderError, RenderError};
 use crate::utils::PyResultMethods;
@@ -345,7 +345,7 @@ impl<'t, 'py> Content<'t, 'py> {
                     mark_safe.call1((string,))?
                 }
             },
-            Self::Bool(_content) => todo!(),
+            Self::Bool(b) => PyBool::new(py, *b).to_owned().into_any(),
         })
     }
 }
