@@ -408,98 +408,23 @@ impl PyCmp<Option<Content<'_, '_>>> for Option<Content<'_, '_>> {
 
 impl PyCmp<bool> for Option<Content<'_, '_>> {
     fn eq(&self, other: &bool) -> bool {
-        match self {
-            Some(Content::Py(obj)) => obj.eq(other).unwrap_or(false),
-            Some(Content::Float(f)) => {
-                *f == match other {
-                    true => 1.0,
-                    false => 0.0,
-                }
-            }
-            Some(Content::Int(n)) => {
-                *n == match other {
-                    true => 1.into(),
-                    false => 0.into(),
-                }
-            }
-            _ => false,
-        }
+        self.eq(&Some(Content::Bool(*other)))
     }
 
     fn lt(&self, other: &bool) -> bool {
-        match self {
-            Some(Content::Py(obj)) => obj.lt(other).unwrap_or(false),
-            Some(Content::Float(f)) => {
-                *f < match other {
-                    true => 1.0,
-                    false => 0.0,
-                }
-            }
-            Some(Content::Int(n)) => {
-                *n < match other {
-                    true => 1.into(),
-                    false => 0.into(),
-                }
-            }
-            _ => false,
-        }
+        self.lt(&Some(Content::Bool(*other)))
     }
 
     fn gt(&self, other: &bool) -> bool {
-        match self {
-            Some(Content::Py(obj)) => obj.gt(other).unwrap_or(false),
-            Some(Content::Float(f)) => {
-                *f > match other {
-                    true => 1.0,
-                    false => 0.0,
-                }
-            }
-            Some(Content::Int(n)) => {
-                *n > match other {
-                    true => 1.into(),
-                    false => 0.into(),
-                }
-            }
-            _ => false,
-        }
+        self.gt(&Some(Content::Bool(*other)))
     }
 
     fn lte(&self, other: &bool) -> bool {
-        match self {
-            Some(Content::Py(obj)) => obj.le(other).unwrap_or(false),
-            Some(Content::Float(f)) => {
-                *f <= match other {
-                    true => 1.0,
-                    false => 0.0,
-                }
-            }
-            Some(Content::Int(n)) => {
-                *n <= match other {
-                    true => 1.into(),
-                    false => 0.into(),
-                }
-            }
-            _ => false,
-        }
+        self.lte(&Some(Content::Bool(*other)))
     }
 
     fn gte(&self, other: &bool) -> bool {
-        match self {
-            Some(Content::Py(obj)) => obj.ge(other).unwrap_or(false),
-            Some(Content::Float(f)) => {
-                *f >= match other {
-                    true => 1.0,
-                    false => 0.0,
-                }
-            }
-            Some(Content::Int(n)) => {
-                *n >= match other {
-                    true => 1.into(),
-                    false => 0.into(),
-                }
-            }
-            _ => false,
-        }
+        self.gte(&Some(Content::Bool(*other)))
     }
 }
 
