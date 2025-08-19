@@ -290,7 +290,8 @@ impl<'t, 'py> Content<'t, 'py> {
             Self::Float(content) => ContentString::String(content.to_string().into()),
             Self::Int(content) => ContentString::String(content.to_string().into()),
             Self::Py(content) => return resolve_python(content, context),
-            Self::Bool(_content) => todo!(),
+            Self::Bool(true) => ContentString::String(Cow::Borrowed("True")),
+            Self::Bool(false) => ContentString::String(Cow::Borrowed("False")),
         })
     }
 
