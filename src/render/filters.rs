@@ -425,7 +425,14 @@ impl ResolveFilter for SlugifyFilter {
                     Cow::Owned(content.to_string()),
                 ))),
                 Content::String(content) => Some(content.map_content(slugify)),
-                Content::Bool(_) => todo!(),
+                Content::Bool(true) => {
+                    let content = Cow::Borrowed("true");
+                    Some(Content::String(ContentString::String(content)))
+                }
+                Content::Bool(false) => {
+                    let content = Cow::Borrowed("false");
+                    Some(Content::String(ContentString::String(content)))
+                }
             },
             None => "".as_content(),
         };
