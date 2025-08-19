@@ -820,3 +820,27 @@ def test_render_endfor_tag():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_render_for_loop_not_iterable():
+    template = "{% for x in a %}{{ x }}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(TypeError) as exc_info:
+        django_template.render({"a": 1})
+
+    assert str(exc_info.value) == "'int' object is not iterable"
+
+    with pytest.raises(TypeError) as exc_info:
+        rust_template.render({"a": 1})
+
+    expected = """\
+  × 'int' object is not iterable
+   ╭────
+ 1 │ {% for x in a %}{{ x }}{% endfor %}
+   ·             ┬
+   ·             ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected

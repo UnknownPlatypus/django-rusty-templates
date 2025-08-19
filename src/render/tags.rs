@@ -8,7 +8,7 @@ use pyo3::types::{PyBool, PyDict, PyList, PyNone, PyString};
 
 use super::types::{Content, ContentString, Context};
 use super::{Evaluate, Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
-use crate::error::{PyRenderError, RenderError};
+use crate::error::{AnnotatePyErr, PyRenderError, RenderError};
 use crate::parse::{For, IfCondition, Tag, Url};
 use crate::template::django_rusty_templates::NoReverseMatch;
 use crate::types::TemplateString;
@@ -661,7 +661,13 @@ impl For {
         context: &mut Context,
     ) -> RenderResult<'t> {
         let mut parts = Vec::new();
-        let mut list: Vec<_> = iterable.try_iter()?.collect();
+        let mut list: Vec<_> = match iterable.try_iter() {
+            Ok(iterator) => iterator.collect(),
+            Err(error) => {
+                let error = error.annotate(py, self.iterable.at, "here", template);
+                return Err(error.into());
+            }
+        };
         if self.reversed {
             list.reverse();
         }
