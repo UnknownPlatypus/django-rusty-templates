@@ -375,7 +375,8 @@ impl ResolveFilter for SafeFilter {
                         let content = object.str()?.extract::<String>()?;
                         Cow::Owned(content)
                     }
-                    Content::Bool(_) => todo!(),
+                    Content::Bool(true) => Cow::Borrowed("True"),
+                    Content::Bool(false) => Cow::Borrowed("False"),
                 },
                 None => Cow::Borrowed(""),
             },
