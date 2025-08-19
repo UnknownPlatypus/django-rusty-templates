@@ -307,7 +307,8 @@ impl ResolveFilter for EscapeFilter {
                         encode_quoted_attribute_to_string(&content, &mut encoded);
                         Cow::Owned(encoded)
                     }
-                    Content::Bool(_) => todo!(),
+                    Content::Bool(true) => Cow::Borrowed("True"),
+                    Content::Bool(false) => Cow::Borrowed("False"),
                 },
                 None => Cow::Borrowed(""),
             },
