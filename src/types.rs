@@ -91,6 +91,7 @@ impl<'t> Variable {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ArgumentType {
     Variable(Variable),
+    ForVariable(ForVariable),
     Text(Text),
     TranslatedText(TranslatedText),
     Int(BigInt),

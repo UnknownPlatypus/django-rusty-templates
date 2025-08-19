@@ -45,19 +45,21 @@ use crate::types::TranslatedText;
 use crate::types::Variable;
 
 impl ArgumentToken {
-    fn parse(&self, template: TemplateString<'_>) -> Result<Argument, ParseError> {
+    fn parse(&self, parser: &Parser) -> Result<Argument, ParseError> {
         Ok(Argument {
             at: self.at,
             argument_type: match self.argument_type {
-                ArgumentTokenType::Variable => ArgumentType::Variable(Variable::new(self.at)),
+                ArgumentTokenType::Variable => parser.parse_for_variable(self.at).into(),
                 ArgumentTokenType::Text => ArgumentType::Text(Text::new(self.content_at())),
-                ArgumentTokenType::Numeric => match template.content(self.at).parse::<BigInt>() {
-                    Ok(n) => ArgumentType::Int(n),
-                    Err(_) => match template.content(self.at).parse::<f64>() {
-                        Ok(f) => ArgumentType::Float(f),
-                        Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
-                    },
-                },
+                ArgumentTokenType::Numeric => {
+                    match parser.template.content(self.at).parse::<BigInt>() {
+                        Ok(n) => ArgumentType::Int(n),
+                        Err(_) => match parser.template.content(self.at).parse::<f64>() {
+                            Ok(f) => ArgumentType::Float(f),
+                            Err(_) => return Err(ParseError::InvalidNumber { at: self.at.into() }),
+                        },
+                    }
+                }
                 ArgumentTokenType::TranslatedText => {
                     ArgumentType::TranslatedText(TranslatedText::new(self.content_at()))
                 }
@@ -506,6 +508,24 @@ impl From<TagElement> for TokenTree {
     }
 }
 
+impl From<Either<Variable, ForVariable>> for TagElement {
+    fn from(variable: Either<Variable, ForVariable>) -> Self {
+        match variable {
+            Either::Left(v) => Self::Variable(v),
+            Either::Right(v) => Self::ForVariable(v),
+        }
+    }
+}
+
+impl From<Either<Variable, ForVariable>> for ArgumentType {
+    fn from(variable: Either<Variable, ForVariable>) -> Self {
+        match variable {
+            Either::Left(v) => Self::Variable(v),
+            Either::Right(v) => Self::ForVariable(v),
+        }
+    }
+}
+
 #[allow(clippy::enum_variant_names)]
 #[derive(Error, Debug, Diagnostic, PartialEq, Eq)]
 pub enum ForParseError {
@@ -845,7 +865,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
         .into())
     }
 
-    fn parse_for_variable(&self, at: (usize, usize)) -> TagElement {
+    fn parse_for_variable(&self, at: (usize, usize)) -> Either<Variable, ForVariable> {
         let mut parts = self.template.content(at).split('.');
         if self.forloop_depth == 0
             || parts
@@ -854,12 +874,12 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
                 .trim()
                 != "forloop"
         {
-            return TagElement::Variable(Variable::new(at));
+            return Either::Left(Variable::new(at));
         }
         let part = match parts.next_back() {
             Some(part) => part.trim(),
             None => {
-                return TagElement::ForVariable(ForVariable {
+                return Either::Right(ForVariable {
                     variant: ForVariableName::Object,
                     parent_count: 0,
                 });
@@ -873,12 +893,12 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             "first" => ForVariableName::First,
             "last" => ForVariableName::Last,
             "parentloop" => ForVariableName::Object,
-            _ => return TagElement::Variable(Variable::new(at)),
+            _ => return Either::Left(Variable::new(at)),
         };
         let parts: Vec<_> = parts.collect();
         for part in &parts {
             if part.trim() != "parentloop" {
-                return TagElement::Variable(Variable::new(at));
+                return Either::Left(Variable::new(at));
             }
         }
         let mut parent_count = parts.len();
@@ -886,9 +906,9 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             parent_count += 1;
         }
         if parent_count > self.forloop_depth {
-            return TagElement::Variable(Variable::new(at));
+            return Either::Left(Variable::new(at));
         }
-        TagElement::ForVariable(ForVariable {
+        Either::Right(ForVariable {
             variant,
             parent_count,
         })
@@ -905,7 +925,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             Some(t) => t,
         };
         let mut var = match variable_token.token_type {
-            VariableTokenType::Variable => self.parse_for_variable(variable_token.at),
+            VariableTokenType::Variable => self.parse_for_variable(variable_token.at).into(),
             VariableTokenType::Int(n) => TagElement::Int(n),
             VariableTokenType::Float(f) => TagElement::Float(f),
         };
@@ -913,7 +933,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
             let filter_token = filter_token?;
             let argument = match filter_token.argument {
                 None => None,
-                Some(ref a) => Some(a.parse(self.template)?),
+                Some(ref a) => Some(a.parse(self)?),
             };
             let filter = Filter::new(self, filter_token.at, var, argument)?;
             var = TagElement::Filter(Box::new(filter));

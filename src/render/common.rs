@@ -195,6 +195,9 @@ impl Resolve for Argument {
                     }
                 }
             }
+            ArgumentType::ForVariable(variable) => {
+                return variable.resolve(py, template, context, failures);
+            }
             ArgumentType::Float(number) => Content::Float(*number),
             ArgumentType::Int(number) => Content::Int(number.clone()),
         }))

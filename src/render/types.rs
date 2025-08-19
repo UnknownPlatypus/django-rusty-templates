@@ -313,7 +313,8 @@ impl<'t, 'py> Content<'t, 'py> {
                     }
                 }
             },
-            Self::Bool(_content) => todo!(),
+            Self::Bool(true) => 1.to_bigint(),
+            Self::Bool(false) => 0.to_bigint(),
         }
     }
 
