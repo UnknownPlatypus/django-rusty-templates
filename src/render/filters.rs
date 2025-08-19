@@ -236,7 +236,11 @@ impl ResolveFilter for CenterFilter {
                     return Err(err.into());
                 }
             },
-            Content::Bool(_) => todo!(),
+            Content::Bool(true) if content.is_empty() => {
+                let content = Cow::Borrowed(" ");
+                return Ok(Some(Content::String(ContentString::String(content))));
+            }
+            Content::Bool(_) => return Ok(Some(Content::String(ContentString::String(content)))),
         };
 
         if size <= content.len() {
