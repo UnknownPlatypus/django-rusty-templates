@@ -1,7 +1,9 @@
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::lex::common::{LexerError, lex_numeric, lex_text, lex_translated, lex_variable};
+use crate::lex::common::{
+    LexerError, NextChar, lex_numeric, lex_text, lex_translated, lex_variable,
+};
 use crate::lex::tag::TagParts;
 use crate::types::TemplateString;
 
@@ -70,22 +72,6 @@ pub struct ForLexer<'t> {
     byte: usize,
     state: State,
     previous_at: Option<(usize, usize)>,
-}
-
-trait NextChar {
-    fn next_whitespace(&self) -> usize;
-    fn next_non_whitespace(&self) -> usize;
-}
-
-impl NextChar for str {
-    fn next_whitespace(&self) -> usize {
-        self.find(char::is_whitespace).unwrap_or(self.len())
-    }
-
-    fn next_non_whitespace(&self) -> usize {
-        self.find(|c: char| !c.is_whitespace())
-            .unwrap_or(self.len())
-    }
 }
 
 impl<'t> ForLexer<'t> {
@@ -170,10 +156,7 @@ impl<'t> ForLexer<'t> {
     }
 
     fn lex_remainder(&mut self) -> Result<(), ForLexerError> {
-        let remainder = self
-            .rest
-            .find(char::is_whitespace)
-            .unwrap_or(self.rest.len());
+        let remainder = self.rest.next_whitespace();
         match remainder {
             0 => {
                 let rest = self.rest.trim_start();
