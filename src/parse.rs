@@ -362,24 +362,21 @@ fn parse_for_loop(
     let variables_at = (variables_start, last.at.0 - variables_start + last.at.1);
 
     if let Err(error) = lexer.lex_in() {
+        if parser.template.content(last.at) != "in" {
+            return Err(error.into());
+        }
         let len = variable_names.len();
-        let last_name = parser.template.content(last.at);
         match error {
             ForLexerInError::MissingComma { .. } if len >= 2 => {
-                if last_name == "in" {
-                    let previous = &variable_names[len - 2];
-                    let at = previous.at.into();
-                    return Err(ForParseError::MissingVariable { at }.into());
-                }
+                let previous = &variable_names[len - 2];
+                let at = previous.at.into();
+                return Err(ForParseError::MissingVariable { at }.into());
             }
             _ => {
-                if last_name == "in" {
-                    let at = last.at.into();
-                    return Err(ForParseError::MissingVariableBeforeIn { at }.into());
-                }
+                let at = last.at.into();
+                return Err(ForParseError::MissingVariableBeforeIn { at }.into());
             }
         }
-        return Err(error.into());
     }
 
     let expression_token = lexer.lex_expression()?;
