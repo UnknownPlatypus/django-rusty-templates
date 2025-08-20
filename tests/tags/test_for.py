@@ -900,3 +900,28 @@ def test_render_for_loop_body_error():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_render_for_loop_missing():
+    template = "{% for x in a|default:b %}{{ x }}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        django_template.render({})
+
+    error = "Failed lookup for key [b] in [{'True': True, 'False': False, 'None': None}, {}]"
+    assert str(exc_info.value) == error
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        rust_template.render({})
+
+    expected = """\
+  × Failed lookup for key [b] in {"False": False, "None": None, "True": True}
+   ╭────
+ 1 │ {% for x in a|default:b %}{{ x }}{% endfor %}
+   ·                       ┬
+   ·                       ╰── key
+   ╰────
+"""
+    assert str(exc_info.value) == expected
