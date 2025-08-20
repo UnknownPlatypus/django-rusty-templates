@@ -4,7 +4,7 @@ use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 
-use super::types::{Content, ContentString, Context};
+use super::types::{AsBorrowedContent, Content, ContentString, Context};
 use super::{Evaluate, Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
 use crate::error::RenderError;
 use crate::parse::{TagElement, TokenTree};
@@ -107,10 +107,7 @@ impl Resolve for ForVariable {
     ) -> ResolveResult<'t, 'py> {
         let for_loop = match context.get_for_loop(self.parent_count) {
             Some(for_loop) => for_loop,
-            None => {
-                let content = Cow::Borrowed("{}");
-                return Ok(Some(Content::String(ContentString::String(content))));
-            }
+            None => return Ok(Some("{}".as_content())),
         };
         Ok(Some(match self.variant {
             ForVariableName::Counter => Content::Int(for_loop.counter().into()),

@@ -6,7 +6,7 @@ use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyList, PyNone, PyString};
 
-use super::types::{Content, ContentString, Context};
+use super::types::{AsBorrowedContent, Content, Context};
 use super::{Evaluate, Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
 use crate::error::{AnnotatePyErr, PyRenderError, RenderError};
 use crate::parse::{For, IfCondition, Tag, Url};
@@ -45,7 +45,7 @@ impl Resolve for Url {
     ) -> ResolveResult<'t, 'py> {
         let view_name = match self.view_name.resolve(py, template, context, failures)? {
             Some(view_name) => view_name,
-            None => Content::String(ContentString::String(Cow::Borrowed(""))),
+            None => "".as_content(),
         };
         let urls = py.import("django.urls")?;
         let reverse = urls.getattr("reverse")?;

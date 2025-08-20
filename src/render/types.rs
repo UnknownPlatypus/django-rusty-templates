@@ -375,3 +375,35 @@ impl<'t, 'py> Content<'t, 'py> {
         })
     }
 }
+
+pub trait IntoOwnedContent<'t, 'py> {
+    fn into_content(self) -> Content<'t, 'py>;
+}
+
+pub trait AsBorrowedContent<'a, 't, 'py>
+where
+    'a: 't,
+{
+    fn as_content(&'a self) -> Content<'t, 'py>;
+}
+
+impl<'a, 't, 'py> AsBorrowedContent<'a, 't, 'py> for str
+where
+    'a: 't,
+{
+    fn as_content(&'a self) -> Content<'t, 'py> {
+        Content::String(ContentString::String(Cow::Borrowed(self)))
+    }
+}
+
+impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
+    fn into_content(self) -> Content<'t, 'py> {
+        Content::String(ContentString::String(Cow::Owned(self)))
+    }
+}
+
+impl<'t, 'py> IntoOwnedContent<'t, 'py> for Cow<'t, str> {
+    fn into_content(self) -> Content<'t, 'py> {
+        Content::String(ContentString::String(self))
+    }
+}
