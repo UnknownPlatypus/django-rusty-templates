@@ -108,9 +108,11 @@ impl Context {
     }
 
     pub fn pop_variable(&mut self, name: &str) {
-        if let Some(values) = self.context.get_mut(name) {
-            values.pop();
-        }
+        let values = self
+            .context
+            .get_mut(name)
+            .expect("Variable should have been pushed before");
+        values.pop();
     }
 
     pub fn push_variables(
