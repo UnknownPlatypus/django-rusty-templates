@@ -687,6 +687,7 @@ impl For {
                 values,
                 self.iterable.at,
                 index,
+                template,
             )?;
             parts.push(self.body.render(py, template, context)?);
             context.increment_for_loop();

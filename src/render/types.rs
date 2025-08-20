@@ -5,12 +5,13 @@ use std::iter::zip;
 
 use html_escape::encode_quoted_attribute;
 use num_bigint::{BigInt, ToBigInt};
-use pyo3::exceptions::PyAttributeError;
+use pyo3::exceptions::{PyAttributeError, PyTypeError};
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyInt, PyString, PyType};
 
-use crate::error::{PyRenderError, RenderError};
+use crate::error::{AnnotatePyErr, PyRenderError, RenderError};
+use crate::types::TemplateString;
 use crate::utils::PyResultMethods;
 
 #[derive(Debug)]
@@ -119,14 +120,37 @@ impl Context {
         values: Bound<'_, PyAny>,
         values_at: (usize, usize),
         index: usize,
+        template: TemplateString<'_>,
     ) -> Result<(), PyRenderError> {
         if names.len() == 1 {
             self.push_variable(names[0].clone(), values, index);
         } else {
-            let values: Vec<_> = values.try_iter()?.collect();
+            let py = values.py();
+            let values: Vec<_> = match values.try_iter() {
+                Ok(values) => match values.collect() {
+                    Ok(values) => values,
+                    Err(error) => {
+                        let error = error.annotate(py, values_at, "while iterating this", template);
+                        return Err(error.into());
+                    }
+                },
+                Err(error) if error.is_instance_of::<PyTypeError>(py) => {
+                    return Err(RenderError::TupleUnpackError {
+                        expected_count: names.len(),
+                        actual_count: 1,
+                        expected_at: names_at.into(),
+                        actual_at: values_at.into(),
+                    }
+                    .into());
+                }
+                Err(error) => {
+                    let error = error.annotate(py, values_at, "while iterating this", template);
+                    return Err(error.into());
+                }
+            };
             if names.len() == values.len() {
                 for (name, value) in zip(names, values) {
-                    self.push_variable(name.clone(), value?, index);
+                    self.push_variable(name.clone(), value, index);
                 }
             } else {
                 return Err(RenderError::TupleUnpackError {

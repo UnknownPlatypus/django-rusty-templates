@@ -6,6 +6,23 @@ from django.template.base import VariableDoesNotExist
 from django.template.exceptions import TemplateSyntaxError
 
 
+class BrokenIterator:
+    def __len__(self):
+        return 3
+
+    def __iter__(self):
+        yield 1
+        yield 1 / 0
+
+
+class BrokenIterator2:
+    def __len__(self):
+        return 3
+
+    def __iter__(self):
+        1 / 0
+
+
 def test_render_for_loop():
     template = "{% for x in y %}{{ x }}{% endfor %}"
     django_template = engines["django"].from_string(template)
@@ -721,6 +738,88 @@ def test_render_for_loop_unpack_tuple_mismatch():
     assert str(exc_info.value) == expected
 
 
+def test_render_for_loop_unpack_tuple_invalid():
+    template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    l = [1]
+
+    with pytest.raises(ValueError) as exc_info:
+        django_template.render({"l": l})
+
+    assert str(exc_info.value) == "Need 3 values to unpack in for loop; got 1. "
+
+    with pytest.raises(ValueError) as exc_info:
+        rust_template.render({"l": l})
+
+    expected = """\
+  × Need 3 values to unpack; got 1.
+   ╭─[1:8]
+ 1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
+   ·        ───┬───    ┬
+   ·           │       ╰── from here
+   ·           ╰── unpacked here
+ 2 │ {% endfor %}
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_render_for_loop_unpack_tuple_iteration_error():
+    template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    l = [BrokenIterator()]
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        django_template.render({"l": l})
+
+    assert str(exc_info.value) == "division by zero"
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        rust_template.render({"l": l})
+
+    expected = """\
+  × division by zero
+   ╭─[1:19]
+ 1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
+   ·                   ┬
+   ·                   ╰── while iterating this
+ 2 │ {% endfor %}
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_render_for_loop_unpack_tuple_broken_iterator():
+    template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    l = [BrokenIterator2()]
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        django_template.render({"l": l})
+
+    assert str(exc_info.value) == "division by zero"
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        rust_template.render({"l": l})
+
+    expected = """\
+  × division by zero
+   ╭─[1:19]
+ 1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
+   ·                   ┬
+   ·                   ╰── while iterating this
+ 2 │ {% endfor %}
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
 def test_render_for_loop_unpack_string():
     template = "{% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}"
     django_template = engines["django"].from_string(template)
@@ -902,18 +1001,13 @@ def test_render_for_loop_iteration_error():
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
-    class Iterator:
-        def __iter__(self):
-            yield 1
-            yield 1 / 0
-
     with pytest.raises(ZeroDivisionError) as exc_info:
-        django_template.render({"a": Iterator()})
+        django_template.render({"a": BrokenIterator()})
 
     assert str(exc_info.value) == "division by zero"
 
     with pytest.raises(ZeroDivisionError) as exc_info:
-        rust_template.render({"a": Iterator()})
+        rust_template.render({"a": BrokenIterator()})
 
     expected = """\
   × division by zero
