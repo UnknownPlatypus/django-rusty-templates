@@ -4,8 +4,8 @@ use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
 use crate::lex::common::{
-    LexerError, check_variable_attrs, lex_numeric, lex_text, lex_translated, lex_variable_argument,
-    trim_variable,
+    LexerError, NextChar, check_variable_attrs, lex_numeric, lex_text, lex_translated,
+    lex_variable_argument, trim_variable,
 };
 use crate::lex::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 
@@ -289,10 +289,7 @@ impl<'t> FilterLexer<'t> {
                 if let Some('(') = chars.next() {
                     self.lex_translated(&mut chars)?
                 } else {
-                    let end = self
-                        .rest
-                        .find(char::is_whitespace)
-                        .unwrap_or(self.rest.len());
+                    let end = self.rest.next_whitespace();
                     let at = (self.byte, end);
                     self.byte += self.rest.len();
                     self.rest = "";

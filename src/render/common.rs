@@ -1,16 +1,17 @@
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 
 use pyo3::intern;
 use pyo3::prelude::*;
 use pyo3::types::PyString;
 
-use super::types::{Content, ContentString, Context};
+use super::types::{AsBorrowedContent, Content, ContentString, Context};
 use super::{Evaluate, Render, RenderResult, Resolve, ResolveFailures, ResolveResult};
 use crate::error::RenderError;
 use crate::parse::{TagElement, TokenTree};
 use crate::types::Argument;
 use crate::types::ArgumentType;
+use crate::types::ForVariable;
+use crate::types::ForVariableName;
 use crate::types::TemplateString;
 use crate::types::Text;
 use crate::types::TranslatedText;
@@ -47,7 +48,7 @@ impl Resolve for Variable {
     ) -> ResolveResult<'t, 'py> {
         let mut parts = self.parts(template);
         let (first, mut object_at) = parts.next().expect("Variable names cannot be empty");
-        let mut variable = match context.context.get(first) {
+        let mut variable = match context.get(first) {
             Some(variable) => variable.bind(py).clone(),
             None => return Ok(None),
         };
@@ -93,6 +94,37 @@ impl Resolve for Variable {
             object_at.1 += key_at.1 + 1;
         }
         Ok(Some(Content::Py(variable)))
+    }
+}
+
+impl Resolve for ForVariable {
+    fn resolve<'t, 'py>(
+        &self,
+        py: Python<'py>,
+        _template: TemplateString<'t>,
+        context: &mut Context,
+        _failures: ResolveFailures,
+    ) -> ResolveResult<'t, 'py> {
+        let for_loop = match context.get_for_loop(self.parent_count) {
+            Some(for_loop) => for_loop,
+            None => return Ok(Some("{}".as_content())),
+        };
+        Ok(Some(match self.variant {
+            ForVariableName::Counter => Content::Int(for_loop.counter().into()),
+            ForVariableName::Counter0 => Content::Int(for_loop.counter0().into()),
+            ForVariableName::RevCounter => Content::Int(for_loop.rev_counter().into()),
+            ForVariableName::RevCounter0 => Content::Int(for_loop.rev_counter0().into()),
+            ForVariableName::First => Content::Bool(for_loop.first()),
+            ForVariableName::Last => Content::Bool(for_loop.last()),
+            ForVariableName::Object => {
+                let content = Cow::Owned(context.render_for_loop(py, self.parent_count));
+                let content = match context.autoescape {
+                    false => ContentString::String(content),
+                    true => ContentString::HtmlUnsafe(content),
+                };
+                Content::String(content)
+            }
+        }))
     }
 }
 
@@ -149,12 +181,7 @@ impl Resolve for Argument {
                     Some(content) => content,
                     None => {
                         let key = template.content(variable.at).to_string();
-                        let context: BTreeMap<&String, &Bound<'py, PyAny>> = context
-                            .context
-                            .iter()
-                            .map(|(k, v)| (k, v.bind(py)))
-                            .collect();
-                        let object = format!("{context:?}");
+                        let object = context.display(py);
                         return Err(RenderError::ArgumentDoesNotExist {
                             key,
                             object,
@@ -164,6 +191,9 @@ impl Resolve for Argument {
                         .into());
                     }
                 }
+            }
+            ArgumentType::ForVariable(variable) => {
+                return variable.resolve(py, template, context, failures);
             }
             ArgumentType::Float(number) => Content::Float(*number),
             ArgumentType::Int(number) => Content::Int(number.clone()),
@@ -183,6 +213,7 @@ impl Resolve for TagElement {
             Self::Text(text) => text.resolve(py, template, context, failures),
             Self::TranslatedText(text) => text.resolve(py, template, context, failures),
             Self::Variable(variable) => variable.resolve(py, template, context, failures),
+            Self::ForVariable(variable) => variable.resolve(py, template, context, failures),
             Self::Filter(filter) => filter.resolve(py, template, context, failures),
             Self::Int(int) => Ok(Some(Content::Int(int.clone()))),
             Self::Float(float) => Ok(Some(Content::Float(*float))),
@@ -223,6 +254,7 @@ impl Render for TokenTree {
             Self::Float(f) => Ok(f.to_string().into()),
             Self::Tag(tag) => tag.render(py, template, context),
             Self::Variable(variable) => variable.render(py, template, context),
+            Self::ForVariable(variable) => variable.render(py, template, context),
             Self::Filter(filter) => filter.render(py, template, context),
         }
     }

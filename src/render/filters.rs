@@ -14,7 +14,7 @@ use crate::filters::{
     ExternalFilter, FilterType, LowerFilter, SafeFilter, SlugifyFilter, UpperFilter,
 };
 use crate::parse::Filter;
-use crate::render::types::{Content, ContentString, Context};
+use crate::render::types::{AsBorrowedContent, Content, ContentString, Context, IntoOwnedContent};
 use crate::render::{Resolve, ResolveFailures, ResolveResult};
 use crate::types::TemplateString;
 use regex::Regex;
@@ -29,32 +29,6 @@ static WHITESPACE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[-\s]+").expect("Static string will never panic"));
 
 static SAFEDATA: GILOnceCell<Py<PyType>> = GILOnceCell::new();
-
-trait IntoOwnedContent<'t, 'py> {
-    fn into_content(self) -> Option<Content<'t, 'py>>;
-}
-
-trait AsBorrowedContent<'a, 't, 'py>
-where
-    'a: 't,
-{
-    fn as_content(&'a self) -> Option<Content<'t, 'py>>;
-}
-
-impl<'a, 't, 'py> AsBorrowedContent<'a, 't, 'py> for str
-where
-    'a: 't,
-{
-    fn as_content(&'a self) -> Option<Content<'t, 'py>> {
-        Some(Content::String(ContentString::String(Cow::Borrowed(self))))
-    }
-}
-
-impl<'t, 'py> IntoOwnedContent<'t, 'py> for String {
-    fn into_content(self) -> Option<Content<'t, 'py>> {
-        Some(Content::String(ContentString::String(Cow::Owned(self))))
-    }
-}
 
 impl Resolve for Filter {
     fn resolve<'t, 'py>(
@@ -108,7 +82,7 @@ impl ResolveFilter for AddSlashesFilter {
                 .into_content(),
             None => "".as_content(),
         };
-        Ok(content)
+        Ok(Some(content))
     }
 }
 
@@ -156,14 +130,14 @@ impl ResolveFilter for CapfirstFilter {
                 let mut chars = content_string.chars();
                 let first_char = match chars.next() {
                     Some(c) => c.to_uppercase(),
-                    None => return Ok("".as_content()),
+                    None => return Ok(Some("".as_content())),
                 };
                 let string: String = first_char.chain(chars).collect();
                 string.into_content()
             }
             None => "".as_content(),
         };
-        Ok(content)
+        Ok(Some(content))
     }
 }
 
@@ -189,7 +163,7 @@ impl ResolveFilter for CenterFilter {
         let right: usize;
         let content = match variable {
             Some(content) => content.render(context)?,
-            None => return Ok("".as_content()),
+            None => return Ok(Some("".as_content())),
         };
         let arg = self
             .argument
@@ -236,10 +210,12 @@ impl ResolveFilter for CenterFilter {
                     return Err(err.into());
                 }
             },
+            Content::Bool(true) if content.is_empty() => return Ok(Some(" ".as_content())),
+            Content::Bool(_) => return Ok(Some(content.into_content())),
         };
 
         if size <= content.len() {
-            return Ok(Some(Content::String(ContentString::String(content))));
+            return Ok(Some(content.into_content()));
         }
         if size % 2 == 0 && content.len() % 2 != 0 {
             // If the size is even and the content length is odd, we need to adjust the centering
@@ -255,7 +231,7 @@ impl ResolveFilter for CenterFilter {
         centered.push_str(&content);
         centered.push_str(&" ".repeat(right));
 
-        Ok(centered.into_content())
+        Ok(Some(centered.into_content()))
     }
 }
 
@@ -302,6 +278,8 @@ impl ResolveFilter for EscapeFilter {
                         encode_quoted_attribute_to_string(&content, &mut encoded);
                         Cow::Owned(encoded)
                     }
+                    Content::Bool(true) => Cow::Borrowed("True"),
+                    Content::Bool(false) => Cow::Borrowed("False"),
                 },
                 None => Cow::Borrowed(""),
             },
@@ -339,14 +317,12 @@ impl ResolveFilter for LowerFilter {
         context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
         let content = match variable {
-            Some(content) => Some(
-                content
-                    .resolve_string(context)?
-                    .map_content(|content| Cow::Owned(content.to_lowercase())),
-            ),
+            Some(content) => content
+                .resolve_string(context)?
+                .map_content(|content| Cow::Owned(content.to_lowercase())),
             None => "".as_content(),
         };
-        Ok(content)
+        Ok(Some(content))
     }
 }
 
@@ -368,6 +344,8 @@ impl ResolveFilter for SafeFilter {
                         let content = object.str()?.extract::<String>()?;
                         Cow::Owned(content)
                     }
+                    Content::Bool(true) => Cow::Borrowed("True"),
+                    Content::Bool(false) => Cow::Borrowed("False"),
                 },
                 None => Cow::Borrowed(""),
             },
@@ -404,22 +382,20 @@ impl ResolveFilter for SlugifyFilter {
                     #[allow(non_snake_case)]
                     let SafeData = SAFEDATA.import(py, "django.utils.safestring", "SafeData")?;
                     match content.is_instance(SafeData)? {
-                        true => Some(Content::String(ContentString::HtmlSafe(slug))),
-                        false => Some(Content::String(ContentString::HtmlUnsafe(slug))),
+                        true => Content::String(ContentString::HtmlSafe(slug)),
+                        false => Content::String(ContentString::HtmlUnsafe(slug)),
                     }
                 }
                 // Int and Float requires no slugify, we only need to turn it into a string.
-                Content::Int(content) => Some(Content::String(ContentString::String(Cow::Owned(
-                    content.to_string(),
-                )))),
-                Content::Float(content) => Some(Content::String(ContentString::String(
-                    Cow::Owned(content.to_string()),
-                ))),
-                Content::String(content) => Some(content.map_content(slugify)),
+                Content::Int(content) => content.to_string().into_content(),
+                Content::Float(content) => content.to_string().into_content(),
+                Content::String(content) => content.map_content(slugify),
+                Content::Bool(true) => "true".as_content(),
+                Content::Bool(false) => "false".as_content(),
             },
             None => "".as_content(),
         };
-        Ok(content)
+        Ok(Some(content))
     }
 }
 
@@ -434,11 +410,11 @@ impl ResolveFilter for UpperFilter {
         let content = match variable {
             Some(content) => {
                 let content = content.resolve_string(context)?;
-                Some(content.map_content(|content| Cow::Owned(content.to_uppercase())))
+                content.map_content(|content| Cow::Owned(content.to_uppercase()))
             }
             None => "".as_content(),
         };
-        Ok(content)
+        Ok(Some(content))
     }
 }
 

@@ -122,6 +122,14 @@ def test_center_argument_is_negative_integer_as_string(assert_render):
     assert_render(template, context, expected)
 
 
+@pytest.mark.parametrize("foo,expected", [("", " "), ("foo", "foofoo")])
+def test_center_by_bool(assert_render, foo, expected):
+    template = "{% for x in 'xy' %}{{ foo|center:forloop.first }}{% endfor %}"
+    context = {"foo": foo}
+
+    assert_render(template, context, expected)
+
+
 def test_center_argument_is_negative_float_as_string():
     template = "{{ foo|center:bar }}"
 

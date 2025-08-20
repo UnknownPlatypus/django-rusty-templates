@@ -7,6 +7,22 @@ use super::QUOTE_LEN;
 const START_TRANSLATE_LEN: usize = 2;
 const END_TRANSLATE_LEN: usize = 1;
 
+pub trait NextChar {
+    fn next_whitespace(&self) -> usize;
+    fn next_non_whitespace(&self) -> usize;
+}
+
+impl NextChar for str {
+    fn next_whitespace(&self) -> usize {
+        self.find(char::is_whitespace).unwrap_or(self.len())
+    }
+
+    fn next_non_whitespace(&self) -> usize {
+        self.find(|c: char| !c.is_whitespace())
+            .unwrap_or(self.len())
+    }
+}
+
 #[derive(Clone, Error, Debug, Diagnostic, PartialEq, Eq)]
 pub enum LexerError {
     #[error("Expected a complete string literal")]

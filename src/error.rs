@@ -1,6 +1,8 @@
-use miette::{Diagnostic, SourceSpan};
+use miette::{Diagnostic, LabeledSpan, SourceSpan, miette};
 use pyo3::prelude::*;
 use thiserror::Error;
+
+use crate::types::TemplateString;
 
 #[derive(Error, Debug)]
 pub enum PyRenderError {
@@ -48,6 +50,15 @@ pub enum RenderError {
         #[label("{object}")]
         object_at: Option<SourceSpan>,
     },
+    #[error("Need {expected_count} values to unpack; got {actual_count}.")]
+    TupleUnpackError {
+        expected_count: usize,
+        actual_count: usize,
+        #[label("unpacked here")]
+        expected_at: SourceSpan,
+        #[label("from here")]
+        actual_at: SourceSpan,
+    },
     #[error("Failed lookup for key [{key}] in {object}")]
     VariableDoesNotExist {
         key: String,
@@ -57,4 +68,32 @@ pub enum RenderError {
         #[label("{object}")]
         object_at: Option<SourceSpan>,
     },
+}
+
+pub trait AnnotatePyErr {
+    fn annotate(
+        self,
+        py: Python<'_>,
+        at: (usize, usize),
+        label: &str,
+        template: TemplateString<'_>,
+    ) -> Self;
+}
+
+impl AnnotatePyErr for PyErr {
+    fn annotate(
+        self,
+        py: Python<'_>,
+        at: (usize, usize),
+        label: &str,
+        template: TemplateString<'_>,
+    ) -> Self {
+        let message = miette!(
+            labels = vec![LabeledSpan::at(at, label)],
+            "{}",
+            self.value(py),
+        )
+        .with_source_code(template.0.to_string());
+        PyErr::from_type(self.get_type(py), format!("{message:?}"))
+    }
 }

@@ -335,6 +335,12 @@ pub mod django_rusty_templates {
                                     self.template.clone(),
                                 ));
                             }
+                            RenderError::TupleUnpackError { .. } => {
+                                return Err(PyValueError::with_source_code(
+                                    err.into(),
+                                    self.template.clone(),
+                                ));
+                            }
                         }
                     }
                 }
