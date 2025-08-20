@@ -132,7 +132,7 @@ impl Context {
                 Ok(values) => match values.collect() {
                     Ok(values) => values,
                     Err(error) => {
-                        let error = error.annotate(py, values_at, "while iterating this", template);
+                        let error = error.annotate(py, values_at, "while unpacking this", template);
                         return Err(error.into());
                     }
                 },

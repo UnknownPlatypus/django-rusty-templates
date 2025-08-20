@@ -786,7 +786,7 @@ def test_render_for_loop_unpack_tuple_iteration_error():
    ╭─[1:19]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
    ·                   ┬
-   ·                   ╰── while iterating this
+   ·                   ╰── while unpacking this
  2 │ {% endfor %}
    ╰────
 """
