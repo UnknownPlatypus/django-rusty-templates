@@ -823,6 +823,56 @@ def test_render_endfor_tag():
     assert str(exc_info.value) == expected
 
 
+def test_render_missing_endfor_tag():
+    template = "{% for x in 'a' %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert (
+        str(exc_info.value)
+        == "Unclosed tag on line 1: 'for'. Looking for one of: empty, endfor."
+    )
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Unclosed 'for' tag. Looking for one of: empty, endfor
+   ╭────
+ 1 │ {% for x in 'a' %}
+   · ─────────┬────────
+   ·          ╰── started here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_render_missing_endfor_tag_after_empty():
+    template = "{% for x in 'a' %}{% empty %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    assert (
+        str(exc_info.value)
+        == "Unclosed tag on line 1: 'for'. Looking for one of: endfor."
+    )
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Unclosed 'empty' tag. Looking for one of: endfor
+   ╭────
+ 1 │ {% for x in 'a' %}{% empty %}
+   ·                   ─────┬─────
+   ·                        ╰── started here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
 def test_render_for_loop_not_iterable():
     template = "{% for x in a %}{{ x }}{% endfor %}"
     django_template = engines["django"].from_string(template)
