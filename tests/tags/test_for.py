@@ -2,6 +2,7 @@ from textwrap import dedent
 
 import pytest
 from django.template import engines
+from django.template.base import VariableDoesNotExist
 from django.template.exceptions import TemplateSyntaxError
 
 
@@ -854,7 +855,7 @@ def test_render_for_loop_iteration_error():
     class Iterator:
         def __iter__(self):
             yield 1
-            yield 1/0
+            yield 1 / 0
 
     with pytest.raises(ZeroDivisionError) as exc_info:
         django_template.render({"a": Iterator()})
@@ -870,6 +871,32 @@ def test_render_for_loop_iteration_error():
  1 │ {% for x in a %}{{ x }}{% endfor %}
    ·             ┬
    ·             ╰── while iterating this
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_render_for_loop_body_error():
+    template = "{% for x in a %}{% for y in 'b' %}{{ x|add:z }}{% endfor %}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        django_template.render({"a": [1]})
+
+    error = "Failed lookup for key [z] in [{'True': True, 'False': False, 'None': None}, {'a': [1]}]"
+    assert str(exc_info.value) == error
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        rust_template.render({"a": [1]})
+
+    expected = """\
+  × Failed lookup for key [z] in {"False": False, "None": None, "True": True,
+  │ "a": [1], "x": 1, "y": 'b'}
+   ╭────
+ 1 │ {% for x in a %}{% for y in 'b' %}{{ x|add:z }}{% endfor %}{% endfor %}
+   ·                                            ┬
+   ·                                            ╰── key
    ╰────
 """
     assert str(exc_info.value) == expected
