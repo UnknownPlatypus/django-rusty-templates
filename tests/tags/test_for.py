@@ -844,3 +844,32 @@ def test_render_for_loop_not_iterable():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_render_for_loop_iteration_error():
+    template = "{% for x in a %}{{ x }}{% endfor %}"
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    class Iterator:
+        def __iter__(self):
+            yield 1
+            yield 1/0
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        django_template.render({"a": Iterator()})
+
+    assert str(exc_info.value) == "division by zero"
+
+    with pytest.raises(ZeroDivisionError) as exc_info:
+        rust_template.render({"a": Iterator()})
+
+    expected = """\
+  × division by zero
+   ╭────
+ 1 │ {% for x in a %}{{ x }}{% endfor %}
+   ·             ┬
+   ·             ╰── while iterating this
+   ╰────
+"""
+    assert str(exc_info.value) == expected

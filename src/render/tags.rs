@@ -673,10 +673,18 @@ impl For {
         }
         context.push_for_loop(list.len());
         for (index, values) in list.into_iter().enumerate() {
+            let values = match values {
+                Ok(values) => values,
+                Err(error) => {
+                    let error =
+                        error.annotate(py, self.iterable.at, "while iterating this", template);
+                    return Err(error.into());
+                }
+            };
             context.push_variables(
                 &self.variables.names,
                 self.variables.at,
-                values?,
+                values,
                 self.iterable.at,
                 index,
             )?;
