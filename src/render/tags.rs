@@ -30,8 +30,8 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         .getattr(py, "resolver_match")
         .ok_or_isinstance_of::<PyAttributeError>(py)?
     {
-        Ok(resolver_match) => resolver_match.getattr(py, "namespace"),
-        Err(_) => Ok(none),
+        Ok(resolver_match) if !resolver_match.is_none(py) => resolver_match.getattr(py, "namespace"),
+        _ => Ok(none),
     }
 }
 
