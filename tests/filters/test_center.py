@@ -244,12 +244,16 @@ def test_center_argument_int_bigger_than_isize_max_python():
     template = "{{ foo|center:width }}"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["django"].from_string(template).render({"foo": "test", "width": 9223372036854775808})
+        engines["django"].from_string(template).render(
+            {"foo": "test", "width": 9223372036854775808}
+        )
 
     assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["rusty"].from_string(template).render({"foo": "test", "width": 9223372036854775808})
+        engines["rusty"].from_string(template).render(
+            {"foo": "test", "width": 9223372036854775808}
+        )
 
     expected = """\
   × Integer 9223372036854775808 is too large
@@ -266,12 +270,16 @@ def test_center_argument_int_smaller_than_isize_min_python():
     template = "{{ foo|center:width }}"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["django"].from_string(template).render({"foo": "test", "width": -9223372036854775809})
+        engines["django"].from_string(template).render(
+            {"foo": "test", "width": -9223372036854775809}
+        )
 
     assert str(exc_info.value) == "Python int too large to convert to C ssize_t"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["rusty"].from_string(template).render({"foo": "test", "width": -9223372036854775809})
+        engines["rusty"].from_string(template).render(
+            {"foo": "test", "width": -9223372036854775809}
+        )
 
     expected = """\
   × Integer -9223372036854775809 is too large
@@ -400,12 +408,16 @@ def test_center_argument_float_inf_python():
     template = "{{ foo|center:width }}"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["django"].from_string(template).render({"foo": "test", "width": float("inf")})
+        engines["django"].from_string(template).render(
+            {"foo": "test", "width": float("inf")}
+        )
 
     assert str(exc_info.value) == "cannot convert float infinity to integer"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["rusty"].from_string(template).render({"foo": "test", "width": float("inf")})
+        engines["rusty"].from_string(template).render(
+            {"foo": "test", "width": float("inf")}
+        )
 
     expected = """\
   × Couldn't convert float (inf) to integer
@@ -422,12 +434,16 @@ def test_center_argument_float_negative_inf_python():
     template = "{{ foo|center:width }}"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["django"].from_string(template).render({"foo": "test", "width": float("-inf")})
+        engines["django"].from_string(template).render(
+            {"foo": "test", "width": float("-inf")}
+        )
 
     assert str(exc_info.value) == "cannot convert float infinity to integer"
 
     with pytest.raises(OverflowError) as exc_info:
-        engines["rusty"].from_string(template).render({"foo": "test", "width": float("-inf")})
+        engines["rusty"].from_string(template).render(
+            {"foo": "test", "width": float("-inf")}
+        )
 
     expected = """\
   × Couldn't convert float (-inf) to integer

@@ -100,7 +100,7 @@ def test_render_url_current_app_unset():
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
-    request = factory.get('/')
+    request = factory.get("/")
 
     expected = "/users/lily/"
     assert django_template.render({}, request) == expected
@@ -112,7 +112,7 @@ def test_render_url_current_app():
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
-    request = factory.get('/')
+    request = factory.get("/")
     request.current_app = "members"
 
     expected = "/members/lily/"
@@ -125,7 +125,7 @@ def test_render_url_current_app_kwargs():
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
-    request = factory.get('/')
+    request = factory.get("/")
     request.current_app = "members"
 
     expected = "/members/lily/"
@@ -138,7 +138,7 @@ def test_render_url_current_app_resolver_match():
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
 
-    request = factory.get('/')
+    request = factory.get("/")
     request.resolver_match = resolve("/members/bryony/")
 
     expected = "/members/lily/"

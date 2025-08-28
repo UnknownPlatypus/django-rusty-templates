@@ -1077,13 +1077,13 @@ def test_missing_argument_after_for_loop():
     rust_template = engines["rusty"].from_string(template)
 
     with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({"a": 'b'})
+        django_template.render({"a": "b"})
 
     error = "Failed lookup for key [x] in [{'True': True, 'False': False, 'None': None}, {'a': 'b'}]"
     assert str(exc_info.value) == error
 
     with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({"a": 'b'})
+        rust_template.render({"a": "b"})
 
     expected = """\
   × Failed lookup for key [x] in {"False": False, "None": None, "True": True,
