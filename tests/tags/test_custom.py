@@ -179,6 +179,16 @@ def test_simple_tag_takes_context_getitem():
 
 
 def test_simple_tag_takes_context_setitem():
+    template = "{% load counter from custom_tags %}{% counter %}{{ count }}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({}) == "1"
+    assert rust_template.render({}) == "1"
+
+
+def test_simple_tag_takes_context_setitem_in_loop():
     template = "{% load counter from custom_tags %}{% for item in items %}{% if item %}{% counter %}{% endif %}{{ count }}{% endfor %}{{ count }}"
 
     django_template = engines["django"].from_string(template)
