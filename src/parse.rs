@@ -1094,6 +1094,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     fn parse_custom_tag_parts(
         &self,
         parts: TagParts,
