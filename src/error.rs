@@ -1,4 +1,5 @@
 use miette::{Diagnostic, LabeledSpan, SourceSpan, miette};
+use pyo3::exceptions::PyKeyError;
 use pyo3::prelude::*;
 use thiserror::Error;
 
@@ -70,6 +71,18 @@ pub enum RenderError {
     },
 }
 
+#[pyclass]
+struct KeyErrorMessage {
+    message: String,
+}
+
+#[pymethods]
+impl KeyErrorMessage {
+    fn __repr__(&self) -> &str {
+        &self.message
+    }
+}
+
 pub trait AnnotatePyErr {
     fn annotate(
         self,
@@ -94,6 +107,17 @@ impl AnnotatePyErr for PyErr {
             self.value(py),
         )
         .with_source_code(template.0.to_string());
-        PyErr::from_type(self.get_type(py), format!("{message:?}"))
+        if self.is_instance_of::<PyKeyError>(py) {
+            let message = format!("{message:?}");
+            // Python converts the message to `repr(message)` for KeyError.
+            // When annotating, this is unhelpful, so we work around this by defining a custom
+            // `__repr__` that returns the message exactly as we want it.
+            // https://github.com/python/cpython/blob/43573028c6ae21c66c118b8bae866c8968b87b68/Objects/exceptions.c#L2946-L2954
+            let message = KeyErrorMessage { message };
+            PyKeyError::new_err((message,))
+        } else {
+            let err_type = self.get_type(py);
+            PyErr::from_type(err_type, format!("{message:?}"))
+        }
     }
 }

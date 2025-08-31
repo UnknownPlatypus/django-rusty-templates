@@ -826,13 +826,17 @@ impl Render for SimpleTag {
             // Try to remove the Context from the PyContext
             let inner_context = match Arc::try_unwrap(extracted_context.context) {
                 // Fast path when we have the only reference in the Arc.
-                Ok(inner_context) => inner_context.into_inner().expect("Mutex should be unlocked because Arc refcount is one."),
+                Ok(inner_context) => inner_context
+                    .into_inner()
+                    .expect("Mutex should be unlocked because Arc refcount is one."),
                 // Slow path when Python has held on to the context for some reason.
                 // We can still do the right thing by cloning.
                 Err(inner_context) => {
-                    let guard = inner_context.lock_py_attached(py).expect("Mutex should not be poisoned");
+                    let guard = inner_context
+                        .lock_py_attached(py)
+                        .expect("Mutex should not be poisoned");
                     guard.clone_ref(py)
-                },
+                }
             };
             // Put the Context back in `context`
             let _ = std::mem::replace(context, inner_context);

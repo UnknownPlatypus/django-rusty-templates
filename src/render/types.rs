@@ -283,28 +283,45 @@ impl PyContext {
 impl PyContext {
     #[getter]
     fn request<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyAny>> {
-        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        let guard = self
+            .context
+            .lock_py_attached(py)
+            .expect("Mutex should not be poisoned");
         guard
             .request
             .as_ref()
             .map(|request| request.bind(py).clone())
     }
 
-    fn get<'py>(&self, py: Python<'py>, key: String, fallback: Bound<'py, PyAny>) -> Bound<'py, PyAny> {
-        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+    fn get<'py>(
+        &self,
+        py: Python<'py>,
+        key: String,
+        fallback: Bound<'py, PyAny>,
+    ) -> Bound<'py, PyAny> {
+        let guard = self
+            .context
+            .lock_py_attached(py)
+            .expect("Mutex should not be poisoned");
         match guard.get(&key) {
             Some(value) => value.bind(py).clone(),
-            None => fallback
+            None => fallback,
         }
     }
 
     fn __contains__<'py>(&self, py: Python<'py>, key: String) -> bool {
-        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        let guard = self
+            .context
+            .lock_py_attached(py)
+            .expect("Mutex should not be poisoned");
         guard.get(&key).is_some()
     }
 
     fn __getitem__<'py>(&self, py: Python<'py>, key: String) -> Result<Bound<'py, PyAny>, PyErr> {
-        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        let guard = self
+            .context
+            .lock_py_attached(py)
+            .expect("Mutex should not be poisoned");
         match guard.get(&key) {
             Some(value) => Ok(value.bind(py).clone()),
             None => Err(PyKeyError::new_err(key)),
@@ -312,7 +329,10 @@ impl PyContext {
     }
 
     fn __setitem__<'py>(&self, py: Python<'py>, key: String, value: Bound<'py, PyAny>) {
-        let mut guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        let mut guard = self
+            .context
+            .lock_py_attached(py)
+            .expect("Mutex should not be poisoned");
         if let Some(last) = guard.names.last_mut() {
             last.insert(key.clone());
         };

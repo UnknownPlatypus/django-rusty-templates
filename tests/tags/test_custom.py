@@ -198,6 +198,33 @@ def test_simple_tag_takes_context_setitem_in_loop():
     assert rust_template.render({"items": [1, 0, 4, 0]}) == "1122"
 
 
+def test_simple_tag_takes_context_getitem_missing():
+    template = "{% load local_time from custom_tags %}{% local_time dt %}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    source_time = datetime(2025, 8, 31, 9, 14, tzinfo=ZoneInfo("Europe/London"))
+    context = {"dt": source_time}
+    with pytest.raises(KeyError) as exc_info:
+        django_template.render(context)
+
+    assert str(exc_info.value) == "'timezone'"
+
+    with pytest.raises(KeyError) as exc_info:
+        rust_template.render(context)
+
+    expected = """\
+  × 'timezone'
+   ╭────
+ 1 │ {% load local_time from custom_tags %}{% local_time dt %}
+   ·                                       ─────────┬─────────
+   ·                                                ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
 def test_simple_tag_positional_after_kwarg():
     template = "{% load double from custom_tags %}{% double value=3 foo %}"
 
