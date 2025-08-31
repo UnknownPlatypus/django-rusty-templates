@@ -6,6 +6,7 @@ use num_bigint::{BigInt, Sign};
 use num_traits::cast::ToPrimitive;
 use pyo3::exceptions::PyAttributeError;
 use pyo3::prelude::*;
+use pyo3::sync::MutexExt;
 use pyo3::types::{PyBool, PyDict, PyList, PyNone, PyString, PyTuple};
 
 use super::types::{AsBorrowedContent, Content, Context, PyContext};
@@ -697,7 +698,7 @@ impl For {
             parts.push(self.body.render(py, template, context)?);
             context.increment_for_loop();
         }
-        context.pop_variables(&self.variables.names);
+        context.pop_variables();
         context.pop_for_loop();
         Ok(Cow::Owned(parts.join("")))
     }
@@ -732,7 +733,7 @@ impl For {
             parts.push(self.body.render(py, template, context)?);
             context.increment_for_loop();
         }
-        context.pop_variable(variable);
+        context.pop_variables();
         context.pop_for_loop();
         Ok(Cow::Owned(parts.join("")))
     }
@@ -825,10 +826,13 @@ impl Render for SimpleTag {
             // Try to remove the Context from the PyContext
             let inner_context = match Arc::try_unwrap(extracted_context.context) {
                 // Fast path when we have the only reference in the Arc.
-                Ok(inner_context) => inner_context,
+                Ok(inner_context) => inner_context.into_inner().expect("Mutex should be unlocked because Arc refcount is one."),
                 // Slow path when Python has held on to the context for some reason.
                 // We can still do the right thing by cloning.
-                Err(inner_context) => inner_context.clone_ref(py),
+                Err(inner_context) => {
+                    let guard = inner_context.lock_py_attached(py).expect("Mutex should not be poisoned");
+                    guard.clone_ref(py)
+                },
             };
             // Put the Context back in `context`
             let _ = std::mem::replace(context, inner_context);

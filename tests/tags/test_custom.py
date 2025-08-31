@@ -1,3 +1,6 @@
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 import pytest
 from django.template import engines
 from django.template.base import VariableDoesNotExist
@@ -142,6 +145,47 @@ def test_simple_tag_takes_context_context_reference_held():
     request = factory.get("/foo/")
     assert django_template.render({"bar": "bar"}, request) == "/foo/bar"
     assert rust_template.render({"bar": "bar"}, request) == "/foo/bar"
+
+
+def test_simple_tag_takes_context_get_variable():
+    template = """\
+{% load greeting from custom_tags %}{% greeting 'Charlie' %}
+{% for user in users %}{% greeting 'Lily' %}{% endfor %}
+{% greeting 'George' %}"""
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    expected = """\
+Hello Charlie from Django!
+Hello Lily from Rusty Templates!
+Hello George from Django!"""
+    assert django_template.render({"users": ["Rusty Templates"]}) == expected
+    assert rust_template.render({"users": ["Rusty Templates"]}) == expected
+
+
+def test_simple_tag_takes_context_getitem():
+    template = "{% load local_time from custom_tags %}{% local_time dt %}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    source_time = datetime(2025, 8, 31, 9, 14, tzinfo=ZoneInfo("Europe/London"))
+    destination_timezone = ZoneInfo("Australia/Melbourne")
+    context = {"dt": source_time, "timezone": destination_timezone}
+    expected = str(source_time.astimezone(destination_timezone))
+    assert django_template.render(context) == expected
+    assert rust_template.render(context) == expected
+
+
+def test_simple_tag_takes_context_setitem():
+    template = "{% load counter from custom_tags %}{% for item in items %}{% if item %}{% counter %}{% endif %}{{ count }}{% endfor %}{{ count }}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    assert django_template.render({"items": [1, 0, 4, 0]}) == "1122"
+    assert rust_template.render({"items": [1, 0, 4, 0]}) == "1122"
 
 
 def test_simple_tag_positional_after_kwarg():

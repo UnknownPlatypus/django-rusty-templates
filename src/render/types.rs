@@ -1,14 +1,16 @@
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::iter::zip;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use html_escape::encode_quoted_attribute;
 use num_bigint::{BigInt, ToBigInt};
-use pyo3::exceptions::{PyAttributeError, PyTypeError};
+use pyo3::exceptions::{PyAttributeError, PyKeyError, PyTypeError};
 use pyo3::intern;
 use pyo3::prelude::*;
+use pyo3::sync::MutexExt;
 use pyo3::types::{PyBool, PyDict, PyInt, PyString, PyType};
 
 use crate::error::{AnnotatePyErr, PyRenderError, RenderError};
@@ -53,6 +55,7 @@ pub struct Context {
     loops: Vec<ForLoop>,
     pub request: Option<Py<PyAny>>,
     pub autoescape: bool,
+    names: Vec<HashSet<String>>,
 }
 
 impl Context {
@@ -67,6 +70,7 @@ impl Context {
             context,
             autoescape,
             loops: Vec::new(),
+            names: Vec::new(),
         }
     }
 
@@ -76,6 +80,7 @@ impl Context {
             context: HashMap::new(),
             autoescape: false,
             loops: Vec::new(),
+            names: Vec::new(),
         }
     }
 
@@ -89,6 +94,7 @@ impl Context {
                 .collect(),
             autoescape: self.autoescape,
             loops: self.loops.clone(),
+            names: self.names.clone(),
         }
     }
 
@@ -127,15 +133,12 @@ impl Context {
 
     pub fn push_variable(&mut self, name: String, value: Bound<'_, PyAny>, index: usize) {
         let replace = index != 0;
+        if !replace {
+            let mut names_set = HashSet::new();
+            names_set.insert(name.clone());
+            self.names.push(names_set);
+        }
         self._insert(name, value, replace);
-    }
-
-    pub fn pop_variable(&mut self, name: &str) {
-        let values = self
-            .context
-            .get_mut(name)
-            .expect("Variable should have been pushed before");
-        values.pop();
     }
 
     pub fn push_variables(
@@ -147,8 +150,13 @@ impl Context {
         index: usize,
         template: TemplateString<'_>,
     ) -> Result<(), PyRenderError> {
+        let replace = index != 0;
+        if !replace {
+            let names_set = names.iter().cloned().collect();
+            self.names.push(names_set);
+        }
         if names.len() == 1 {
-            self.push_variable(names[0].clone(), values, index);
+            self._insert(names[0].clone(), values, replace);
         } else {
             let py = values.py();
             let values: Vec<_> = match values.try_iter() {
@@ -175,7 +183,7 @@ impl Context {
             };
             if names.len() == values.len() {
                 for (name, value) in zip(names, values) {
-                    self.push_variable(name.clone(), value, index);
+                    self._insert(name.clone(), value, replace);
                 }
             } else {
                 return Err(RenderError::TupleUnpackError {
@@ -190,9 +198,19 @@ impl Context {
         Ok(())
     }
 
-    pub fn pop_variables(&mut self, names: &Vec<String>) {
-        for name in names {
-            self.pop_variable(name)
+    fn _pop_variable(&mut self, name: &str) {
+        let values = self
+            .context
+            .get_mut(name)
+            .expect("Variable should have been pushed before");
+        values.pop();
+    }
+
+    pub fn pop_variables(&mut self) {
+        if let Some(names) = self.names.pop() {
+            for name in names {
+                self._pop_variable(&name)
+            }
         }
     }
 
@@ -247,16 +265,16 @@ impl Context {
     }
 }
 
-#[pyclass]
+#[pyclass(mapping)]
 #[derive(Clone)]
 pub struct PyContext {
-    pub context: Arc<Context>,
+    pub context: Arc<Mutex<Context>>,
 }
 
 impl PyContext {
     pub fn new(context: Context) -> Self {
         Self {
-            context: context.into(),
+            context: Arc::new(Mutex::new(context)),
         }
     }
 }
@@ -265,10 +283,40 @@ impl PyContext {
 impl PyContext {
     #[getter]
     fn request<'py>(&self, py: Python<'py>) -> Option<Bound<'py, PyAny>> {
-        self.context
+        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        guard
             .request
             .as_ref()
             .map(|request| request.bind(py).clone())
+    }
+
+    fn get<'py>(&self, py: Python<'py>, key: String, fallback: Bound<'py, PyAny>) -> Bound<'py, PyAny> {
+        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        match guard.get(&key) {
+            Some(value) => value.bind(py).clone(),
+            None => fallback
+        }
+    }
+
+    fn __contains__<'py>(&self, py: Python<'py>, key: String) -> bool {
+        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        guard.get(&key).is_some()
+    }
+
+    fn __getitem__<'py>(&self, py: Python<'py>, key: String) -> Result<Bound<'py, PyAny>, PyErr> {
+        let guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        match guard.get(&key) {
+            Some(value) => Ok(value.bind(py).clone()),
+            None => Err(PyKeyError::new_err(key)),
+        }
+    }
+
+    fn __setitem__<'py>(&self, py: Python<'py>, key: String, value: Bound<'py, PyAny>) {
+        let mut guard = self.context.lock_py_attached(py).expect("Mutex should not be poisoned");
+        if let Some(last) = guard.names.last_mut() {
+            last.insert(key.clone());
+        };
+        guard.insert(key, value)
     }
 }
 

@@ -51,6 +51,25 @@ def request_path(context):
     return context.request.path
 
 
+@register.simple_tag(takes_context=True)
+def greeting(context, name):
+    user = context.get("user", "Django")
+    return f"Hello {name} from {user}!"
+
+
+@register.simple_tag(takes_context=True)
+def local_time(context, time):
+    timezone = context["timezone"]
+    return time.astimezone(timezone)
+
+
+@register.simple_tag(takes_context=True)
+def counter(context):
+    if "count" in context:
+        context["count"] += 1
+    else:
+        context["count"] = 1
+    return ""
 #
 #
 # @register.simple_block_tag
