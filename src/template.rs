@@ -386,9 +386,9 @@ mod tests {
 
     #[test]
     fn test_syntax_error() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let mut filename = std::env::current_dir().unwrap();
             filename.push("tests");
             filename.push("templates");
@@ -418,9 +418,9 @@ mod tests {
 
     #[test]
     fn test_syntax_error_from_string() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ foo.bar|title'foo' }}".to_string();
             let error = temp_env::with_var("NO_COLOR", Some("1"), || {
@@ -442,9 +442,9 @@ mod tests {
 
     #[test]
     fn test_render_empty_template() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "".to_string();
             let template = Template::new_from_string(py, template_string, &engine).unwrap();
@@ -456,9 +456,9 @@ mod tests {
 
     #[test]
     fn test_render_template_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "Hello {{ user }}!".to_string();
             let template = Template::new_from_string(py, template_string, &engine).unwrap();
@@ -474,9 +474,9 @@ mod tests {
 
     #[test]
     fn test_render_template_unknown_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "Hello {{ user }}!".to_string();
             let template = Template::new_from_string(py, template_string, &engine).unwrap();
@@ -488,9 +488,9 @@ mod tests {
 
     #[test]
     fn test_render_template_variable_nested() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "Hello {{ user.profile.names.0 }}!".to_string();
             let template = Template::new_from_string(py, template_string, &engine).unwrap();
@@ -520,9 +520,9 @@ user = User(["Lily"])
 
     #[test]
     fn test_engine_from_string() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = Engine::new(
                 py,
                 None,
@@ -552,9 +552,9 @@ user = User(["Lily"])
         use pyo3::IntoPyObject;
         use pyo3::types::{PyAnyMethods, PyListMethods};
 
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let cwd = std::env::current_dir().unwrap();
             let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
             let sys_path = sys_path.downcast().unwrap();

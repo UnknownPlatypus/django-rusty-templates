@@ -281,9 +281,9 @@ mod tests {
 
     #[test]
     fn test_filesystem_loader() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let loader =
                 FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
@@ -303,9 +303,9 @@ mod tests {
 
     #[test]
     fn test_filesystem_loader_missing_template() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let loader =
                 FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
@@ -330,9 +330,9 @@ mod tests {
 
     #[test]
     fn test_filesystem_loader_invalid_encoding() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let loader =
                 FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
@@ -355,9 +355,9 @@ mod tests {
 
     #[test]
     fn test_cached_loader() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Helper to check cache contents
             let verify_cache = |cache: &HashMap<String, Result<Template, LoaderError>>,
                                 key: &str,
@@ -414,9 +414,9 @@ mod tests {
 
     #[test]
     fn test_cached_loader_missing_template() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let filesystem_loader =
                 FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
@@ -454,9 +454,9 @@ mod tests {
 
     #[test]
     fn test_cached_loader_invalid_encoding() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let filesystem_loader =
                 FileSystemLoader::new(vec![PathBuf::from("tests/templates")], encoding_rs::UTF_8);
@@ -481,9 +481,9 @@ mod tests {
 
     #[test]
     fn test_locmem_loader() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let mut templates: HashMap<String, String> = HashMap::new();
             templates.insert("index.html".to_string(), "index".to_string());
@@ -501,9 +501,9 @@ mod tests {
 
     #[test]
     fn test_locmem_loader_missing_template() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let templates: HashMap<String, String> = HashMap::new();
 
@@ -524,9 +524,9 @@ mod tests {
 
     #[test]
     fn test_appdirs_loader() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Setup Django
             setup_django(py);
 
@@ -548,9 +548,9 @@ mod tests {
 
     #[test]
     fn test_appdirs_loader_missing_template() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Setup Django
             setup_django(py);
 
@@ -577,9 +577,9 @@ mod tests {
 
     #[test]
     fn test_appdirs_loader_invalid_encoding() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Setup Django
             setup_django(py);
 
@@ -604,9 +604,9 @@ mod tests {
 
     #[test]
     fn test_get_app_template_dir_special_cases() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Test with None path
             let none_path = py.None().into_bound(py);
             let result = get_app_template_dir(none_path, "templates");
@@ -622,9 +622,9 @@ mod tests {
 
     #[test]
     fn test_get_app_template_dir_with_str() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Test with Python string for current directory (nonexistent template)
             let current_dir = ".".into_bound_py_any(py).unwrap();
             let result = get_app_template_dir(current_dir, "nonexistent");
@@ -642,9 +642,9 @@ mod tests {
 
     #[test]
     fn test_get_app_template_dir_with_pathlib() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Import pathlib.Path
             let path_module = py.import("pathlib").unwrap();
             let path_cls = path_module.getattr("Path").unwrap();
@@ -666,9 +666,9 @@ mod tests {
 
     #[test]
     fn test_get_app_template_dirs() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Setup Django
             setup_django(py);
 
@@ -788,10 +788,10 @@ mod tests {
         ignore = "Skipping on Windows due to path character restrictions"
     )]
     fn test_safe_join_matches_django_safe_join() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
         fn matches(path: PathBuf, template_name: String) -> bool {
-            Python::with_gil(|py| {
+            Python::attach(|py| {
                 let utils_os = PyModule::import(py, "django.utils._os").unwrap();
                 let django_safe_join = utils_os.getattr("safe_join").unwrap();
 
