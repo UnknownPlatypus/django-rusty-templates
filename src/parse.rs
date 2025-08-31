@@ -1242,9 +1242,9 @@ mod tests {
 
     #[test]
     fn test_empty_template() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1255,9 +1255,9 @@ mod tests {
 
     #[test]
     fn test_text() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "Some text";
             let template_string = TemplateString(template);
@@ -1271,9 +1271,9 @@ mod tests {
 
     #[test]
     fn test_comment() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{# A commment #}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1284,9 +1284,9 @@ mod tests {
 
     #[test]
     fn test_empty_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{{ }}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1297,9 +1297,9 @@ mod tests {
 
     #[test]
     fn test_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = TemplateString("{{ foo }}");
             let mut parser = Parser::new(py, template, &libraries);
@@ -1315,9 +1315,9 @@ mod tests {
 
     #[test]
     fn test_variable_attribute() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = TemplateString("{{ foo.bar.baz }}");
             let mut parser = Parser::new(py, template, &libraries);
@@ -1333,9 +1333,9 @@ mod tests {
 
     #[test]
     fn test_filter() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let filters = HashMap::from([("bar".to_string(), py.None().bind(py).clone())]);
             let template = TemplateString("{{ foo|bar }}");
@@ -1365,9 +1365,9 @@ mod tests {
 
     #[test]
     fn test_unknown_filter() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = TemplateString("{{ foo|bar }}");
             let mut parser = Parser::new(py, template, &libraries);
@@ -1384,9 +1384,9 @@ mod tests {
 
     #[test]
     fn test_filter_multiple() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{{ foo|bar|baz }}";
             let filters = HashMap::from([
@@ -1424,9 +1424,9 @@ mod tests {
 
     #[test]
     fn test_filter_argument() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let filters = HashMap::from([("bar".to_string(), py.None().bind(py).clone())]);
             let template = TemplateString("{{ foo|bar:baz }}");
@@ -1459,9 +1459,9 @@ mod tests {
 
     #[test]
     fn test_filter_argument_text() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let filters = HashMap::from([("bar".to_string(), py.None().bind(py).clone())]);
             let template = TemplateString("{{ foo|bar:'baz' }}");
@@ -1490,9 +1490,9 @@ mod tests {
 
     #[test]
     fn test_filter_argument_translated_text() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let filters = HashMap::from([("bar".to_string(), py.None().bind(py).clone())]);
             let template = TemplateString("{{ foo|bar:_('baz') }}");
@@ -1521,9 +1521,9 @@ mod tests {
 
     #[test]
     fn test_filter_argument_float() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let filters = HashMap::from([("bar".to_string(), py.None().bind(py).clone())]);
             let template = "{{ foo|bar:5.2e3 }}";
@@ -1551,9 +1551,9 @@ mod tests {
 
     #[test]
     fn test_filter_argument_int() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let filters = HashMap::from([("bar".to_string(), py.None().bind(py).clone())]);
             let template = "{{ foo|bar:99 }}";
@@ -1581,9 +1581,9 @@ mod tests {
 
     #[test]
     fn test_filter_argument_bigint() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let filters = HashMap::from([("bar".to_string(), py.None().bind(py).clone())]);
             let template = "{{ foo|bar:99999999999999999 }}";
@@ -1611,9 +1611,9 @@ mod tests {
 
     #[test]
     fn test_filter_argument_invalid_number() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{{ foo|bar:9.9.9 }}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1624,9 +1624,9 @@ mod tests {
 
     #[test]
     fn test_filter_parse_addslashes() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ foo|addslashes }}".to_string();
             let context = PyDict::new(py);
@@ -1648,9 +1648,9 @@ mod tests {
 
     #[test]
     fn test_filter_default() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = TemplateString("{{ foo|default:baz }}");
             let mut parser = Parser::new(py, template, &libraries);
@@ -1676,9 +1676,9 @@ mod tests {
 
     #[test]
     fn test_filter_default_missing_argument() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{{ foo|default|baz }}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1689,9 +1689,9 @@ mod tests {
 
     #[test]
     fn test_filter_lower_unexpected_argument() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{{ foo|lower:baz }}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1708,9 +1708,9 @@ mod tests {
 
     #[test]
     fn test_variable_lexer_error() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{{ _foo }}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1726,9 +1726,9 @@ mod tests {
 
     #[test]
     fn test_parse_empty_tag() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{%  %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1739,9 +1739,9 @@ mod tests {
 
     #[test]
     fn test_block_error() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url'foo' %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1755,9 +1755,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url 'some-url-name' %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1776,9 +1776,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_view_name_translated() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url _('some-url-name') %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1797,9 +1797,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_view_name_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1818,9 +1818,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_view_name_filter() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name|default:'home' %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1849,9 +1849,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_no_arguments() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1862,9 +1862,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_view_name_integer() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url 64 %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1883,9 +1883,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_arguments() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name 'foo' bar|default:'home' 64 5.7 _(\"spam\") %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1917,9 +1917,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_kwargs() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name foo='foo' extra=-64 %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1941,9 +1941,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_arguments_as_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name 'foo' as some_url %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1962,9 +1962,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_kwargs_as_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name foo='foo' as some_url %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -1983,9 +1983,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_arguments_last_variables() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name 'foo' arg arg2 %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -2008,9 +2008,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_mixed_args_kwargs() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url some_view_name 'foo' arg name=arg2 %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -2026,9 +2026,9 @@ mod tests {
 
     #[test]
     fn test_parse_url_tag_invalid_number() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let libraries = HashMap::new();
             let template = "{% url foo 9.9.9 %}";
             let mut parser = Parser::new(py, template.into(), &libraries);
@@ -2039,9 +2039,9 @@ mod tests {
 
     #[test]
     fn test_filter_type_partial_eq() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             assert_eq!(
                 FilterType::Lower(LowerFilter),
                 FilterType::Lower(LowerFilter)

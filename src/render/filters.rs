@@ -5,7 +5,7 @@ use html_escape::encode_quoted_attribute_to_string;
 use num_bigint::{BigInt, ToBigInt};
 use num_traits::ToPrimitive;
 use pyo3::prelude::*;
-use pyo3::sync::GILOnceCell;
+use pyo3::sync::PyOnceLock;
 use pyo3::types::PyType;
 
 use crate::error::RenderError;
@@ -28,7 +28,7 @@ static NON_WORD_RE: LazyLock<Regex> =
 static WHITESPACE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[-\s]+").expect("Static string will never panic"));
 
-static SAFEDATA: GILOnceCell<Py<PyType>> = GILOnceCell::new();
+static SAFEDATA: PyOnceLock<Py<PyType>> = PyOnceLock::new();
 
 impl Resolve for Filter {
     fn resolve<'t, 'py>(
@@ -428,7 +428,7 @@ mod tests {
     use crate::types::{Argument, ArgumentType, Text, Variable};
 
     use pyo3::types::{PyDict, PyString};
-    static MARK_SAFE: GILOnceCell<Py<PyAny>> = GILOnceCell::new();
+    static MARK_SAFE: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 
     fn mark_safe(py: Python<'_>, string: String) -> Result<Py<PyAny>, PyErr> {
         let mark_safe = match MARK_SAFE.get(py) {
@@ -448,9 +448,9 @@ mod tests {
 
     #[test]
     fn test_render_filter() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
             let mut context = Context::new(context, None, false);
@@ -472,9 +472,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_happy_path() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -488,9 +488,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_spaces_omitted() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -504,9 +504,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_special_characters_omitted() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -520,9 +520,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_multiple_spaces_inside_becomes_single() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -536,9 +536,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_integer() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:1|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -551,9 +551,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_float() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:1.3|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -566,9 +566,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_rust_string() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:'hello world'|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -581,9 +581,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_safe_string() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|default:'hello world'|safe|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -596,9 +596,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_safe_string_from_rust_treated_as_py() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -613,9 +613,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_non_existing_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ not_there|slugify }}".to_string();
             let context = PyDict::new(py);
@@ -628,9 +628,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_slugify_invalid() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|slugify:invalid }}".to_string();
             let error = Template::new_from_string(py, template_string, &engine).unwrap_err();
@@ -642,9 +642,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_addslashes_single() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let name = PyString::new(py, "'hello'").into_any();
             let context = HashMap::from([("quotes".to_string(), name.unbind())]);
             let mut context = Context::new(context, None, false);
@@ -663,9 +663,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_capfirst() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|capfirst }}".to_string();
             let context = PyDict::new(py);
@@ -701,9 +701,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_center() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|center:'11' }}".to_string();
             let context = PyDict::new(py);
@@ -733,9 +733,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_center_no_argument_return_err() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|center }}".to_string();
             let context = PyDict::new(py);
@@ -750,9 +750,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_center_no_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|center:'11' }}".to_string();
             let context = PyDict::new(py);
@@ -765,9 +765,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_center_on_0() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let engine = EngineData::empty();
             let template_string = "{{ var|center:0 }}".to_string();
             let context = PyDict::new(py);
@@ -781,9 +781,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_default() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let context = HashMap::new();
             let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|default:'Bryony' }}");
@@ -804,9 +804,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_default_integer() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let context = HashMap::new();
             let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ count|default:12}}");
@@ -827,9 +827,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_default_float() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let context = HashMap::new();
             let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ count|default:3.5}}");
@@ -850,9 +850,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_default_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let me = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("me".to_string(), me.unbind())]);
             let mut context = Context::new(context, None, false);
@@ -874,9 +874,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_lower() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
             let mut context = Context::new(context, None, false);
@@ -895,9 +895,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_lower_missing_left() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let context = HashMap::new();
             let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|lower }}");
@@ -915,9 +915,9 @@ mod tests {
 
     #[test]
     fn test_render_chained_filters() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let context = HashMap::new();
             let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|default:'Bryony'|lower }}");
@@ -943,9 +943,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_upper() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let name = PyString::new(py, "Foo").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
             let mut context = Context::new(context, None, false);
@@ -964,9 +964,9 @@ mod tests {
 
     #[test]
     fn test_render_filter_upper_missing_left() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let context = HashMap::new();
             let mut context = Context::new(context, None, false);
             let template = TemplateString("{{ name|upper }}");

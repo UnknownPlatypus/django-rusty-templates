@@ -270,9 +270,9 @@ mod tests {
 
     #[test]
     fn test_render_variable() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let name = PyString::new(py, "Lily").into_any();
             let context = HashMap::from([("name".to_string(), name.unbind())]);
             let mut context = Context::new(context, None, false);
@@ -286,9 +286,9 @@ mod tests {
 
     #[test]
     fn test_render_dict_lookup() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let data = PyDict::new(py);
             let name = PyString::new(py, "Lily");
             data.set_item("name", name).unwrap();
@@ -304,9 +304,9 @@ mod tests {
 
     #[test]
     fn test_render_list_lookup() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let name = PyString::new(py, "Lily");
             let names = PyList::new(py, [name]).unwrap();
             let context = HashMap::from([("names".to_string(), names.into_any().unbind())]);
@@ -321,9 +321,9 @@ mod tests {
 
     #[test]
     fn test_render_attribute_lookup() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let locals = PyDict::new(py);
             py.run(
                 c"
@@ -350,9 +350,9 @@ user = User('Lily')
 
     #[test]
     fn test_render_html_autoescape() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             let html = PyString::new(py, "<p>Hello World!</p>").into_any().unbind();
             let context = HashMap::from([("html".to_string(), html)]);
             let mut context = Context::new(context, None, true);
