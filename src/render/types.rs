@@ -49,7 +49,7 @@ impl ForLoop {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Context {
     context: HashMap<String, Vec<Py<PyAny>>>,
     loops: Vec<ForLoop>,
@@ -69,16 +69,6 @@ impl Context {
             request,
             context,
             autoescape,
-            loops: Vec::new(),
-            names: Vec::new(),
-        }
-    }
-
-    pub fn empty() -> Self {
-        Self {
-            request: None,
-            context: HashMap::new(),
-            autoescape: false,
             loops: Vec::new(),
             names: Vec::new(),
         }
