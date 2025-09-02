@@ -807,7 +807,7 @@ impl Render for SimpleTag {
             // Take ownership of `context` so we can pass it to Python.
             // The `context` variable now points to an empty `Context` instance which will not be
             // used except as a placeholder.
-            let swapped_context = std::mem::replace(context, Context::empty());
+            let swapped_context = std::mem::take(context);
 
             // Wrap the context as a Python object and add it to the call args
             let py_context = Bound::new(py, PyContext::new(swapped_context))?.into_any();
