@@ -70,8 +70,8 @@ def counter(context):
     else:
         context["count"] = 1
     return ""
-#
-#
+
+
 # @register.simple_block_tag
 # def repeat(content, count):
 #    return content * count
