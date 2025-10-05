@@ -248,3 +248,30 @@ def test_simple_block_tag_argument_syntax_error():
    ╰────
 """
     )
+
+
+def test_simple_block_tag_content_render_error():
+    template = "{% load repeat from custom_tags %}{% repeat 2 %}{{ foo|default:bar }}{% endrepeat %}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        django_template.render({})
+
+    error = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]"
+    assert str(exc_info.value) == error
+
+    with pytest.raises(VariableDoesNotExist) as exc_info:
+        rust_template.render({})
+
+    error = """\
+  × Failed lookup for key [bar] in {"False": False, "None": None, "True":
+  │ True}
+   ╭────
+ 1 │ {% load repeat from custom_tags %}{% repeat 2 %}{{ foo|default:bar }}{% endrepeat %}
+   ·                                                                ─┬─
+   ·                                                                 ╰── key
+   ╰────
+"""
+    assert str(exc_info.value) == error
