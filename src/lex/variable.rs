@@ -151,15 +151,13 @@ pub struct FilterLexer<'t> {
 
 impl<'t> FilterLexer<'t> {
     fn new(variable: &'t str, start: usize) -> Self {
-        let offset = match variable.find('|') {
-            Some(n) => n + 1,
-            None => {
-                return Self {
-                    rest: "",
-                    byte: start + variable.len(),
-                };
-            }
+        let Some(offset) = variable.find('|') else {
+            return Self {
+                rest: "",
+                byte: start + variable.len(),
+            };
         };
+        let offset = offset + 1;
         let variable = &variable[offset..];
         let rest = variable.trim_start();
         Self {
@@ -275,10 +273,12 @@ impl<'t> FilterLexer<'t> {
     }
 
     fn lex_argument(&mut self) -> Result<Option<Argument>, VariableLexerError> {
-        let next = match (self.rest.find("|"), self.rest.find(":")) {
-            (_, None) => return Ok(None),
-            (Some(f), Some(a)) if f < a => return Ok(None),
-            (_, Some(a)) => a + 1,
+        let Some(a) = self.rest.find(":") else {
+            return Ok(None);
+        };
+        let next = match self.rest.find("|") {
+            Some(f) if f < a => return Ok(None),
+            _ => a + 1,
         };
         self.rest = &self.rest[next..];
         self.byte += next;

@@ -48,13 +48,11 @@ impl Resolve for Variable {
     ) -> ResolveResult<'t, 'py> {
         let mut parts = self.parts(template);
         let (first, mut object_at) = parts.next().expect("Variable names cannot be empty");
-        let mut variable = match context.get(first) {
-            Some(variable) => variable.bind(py).clone(),
-            None => return Ok(None),
+        let Some(variable) = context.get(first) else {
+            return Ok(None);
         };
-        variable = match resolve_callable(variable)? {
-            Some(variable) => variable,
-            None => return Ok(None),
+        let Some(mut variable) = resolve_callable(variable.bind(py).clone())? else {
+            return Ok(None);
         };
 
         for (part, key_at) in parts {
@@ -63,22 +61,17 @@ impl Resolve for Variable {
                 Err(_) => match variable.getattr(part) {
                     Ok(variable) => variable,
                     Err(_) => {
-                        let int = match part.parse::<usize>() {
-                            Ok(int) => int,
-                            Err(_) => {
-                                return match failures {
-                                    ResolveFailures::Raise => {
-                                        Err(RenderError::VariableDoesNotExist {
-                                            key: part.to_string(),
-                                            object: variable.str()?.to_string(),
-                                            key_at: key_at.into(),
-                                            object_at: Some(object_at.into()),
-                                        }
-                                        .into())
-                                    }
-                                    ResolveFailures::IgnoreVariableDoesNotExist => Ok(None),
-                                };
-                            }
+                        let Ok(int) = part.parse::<usize>() else {
+                            return match failures {
+                                ResolveFailures::Raise => Err(RenderError::VariableDoesNotExist {
+                                    key: part.to_string(),
+                                    object: variable.str()?.to_string(),
+                                    key_at: key_at.into(),
+                                    object_at: Some(object_at.into()),
+                                }
+                                .into()),
+                                ResolveFailures::IgnoreVariableDoesNotExist => Ok(None),
+                            };
                         };
                         match variable.get_item(int) {
                             Ok(variable) => variable,
@@ -105,9 +98,8 @@ impl Resolve for ForVariable {
         context: &mut Context,
         _failures: ResolveFailures,
     ) -> ResolveResult<'t, 'py> {
-        let for_loop = match context.get_for_loop(self.parent_count) {
-            Some(for_loop) => for_loop,
-            None => return Ok(Some("{}".as_content())),
+        let Some(for_loop) = context.get_for_loop(self.parent_count) else {
+            return Ok(Some("{}".as_content()));
         };
         Ok(Some(match self.variant {
             ForVariableName::Counter => Content::Int(for_loop.counter().into()),
@@ -228,15 +220,14 @@ impl Evaluate for TagElement {
         template: TemplateString<'_>,
         context: &mut Context,
     ) -> Option<bool> {
-        match self.resolve(
+        self.resolve(
             py,
             template,
             context,
             ResolveFailures::IgnoreVariableDoesNotExist,
-        ) {
-            Ok(inner) => inner.evaluate(py, template, context),
-            Err(_) => None,
-        }
+        )
+        .ok()?
+        .evaluate(py, template, context)
     }
 }
 

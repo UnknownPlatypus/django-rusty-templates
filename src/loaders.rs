@@ -86,19 +86,15 @@ impl FileSystemLoader {
     ) -> Result<PyResult<Template>, LoaderError> {
         let mut tried = Vec::new();
         for template_dir in &self.dirs {
-            let path = match safe_join(template_dir, template_name) {
-                Some(path) => path,
-                None => continue,
+            let Some(path) = safe_join(template_dir, template_name) else {
+                continue;
             };
-            let bytes = match std::fs::read(&path) {
-                Ok(bytes) => bytes,
-                Err(_) => {
-                    tried.push((
-                        path.display().to_string(),
-                        "Source does not exist".to_string(),
-                    ));
-                    continue;
-                }
+            let Ok(bytes) = std::fs::read(&path) else {
+                tried.push((
+                    path.display().to_string(),
+                    "Source does not exist".to_string(),
+                ));
+                continue;
             };
             let (contents, encoding, malformed) = self.encoding.decode(&bytes);
             if malformed {

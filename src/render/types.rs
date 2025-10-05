@@ -436,13 +436,11 @@ impl<'t, 'py> Content<'t, 'py> {
                 Ok(left) => Some(left),
                 Err(_) => {
                     let int = PyType::new::<PyInt>(left.py());
-                    match int.call1((left,)) {
-                        Ok(left) => Some(
-                            left.extract::<BigInt>()
-                                .expect("Python integers are BigInt compatible"),
-                        ),
-                        Err(_) => None,
-                    }
+                    let left = int.call1((left,)).ok()?;
+                    Some(
+                        left.extract::<BigInt>()
+                            .expect("Python integers are BigInt compatible"),
+                    )
                 }
             },
             Self::Bool(true) => 1.to_bigint(),

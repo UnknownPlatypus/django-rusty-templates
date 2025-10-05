@@ -94,25 +94,21 @@ impl ResolveFilter for AddFilter {
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
-        let variable = match variable {
-            Some(left) => left,
-            None => return Ok(None),
+        let Some(variable) = variable else {
+            return Ok(None);
         };
         let right = self
             .argument
             .resolve(py, template, context, ResolveFailures::Raise)?
             .expect("missing argument in context should already have raised");
-        match (variable.to_bigint(), right.to_bigint()) {
-            (Some(variable), Some(right)) => Ok(Some(Content::Int(variable + right))),
+        Ok(match (variable.to_bigint(), right.to_bigint()) {
+            (Some(variable), Some(right)) => Some(Content::Int(variable + right)),
             _ => {
                 let variable = variable.to_py(py)?;
                 let right = right.to_py(py)?;
-                match variable.add(right) {
-                    Ok(sum) => Ok(Some(Content::Py(sum))),
-                    Err(_) => Ok(None),
-                }
+                variable.add(right).ok().map(Content::Py)
             }
-        }
+        })
     }
 }
 
@@ -161,10 +157,10 @@ impl ResolveFilter for CenterFilter {
     ) -> ResolveResult<'t, 'py> {
         let left: usize;
         let right: usize;
-        let content = match variable {
-            Some(content) => content.render(context)?,
-            None => return Ok(Some("".as_content())),
+        let Some(content) = variable else {
+            return Ok(Some("".as_content()));
         };
+        let content = content.render(context)?;
         let arg = self
             .argument
             .resolve(py, template, context, ResolveFailures::Raise)?
@@ -243,13 +239,12 @@ impl ResolveFilter for DefaultFilter {
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
-        let content = match variable {
-            Some(left) => Some(left),
+        match variable {
+            Some(left) => Ok(Some(left)),
             None => self
                 .argument
-                .resolve(py, template, context, ResolveFailures::Raise)?,
-        };
-        Ok(content)
+                .resolve(py, template, context, ResolveFailures::Raise),
+        }
     }
 }
 
