@@ -857,6 +857,17 @@ fn build_kwargs<'py>(
     Ok(_kwargs)
 }
 
+fn store_target_var<'t>(py: Python<'_>, context: &mut Context, content: Cow<'t, str>, target_var: &Option<String>) -> Cow<'t, str> {
+    match target_var {
+        None => content,
+        Some(target_var) => {
+            let content = PyString::new(py, &content).into_any();
+            context.insert(target_var.clone(), content);
+            Cow::Borrowed("")
+        }
+    }
+}
+
 impl Render for SimpleTag {
     fn render<'t>(
         &self,
@@ -866,7 +877,7 @@ impl Render for SimpleTag {
     ) -> RenderResult<'t> {
         let mut args = build_args(py, template, context, &self.args)?;
         let kwargs = build_kwargs(py, template, context, &self.kwargs)?;
-        if self.takes_context {
+        let content = if self.takes_context {
             let py_context = add_context_to_args(py, &mut args, context)?;
 
             // Actually call the tag
@@ -875,10 +886,11 @@ impl Render for SimpleTag {
             retrieve_context(py, py_context, context);
 
             // Return the result of calling the tag
-            result
+            result?
         } else {
-            call_tag(py, &self.func, self.at, template, args, kwargs)
-        }
+            call_tag(py, &self.func, self.at, template, args, kwargs)?
+        };
+        Ok(store_target_var(py, context, content, &self.target_var))
     }
 }
 
@@ -896,7 +908,7 @@ impl Render for SimpleBlockTag {
         let content = PyString::new(py, &content).into_any();
         args.push_front(content);
 
-        if self.takes_context {
+        let content = if self.takes_context {
             let py_context = add_context_to_args(py, &mut args, context)?;
 
             // Actually call the tag
@@ -905,9 +917,10 @@ impl Render for SimpleBlockTag {
             retrieve_context(py, py_context, context);
 
             // Return the result of calling the tag
-            result
+            result?
         } else {
-            call_tag(py, &self.func, self.at, template, args, kwargs)
-        }
+            call_tag(py, &self.func, self.at, template, args, kwargs)?
+        };
+        Ok(store_target_var(py, context, content, &self.target_var))
     }
 }

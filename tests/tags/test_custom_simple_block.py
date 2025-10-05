@@ -15,6 +15,17 @@ def test_simple_block_tag_repeat():
     assert rust_template.render({}) == expected
 
 
+def test_simple_block_tag_repeat_as():
+    template = "{% load repeat from custom_tags %}{% repeat 2 as bar %}foo{% endrepeat %}{{ bar }}{{ bar|upper }}"
+
+    django_template = engines["django"].from_string(template)
+    rust_template = engines["rusty"].from_string(template)
+
+    expected = "foofooFOOFOO"
+    assert django_template.render({}) == expected
+    assert rust_template.render({}) == expected
+
+
 def test_with_block():
     template = "{% load with_block from custom_tags %}{% with_block var='name' %}{{ user }}{% end_with_block %}{{ name|lower }}"
 
