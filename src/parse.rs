@@ -231,9 +231,8 @@ fn parse_if_binding_power(
     min_binding_power: u8,
     at: (usize, usize),
 ) -> Result<IfCondition, ParseError> {
-    let token = match lexer.next().transpose()? {
-        Some(token) => token,
-        None => return Err(ParseError::UnexpectedEndExpression { at: at.into() }),
+    let Some(token) = lexer.next().transpose()? else {
+        return Err(ParseError::UnexpectedEndExpression { at: at.into() });
     };
     let content = parser.template.content(token.at);
     let token_at = token.content_at();
@@ -963,16 +962,13 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
         {
             return Either::Left(Variable::new(at));
         }
-        let part = match parts.next_back() {
-            Some(part) => part.trim(),
-            None => {
-                return Either::Right(ForVariable {
-                    variant: ForVariableName::Object,
-                    parent_count: 0,
-                });
-            }
+        let Some(part) = parts.next_back() else {
+            return Either::Right(ForVariable {
+                variant: ForVariableName::Object,
+                parent_count: 0,
+            });
         };
-        let variant = match part {
+        let variant = match part.trim() {
             "counter" => ForVariableName::Counter,
             "counter0" => ForVariableName::Counter0,
             "revcounter" => ForVariableName::RevCounter,
@@ -1007,9 +1003,8 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
         at: (usize, usize),
         start: usize,
     ) -> Result<TagElement, ParseError> {
-        let (variable_token, filter_lexer) = match lex_variable(variable, start)? {
-            None => return Err(ParseError::EmptyVariable { at: at.into() }),
-            Some(t) => t,
+        let Some((variable_token, filter_lexer)) = lex_variable(variable, start)? else {
+            return Err(ParseError::EmptyVariable { at: at.into() });
         };
         let mut var = match variable_token.token_type {
             VariableTokenType::Variable => self.parse_for_variable(variable_token.at).into(),
@@ -1040,9 +1035,8 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
                 return Err(parse_error.into());
             }
         };
-        let (tag, parts) = match maybe_tag {
-            None => return Err(ParseError::EmptyTag { at: at.into() }.into()),
-            Some(t) => t,
+        let Some((tag, parts)) = maybe_tag else {
+            return Err(ParseError::EmptyTag { at: at.into() }.into());
         };
         Ok(match self.template.content(tag.at) {
             "url" => Either::Left(self.parse_url(at, parts)?),
@@ -1122,23 +1116,19 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
         for (index, token) in tokens.iter().enumerate() {
             match token.kwarg {
                 None => {
-                    match seen_kwargs.is_empty() {
-                        true => {
-                            if !context.varargs && index == params_count {
-                                return Err(ParseError::TooManyPositionalArguments {
-                                    at: token.at.into(),
-                                });
-                            }
-                            let element = token.parse(self)?;
-                            args.push(element);
-                        }
-                        false => {
-                            return Err(ParseError::PositionalAfterKeyword {
-                                at: token.at.into(),
-                                after: prev_at.into(),
-                            });
-                        }
+                    if !seen_kwargs.is_empty() {
+                        return Err(ParseError::PositionalAfterKeyword {
+                            at: token.at.into(),
+                            after: prev_at.into(),
+                        });
                     }
+                    if !context.varargs && index == params_count {
+                        return Err(ParseError::TooManyPositionalArguments {
+                            at: token.at.into(),
+                        });
+                    }
+                    let element = token.parse(self)?;
+                    args.push(element);
                     prev_at = token.at;
                 }
                 Some(name_at) => {
@@ -1351,10 +1341,10 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
 
     fn parse_url(&mut self, at: (usize, usize), parts: TagParts) -> Result<TokenTree, ParseError> {
         let mut lexer = SimpleTagLexer::new(self.template, parts);
-        let view_name = match lexer.next() {
-            Some(view_token) => view_token?.parse(self)?,
-            None => return Err(ParseError::UrlTagNoArguments { at: at.into() }),
+        let Some(view_token) = lexer.next() else {
+            return Err(ParseError::UrlTagNoArguments { at: at.into() });
         };
+        let view_name = view_token?.parse(self)?;
 
         let mut tokens = vec![];
         for token in lexer {

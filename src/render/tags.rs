@@ -18,10 +18,8 @@ use crate::types::TemplateString;
 use crate::utils::PyResultMethods;
 
 fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
-    let none = py.None();
-    let request = match request {
-        None => return Ok(none),
-        Some(request) => request,
+    let Some(request) = request else {
+        return Ok(py.None());
     };
     if let Ok(current_app) = request
         .getattr(py, "current_app")
@@ -36,7 +34,7 @@ fn current_app(py: Python, request: &Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         Ok(resolver_match) if !resolver_match.is_none(py) => {
             resolver_match.getattr(py, "namespace")
         }
-        _ => Ok(none),
+        _ => Ok(py.None()),
     }
 }
 
@@ -77,13 +75,12 @@ impl Resolve for Url {
         };
         match &self.variable {
             None => Ok(Some(Content::Py(url?))),
-            Some(variable) => match url.ok_or_isinstance_of::<NoReverseMatch>(py)? {
-                Ok(url) => {
+            Some(variable) => {
+                if let Ok(url) = url.ok_or_isinstance_of::<NoReverseMatch>(py)? {
                     context.insert(variable.clone(), url);
-                    Ok(None)
                 }
-                Err(_) => Ok(None),
-            },
+                Ok(None)
+            }
         }
     }
 }
@@ -555,9 +552,8 @@ impl Evaluate for IfCondition {
                 Err(_) => false,
             },
             Self::In(inner) => {
-                let inner = match inner.resolve(py, template, context) {
-                    Ok(inner) => inner,
-                    Err(_) => return Some(false),
+                let Ok(inner) = inner.resolve(py, template, context) else {
+                    return Some(false);
                 };
                 match inner {
                     (l, Some(r)) => r.contains(l).unwrap_or(false),
@@ -565,9 +561,8 @@ impl Evaluate for IfCondition {
                 }
             }
             Self::NotIn(inner) => {
-                let inner = match inner.resolve(py, template, context) {
-                    Ok(inner) => inner,
-                    Err(_) => return Some(false),
+                let Ok(inner) = inner.resolve(py, template, context) else {
+                    return Some(false);
                 };
                 match inner {
                     (l, Some(r)) => !(r.contains(l).unwrap_or(true)),
@@ -575,9 +570,8 @@ impl Evaluate for IfCondition {
                 }
             }
             Self::Is(inner) => {
-                let inner = match inner.resolve(py, template, context) {
-                    Ok(inner) => inner,
-                    Err(_) => return Some(false),
+                let Ok(inner) = inner.resolve(py, template, context) else {
+                    return Some(false);
                 };
                 match inner {
                     (Some(Content::Py(left)), Some(Content::Py(right))) => left.is(&right),
@@ -593,9 +587,8 @@ impl Evaluate for IfCondition {
                 }
             }
             Self::IsNot(inner) => {
-                let inner = match inner.resolve(py, template, context) {
-                    Ok(inner) => inner,
-                    Err(_) => return Some(false),
+                let Ok(inner) = inner.resolve(py, template, context) else {
+                    return Some(false);
                 };
                 match inner {
                     (Some(Content::Py(left)), Some(Content::Py(right))) => !left.is(&right),
@@ -746,15 +739,13 @@ impl Render for For {
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> RenderResult<'t> {
-        let iterable =
-            match self
-                .iterable
+        let Some(iterable) =
+            self.iterable
                 .iterable
                 .resolve(py, template, context, ResolveFailures::Raise)?
-            {
-                Some(iterable) => iterable,
-                None => return self.empty.render(py, template, context),
-            };
+        else {
+            return self.empty.render(py, template, context);
+        };
         match iterable {
             Content::Py(iterable) => self.render_python(&iterable, py, template, context),
             Content::String(s) => self.render_string(s.as_raw(), py, template, context),

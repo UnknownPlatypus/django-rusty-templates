@@ -121,30 +121,26 @@ impl<'t> Lexer<'t> {
             EndTag::Tag => "%}",
             EndTag::Comment => "#}",
         };
-        let len = match self.rest.find(end_str) {
-            None => {
-                let len = self.rest.len();
-                let at = (self.byte, len);
-                self.byte += len;
-                self.rest = "";
+        let Some(n) = self.rest.find(end_str) else {
+            let len = self.rest.len();
+            let at = (self.byte, len);
+            self.byte += len;
+            self.rest = "";
+            return Token::text(at);
+        };
+        // This can be removed if https://code.djangoproject.com/ticket/35899 lands
+        match self.rest.find("\n") {
+            Some(newline) if newline < n => {
+                let at = (self.byte, newline + 1);
+                self.byte += newline + 1;
+                self.rest = &self.rest[newline + 1..];
                 return Token::text(at);
             }
-            Some(n) => {
-                // This can be removed if https://code.djangoproject.com/ticket/35899 lands
-                match self.rest.find("\n") {
-                    Some(newline) if newline < n => {
-                        let at = (self.byte, newline + 1);
-                        self.byte += newline + 1;
-                        self.rest = &self.rest[newline + 1..];
-                        return Token::text(at);
-                    }
-                    _ => {}
-                }
-                let len = n + end_str.len();
-                self.rest = &self.rest[len..];
-                len
-            }
-        };
+            _ => {}
+        }
+        let len = n + end_str.len();
+        self.rest = &self.rest[len..];
+
         let at = (self.byte, len);
         self.byte += len;
         match end_tag {
@@ -161,40 +157,34 @@ impl<'t> Lexer<'t> {
         let mut rest = self.rest;
         let mut index = 0;
         loop {
-            let next_tag = rest.find("{%");
-            match next_tag {
-                None => return self.lex_text_to_end(),
-                Some(start_tag) => {
-                    rest = &rest[start_tag..];
-                    let close_tag = rest.find("%}");
-                    match close_tag {
-                        None => return self.lex_text_to_end(),
-                        Some(end_tag) => {
-                            let inner = &rest[2..end_tag].trim();
-                            // Check we have the right endverbatim tag
-                            if inner.len() < 3 || &inner[3..] != verbatim {
-                                rest = &rest[end_tag + 2..];
-                                index += start_tag + end_tag + 2;
-                                continue;
-                            }
+            let Some(start_tag) = rest.find("{%") else {
+                return self.lex_text_to_end();
+            };
+            rest = &rest[start_tag..];
+            let Some(end_tag) = rest.find("%}") else {
+                return self.lex_text_to_end();
+            };
+            let inner = &rest[2..end_tag].trim();
+            // Check we have the right endverbatim tag
+            if inner.len() < 3 || &inner[3..] != verbatim {
+                rest = &rest[end_tag + 2..];
+                index += start_tag + end_tag + 2;
+                continue;
+            }
 
-                            index += start_tag;
-                            if index == 0 {
-                                // Return the endverbatim tag since we have no text
-                                let tag_len = end_tag + "%}".len();
-                                let at = (self.byte, tag_len);
-                                self.byte += tag_len;
-                                self.rest = &self.rest[tag_len..];
-                                return Token::tag(at);
-                            } else {
-                                self.rest = &self.rest[index..];
-                                let at = (self.byte, index);
-                                self.byte += index;
-                                return Token::text(at);
-                            }
-                        }
-                    }
-                }
+            index += start_tag;
+            if index == 0 {
+                // Return the endverbatim tag since we have no text
+                let tag_len = end_tag + "%}".len();
+                let at = (self.byte, tag_len);
+                self.byte += tag_len;
+                self.rest = &self.rest[tag_len..];
+                return Token::tag(at);
+            } else {
+                self.rest = &self.rest[index..];
+                let at = (self.byte, index);
+                self.byte += index;
+                return Token::text(at);
             }
         }
     }

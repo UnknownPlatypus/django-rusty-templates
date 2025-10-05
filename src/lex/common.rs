@@ -87,21 +87,15 @@ pub fn lex_text<'t>(
 ) -> Result<((usize, usize), usize, &'t str), LexerError> {
     let mut count = 1;
     loop {
-        let next = match chars.next() {
-            None => {
-                let at = (byte, count);
-                return Err(LexerError::IncompleteString { at: at.into() });
-            }
-            Some(c) => c,
+        let Some(next) = chars.next() else {
+            let at = (byte, count);
+            return Err(LexerError::IncompleteString { at: at.into() });
         };
         count += next.len_utf8();
         if next == '\\' {
-            let next = match chars.next() {
-                Some(next) => next,
-                None => {
-                    let at = (byte, count);
-                    return Err(LexerError::IncompleteString { at: at.into() });
-                }
+            let Some(next) = chars.next() else {
+                let at = (byte, count);
+                return Err(LexerError::IncompleteString { at: at.into() });
             };
             count += next.len_utf8();
         } else if next == end {
@@ -133,17 +127,14 @@ pub fn lex_translated<'t>(
             return Err(LexerError::MissingTranslatedString { at: at.into() });
         }
     };
-    match chars.next() {
-        Some(')') => {
-            let byte = byte + END_TRANSLATE_LEN;
-            let rest = &rest[END_TRANSLATE_LEN..];
-            let at = (start, byte - start);
-            Ok((at, byte, rest))
-        }
-        _ => {
-            let at = (start, byte - start);
-            Err(LexerError::IncompleteTranslatedString { at: at.into() })
-        }
+    if let Some(')') = chars.next() {
+        let byte = byte + END_TRANSLATE_LEN;
+        let rest = &rest[END_TRANSLATE_LEN..];
+        let at = (start, byte - start);
+        Ok((at, byte, rest))
+    } else {
+        let at = (start, byte - start);
+        Err(LexerError::IncompleteTranslatedString { at: at.into() })
     }
 }
 

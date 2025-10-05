@@ -108,16 +108,12 @@ pub mod django_rusty_templates {
                     return Err(InvalidTemplateLibrary::new_err(error));
                 }
             };
-            let library = match library
+            let Ok(library) = library
                 .getattr(intern!(py, "register"))
                 .ok_or_isinstance_of::<PyAttributeError>(py)?
-            {
-                Ok(library) => library,
-                Err(_) => {
-                    let error =
-                        format!("Module '{path}' does not have a variable named 'register'");
-                    return Err(InvalidTemplateLibrary::new_err(error));
-                }
+            else {
+                let error = format!("Module '{path}' does not have a variable named 'register'");
+                return Err(InvalidTemplateLibrary::new_err(error));
             };
             libs.insert(name, library.unbind());
         }

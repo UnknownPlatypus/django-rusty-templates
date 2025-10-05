@@ -31,16 +31,13 @@ pub fn lex_tag(tag: &str, start: usize) -> Result<Option<(TagToken, TagParts)>, 
 
     let start = start + tag.len() - rest.len();
     let tag = tag.trim();
-    let tag_len = match tag.find(|c: char| !c.is_xid_continue()) {
-        Some(tag_len) => tag_len,
-        None => {
-            let at = (start, tag.len());
-            let token = TagToken { at };
-            let parts = TagParts {
-                at: (start + tag.len(), 0),
-            };
-            return Ok(Some((token, parts)));
-        }
+    let Some(tag_len) = tag.find(|c: char| !c.is_xid_continue()) else {
+        let at = (start, tag.len());
+        let token = TagToken { at };
+        let parts = TagParts {
+            at: (start + tag.len(), 0),
+        };
+        return Ok(Some((token, parts)));
     };
     let index = tag.next_whitespace();
     if index > tag_len {
