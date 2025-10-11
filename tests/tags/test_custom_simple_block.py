@@ -240,10 +240,7 @@ def test_simple_block_tag_argument_syntax_error():
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["django"].from_string(template)
 
-    assert (
-        str(exc_info.value)
-        == "Could not parse the remainder: '=' from 'a='"
-    )
+    assert str(exc_info.value) == "Could not parse the remainder: '=' from 'a='"
 
     with pytest.raises(TemplateSyntaxError) as exc_info:
         engines["rusty"].from_string(template)

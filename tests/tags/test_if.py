@@ -1511,3 +1511,139 @@ def test_if_gte_bool(first, second, expected):
 
     assert django_template.render({"y": "12"}) == expected
     assert rust_template.render({"y": "12"}) == expected
+
+
+def test_if_not_numeric():
+    template = "{% if 1.1.1 %}foo{% endif %}"
+
+    django_template = engines["django"].from_string(template)
+
+    assert django_template.render({"1": {"1": {"1": "bar"}}}) == "foo"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Invalid numeric literal
+   ╭────
+ 1 │ {% if 1.1.1 %}foo{% endif %}
+   ·       ──┬──
+   ·         ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_if_invalid_variable():
+    template = "{% if a- %}foo{% endif %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    expected = "Could not parse the remainder: '-' from 'a-'"
+    assert str(exc_info.value) == expected
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% if a- %}foo{% endif %}
+   ·       ─┬
+   ·        ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_if_invalid_content():
+    template = "{% if a %}{{ a- }}{% endif %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    expected = "Could not parse the remainder: '-' from 'a-'"
+    assert str(exc_info.value) == expected
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% if a %}{{ a- }}{% endif %}
+   ·              ─┬
+   ·               ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_if_invalid_content_tag():
+    template = "{% if a %}{% if a- %}{% endif %}{% endif %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    expected = "Could not parse the remainder: '-' from 'a-'"
+    assert str(exc_info.value) == expected
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% if a %}{% if a- %}{% endif %}{% endif %}
+   ·                 ─┬
+   ·                  ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_elif_invalid_content():
+    template = "{% if a %}{% elif b %}{{ a- }}{% endif %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    expected = "Could not parse the remainder: '-' from 'a-'"
+    assert str(exc_info.value) == expected
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% if a %}{% elif b %}{{ a- }}{% endif %}
+   ·                          ─┬
+   ·                           ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
+
+
+def test_else_invalid_content():
+    template = "{% if a %}{% else %}{{ a- }}{% endif %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    expected = "Could not parse the remainder: '-' from 'a-'"
+    assert str(exc_info.value) == expected
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% if a %}{% else %}{{ a- }}{% endif %}
+   ·                        ─┬
+   ·                         ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
