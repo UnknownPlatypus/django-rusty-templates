@@ -220,7 +220,7 @@ impl ExternalLoader {
         _template_name: &str,
         _engine: &EngineData,
     ) -> Result<PyResult<Template>, LoaderError> {
-        todo!()
+        std::todo!() // Bail here because it does not make much sense to convert from PyErr to empty LoaderError
     }
 }
 
