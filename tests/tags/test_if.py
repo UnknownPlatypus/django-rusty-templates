@@ -1532,3 +1532,26 @@ def test_if_not_numeric():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_if_invalid_variable():
+    template = "{% if a- %}foo{% endif %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    expected = "Could not parse the remainder: '-' from 'a-'"
+    assert str(exc_info.value) == expected
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% if a- %}foo{% endif %}
+   ·       ─┬
+   ·        ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
