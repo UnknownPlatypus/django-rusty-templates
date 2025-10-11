@@ -1511,3 +1511,24 @@ def test_if_gte_bool(first, second, expected):
 
     assert django_template.render({"y": "12"}) == expected
     assert rust_template.render({"y": "12"}) == expected
+
+
+def test_if_not_numeric():
+    template = "{% if 1.1.1 %}foo{% endif %}"
+
+    django_template = engines["django"].from_string(template)
+
+    assert django_template.render({"1": {"1": {"1": "bar"}}}) == "foo"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Invalid numeric literal
+   ╭────
+ 1 │ {% if 1.1.1 %}foo{% endif %}
+   ·       ──┬──
+   ·         ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
