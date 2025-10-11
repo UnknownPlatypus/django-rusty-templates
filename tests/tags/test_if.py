@@ -1578,3 +1578,26 @@ def test_if_invalid_content():
    ╰────
 """
     assert str(exc_info.value) == expected
+
+
+def test_if_invalid_content_tag():
+    template = "{% if a %}{% if a- %}{% endif %}{% endif %}"
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["django"].from_string(template)
+
+    expected = "Could not parse the remainder: '-' from 'a-'"
+    assert str(exc_info.value) == expected
+
+    with pytest.raises(TemplateSyntaxError) as exc_info:
+        engines["rusty"].from_string(template)
+
+    expected = """\
+  × Expected a valid variable name
+   ╭────
+ 1 │ {% if a %}{% if a- %}{% endif %}{% endif %}
+   ·                 ─┬
+   ·                  ╰── here
+   ╰────
+"""
+    assert str(exc_info.value) == expected
