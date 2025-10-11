@@ -88,7 +88,9 @@ def test_simple_tag_positional_and_kwargs():
 
 
 def test_simple_tag_double_as_variable():
-    template = "{% load double from custom_tags %}{% double 3 as foo %}{{ foo }}{{ foo }}"
+    template = (
+        "{% load double from custom_tags %}{% double 3 as foo %}{{ foo }}{{ foo }}"
+    )
 
     django_template = engines["django"].from_string(template)
     rust_template = engines["rusty"].from_string(template)
