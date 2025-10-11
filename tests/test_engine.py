@@ -43,6 +43,18 @@ def test_import_libraries_no_register():
     assert str(exc_info.value) == expected
 
 
+def test_import_libraries_module_error():
+    params = {"libraries": {"zero_division": "tests.zero_division"}}
+
+    with pytest.raises(ZeroDivisionError):
+        Engine(**params)
+
+    with pytest.raises(ZeroDivisionError):
+        RustyTemplates(
+            {"OPTIONS": params, "NAME": "rust", "DIRS": [], "APP_DIRS": False}
+        )
+
+
 def test_pathlib_dirs():
     engine = RustyTemplates(
         {
