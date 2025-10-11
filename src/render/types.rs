@@ -448,8 +448,8 @@ impl<'t, 'py> Content<'t, 'py> {
         }
     }
 
-    pub fn to_py(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
-        Ok(match self {
+    pub fn to_py(&self, py: Python<'py>) -> Bound<'py, PyAny> {
+        match self {
             Self::Py(object) => object.clone(),
             Self::Int(i) => i
                 .into_pyobject(py)
@@ -472,13 +472,19 @@ impl<'t, 'py> Content<'t, 'py> {
                     let string = s
                         .into_pyobject(py)
                         .expect("A string can always be converted to a Python str.");
-                    let safestring = py.import(intern!(py, "django.utils.safestring"))?;
-                    let mark_safe = safestring.getattr(intern!(py, "mark_safe"))?;
-                    mark_safe.call1((string,))?
+                    let safestring = py
+                        .import(intern!(py, "django.utils.safestring"))
+                        .expect("Should be able to import `django.utils.safestring`");
+                    let mark_safe = safestring
+                        .getattr(intern!(py, "mark_safe"))
+                        .expect("`safestring` should have a `mark_safe` function");
+                    mark_safe
+                        .call1((string,))
+                        .expect("`mark_safe` should not raise if given a string")
                 }
             },
             Self::Bool(b) => PyBool::new(py, *b).to_owned().into_any(),
-        })
+        }
     }
 }
 
