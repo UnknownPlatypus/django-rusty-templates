@@ -104,8 +104,8 @@ impl ResolveFilter for AddFilter {
         Ok(match (variable.to_bigint(), right.to_bigint()) {
             (Some(variable), Some(right)) => Some(Content::Int(variable + right)),
             _ => {
-                let variable = variable.to_py(py)?;
-                let right = right.to_py(py)?;
+                let variable = variable.to_py(py);
+                let right = right.to_py(py);
                 variable.add(right).ok().map(Content::Py)
             }
         })

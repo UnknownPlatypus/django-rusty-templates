@@ -420,7 +420,7 @@ impl Contains<Option<Content<'_, '_>>> for Content<'_, '_> {
                 _ => None,
             },
             Some(Content::Py(other)) => {
-                let obj = self.to_py(other.py()).ok()?;
+                let obj = self.to_py(other.py());
                 obj.contains(other).ok()
             }
             Some(Content::String(other)) => match self {
@@ -826,7 +826,7 @@ fn build_arg<'py>(
     arg: &TagElement,
 ) -> Result<Bound<'py, PyAny>, PyRenderError> {
     let arg = match arg.resolve(py, template, context, ResolveFailures::Raise)? {
-        Some(arg) => arg.to_py(py)?,
+        Some(arg) => arg.to_py(py),
         None => PyString::intern(py, "").into_any(),
     };
     Ok(arg)
@@ -857,7 +857,12 @@ fn build_kwargs<'py>(
     Ok(_kwargs)
 }
 
-fn store_target_var<'t>(py: Python<'_>, context: &mut Context, content: Cow<'t, str>, target_var: &Option<String>) -> Cow<'t, str> {
+fn store_target_var<'t>(
+    py: Python<'_>,
+    context: &mut Context,
+    content: Cow<'t, str>,
+    target_var: &Option<String>,
+) -> Cow<'t, str> {
     match target_var {
         None => content,
         Some(target_var) => {
