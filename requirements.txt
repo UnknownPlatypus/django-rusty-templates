@@ -1,7 +1,0 @@
-django
-hypothesis
-maturin
-pytest
-pytest-django
-pytest-cov
-ruff
