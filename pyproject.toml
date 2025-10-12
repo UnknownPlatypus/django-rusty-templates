@@ -21,7 +21,6 @@ DJANGO_SETTINGS_MODULE = "tests.settings"
 
 [dependency-groups]
 dev = [
-    "black",
     "django",
     "hypothesis",
     "maturin",
