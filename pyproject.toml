@@ -19,6 +19,17 @@ python-source = "python"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "tests.settings"
 
+[dependency-groups]
+dev = [
+    "django",
+    "hypothesis",
+    "maturin",
+    "pytest",
+    "pytest-django",
+    "pytest-cov",
+    "ruff",
+]
+
 [tool.ruff]
 target-version = "py310"
 
