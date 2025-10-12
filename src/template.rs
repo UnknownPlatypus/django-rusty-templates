@@ -124,19 +124,19 @@ pub mod django_rusty_templates {
     pub struct Engine {
         #[allow(dead_code)]
         dirs: Vec<PathBuf>,
-        #[allow(dead_code)]
+        #[pyo3(get)]
         app_dirs: bool,
-        #[allow(dead_code)]
+        #[pyo3(get)]
         context_processors: Vec<String>,
-        #[allow(dead_code)]
+        #[pyo3(get)]
         debug: bool,
-        #[allow(dead_code)]
+        template_loaders: Vec<Loader>,
+        #[pyo3(get)]
         string_if_invalid: String,
         #[allow(dead_code)]
         encoding: &'static Encoding,
-        #[allow(dead_code)]
+        #[pyo3(get)]
         builtins: Vec<String>,
-        template_loaders: Vec<Loader>,
         data: EngineData,
     }
 
@@ -245,6 +245,29 @@ pub mod django_rusty_templates {
         }
 
         // TODO render_to_string needs implementation.
+
+        #[getter]
+        pub fn dirs(&self) -> Vec<String> {
+            self.dirs.iter().map(|p| p.to_string_lossy().to_string()).collect()
+        }
+        #[getter]
+        pub fn file_charset(&self) -> String {
+            self.encoding.name().to_string()
+        }
+
+        #[getter]
+        pub fn libraries<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
+            let dict = PyDict::new(py);
+            for (key, value) in &self.data.libraries {
+                dict.set_item(key, value.bind(py))?;
+            }
+            Ok(dict)
+        }
+
+        #[getter]
+        pub fn autoescape(&self) -> bool {
+            self.data.autoescape
+        }
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -579,6 +602,69 @@ user = User(["Lily"])
                 .unwrap();
             let cloned = template.clone();
             assert_eq!(cloned, template);
+        })
+    }
+
+    #[test]
+    fn test_engine_attributes() {
+        use std::collections::HashMap;
+
+        use pyo3::IntoPyObject;
+        use pyo3::types::{PyAnyMethods, PyListMethods};
+
+        Python::initialize();
+
+        Python::attach(|py| {
+            let cwd = std::env::current_dir().unwrap();
+            let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
+            let sys_path = sys_path.downcast().unwrap();
+            sys_path.append(cwd.to_string_lossy()).unwrap();
+
+            let engine = Engine::new(
+                py,
+                Some(vec!["tests/templates", "other/templates"].into_pyobject(py).unwrap()),
+                true,
+                Some(vec!["django.template.context_processors.debug"].into_pyobject(py).unwrap()),
+                true,
+                None,
+                "INVALID".to_string(),
+                "utf-8".to_string(),
+                Some(
+                    HashMap::from([("custom_filters", "tests.templatetags.custom_filters")])
+                        .into_pyobject(py)
+                        .unwrap()
+                        .into_any(),
+                ),
+                None,
+                false,
+            )
+            .unwrap();
+
+            let py_engine = engine.into_pyobject(py).unwrap();
+            py_engine.getattr("dirs").unwrap();
+            py_engine.getattr("app_dirs").unwrap();
+            py_engine.getattr("context_processors").unwrap();
+            py_engine.getattr("debug").unwrap();
+            py_engine.getattr("string_if_invalid").unwrap();
+            py_engine.getattr("file_charset").unwrap();
+            py_engine.getattr("builtins").unwrap();
+            py_engine.getattr("libraries").unwrap();
+            py_engine.getattr("autoescape").unwrap();
+
+            // Non-trivial getters
+            let dirs: Vec<String> = py_engine.getattr("dirs").unwrap().extract().unwrap();
+            assert_eq!(dirs.len(), 2);
+            assert!(dirs[0].ends_with("tests/templates"));
+            assert!(dirs[1].ends_with("other/templates"));
+
+            let file_charset: String = py_engine.getattr("file_charset").unwrap().extract().unwrap();
+            assert_eq!(file_charset, "UTF-8");
+
+            // TODO: support this once #89 lands
+            // let loaders: Vec<String> = py_engine.getattr("loaders").unwrap().extract().unwrap();
+            // assert_eq!(loaders.len(), 1);
+            // assert_eq!(loaders[0], "django.template.loaders.cached.Loader");
+
         })
     }
 }
