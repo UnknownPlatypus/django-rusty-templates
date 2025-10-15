@@ -787,9 +787,9 @@ user = User(["Lily"])
 
     #[test]
     fn test_engine_loader_priority() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // Create a Python list
             let py_list = PyList::new(
                 py,
@@ -824,9 +824,9 @@ user = User(["Lily"])
 
     #[test]
     fn test_engine_cached_loader_priority() {
-        pyo3::prepare_freethreaded_python();
+        Python::initialize();
 
-        Python::with_gil(|py| {
+        Python::attach(|py| {
             // // Create a Python string
             let py_string = PyString::new(py, "django.template.loaders.filesystem.Loader");
 
