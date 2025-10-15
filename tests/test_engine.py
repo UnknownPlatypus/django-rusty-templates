@@ -71,39 +71,60 @@ def test_pathlib_dirs():
     assert template.render(context) == expected
 
 
-def test_loader_priority():
-    loaders = [
-        "django.template.loaders.filesystem.Loader",
-        "django.template.loaders.app_directories.Loader",
-    ]
-
-    engine = RustyTemplates(
-        {
-            "OPTIONS": {"loaders": loaders},
-            "NAME": "rust",
-            "DIRS": [],
-            "APP_DIRS": False,
-        }
-    )
-
-    context = {"user": "Lily"}
-    expected = "Hello Lily!\n"
-
-    template = engine.get_template("basic.txt")
-    assert template.render(context) == expected
-
-
-def test_cached_loader_priority():
-    loaders = [
-        (
-            "django.template.loaders.cached.Loader",
+@pytest.mark.parametrize(
+    "loaders,template_name,expected",
+    [
+        pytest.param(
             [
                 "django.template.loaders.filesystem.Loader",
                 "django.template.loaders.app_directories.Loader",
             ],
+            "basic.txt",
+            "Hello Lily!\n",
+            id="Loader priority",
         ),
-    ]
-
+        pytest.param(
+            [
+                (
+                    "django.template.loaders.cached.Loader",
+                    [
+                        "django.template.loaders.filesystem.Loader",
+                        "django.template.loaders.app_directories.Loader",
+                    ],
+                ),
+            ],
+            "basic.txt",
+            "Hello Lily!\n",
+            id="Cached loader",
+        ),
+        pytest.param(
+            [
+                (
+                    "django.template.loaders.cached.Loader",
+                    [
+                        ("django.template.loaders.filesystem.Loader", ["tests", "app"]),
+                        "django.template.loaders.app_directories.Loader",
+                    ],
+                ),
+            ],
+            "basic.txt",
+            "Hello Lily!\n",
+            id="Cached loader + Filesystem Loader with dirs",
+        ),
+        pytest.param(
+            [
+                (
+                    "django.template.loaders.locmem.Loader",
+                    {"index.html": "Welcome {{ user }}!"},
+                ),
+            ],
+            "index.html",
+            "Welcome Lily!",
+            id="Locmem Loader",
+        ),
+    ],
+)
+def test_loader_configurations(loaders, template_name, expected):
     engine = RustyTemplates(
         {
             "OPTIONS": {"loaders": loaders},
@@ -114,33 +135,5 @@ def test_cached_loader_priority():
     )
 
     context = {"user": "Lily"}
-    expected = "Hello Lily!\n"
-
-    template = engine.get_template("basic.txt")
-    assert template.render(context) == expected
-
-
-def test_locmem_loader():
-    loaders = [
-        (
-            "django.template.loaders.locmem.Loader",
-            {
-                "index.html": "index",
-            },
-        )
-    ]
-
-    engine = RustyTemplates(
-        {
-            "OPTIONS": {"loaders": loaders},
-            "NAME": "rust",
-            "DIRS": [],
-            "APP_DIRS": False,
-        }
-    )
-
-    context = {"user": "Lily"}
-    expected = "index"
-
-    template = engine.get_template("index.html")
+    template = engine.get_template(template_name)
     assert template.render(context) == expected

@@ -518,7 +518,7 @@ mod tests {
     use super::django_rusty_templates::*;
 
     use pyo3::Python;
-    use pyo3::types::{PyDict, PyDictMethods, PyList, PyString, PyTuple};
+    use pyo3::types::{PyDict, PyDictMethods, PyString};
 
     #[test]
     fn test_syntax_error() {
@@ -782,94 +782,6 @@ user = User(["Lily"])
             // assert_eq!(loaders.len(), 1);
             // assert_eq!(loaders[0], "django.template.loaders.cached.Loader");
 
-        })
-    }
-
-    #[test]
-    fn test_engine_loader_priority() {
-        Python::initialize();
-
-        Python::attach(|py| {
-            // Create a Python list
-            let py_list = PyList::new(
-                py,
-                &[
-                    PyString::new(py, "django.template.loaders.filesystem.Loader").into_any(),
-                    PyString::new(py, "django.template.loaders.app_directories.Loader").into_any(),
-                ],
-            );
-
-            let engine = Engine::new(
-                py,
-                None,
-                false,
-                None,
-                false,
-                py_list.ok(),
-                "".to_string(),
-                "utf-8".to_string(),
-                None,
-                None,
-                false,
-            )
-            .unwrap();
-
-            let template_string = PyString::new(py, "Hello {{ user }}!");
-            let template = engine.from_string(template_string).unwrap();
-            let context = PyDict::new(py);
-
-            assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
-        })
-    }
-
-    #[test]
-    fn test_engine_cached_loader_priority() {
-        Python::initialize();
-
-        Python::attach(|py| {
-            // // Create a Python string
-            let py_string = PyString::new(py, "django.template.loaders.filesystem.Loader");
-
-            // Create a Python tuple
-            let py_tuple = PyTuple::new(
-                py,
-                &[
-                    PyString::new(py, "django.template.loaders.cached.Loader").into_any(),
-                    PyList::new(
-                        py,
-                        &[
-                            PyString::new(py, "django.template.loaders.filesystem.Loader"),
-                            PyString::new(py, "django.template.loaders.app_directories.Loader"),
-                        ],
-                    )
-                    .unwrap()
-                    .into_any(),
-                ],
-            );
-
-            // Create a heterogeneous Python list (containing a string and a tuple)
-            let py_list = PyList::new(py, &[py_string.into_any(), py_tuple.unwrap().into_any()]);
-
-            let engine = Engine::new(
-                py,
-                None,
-                false,
-                None,
-                false,
-                py_list.ok(),
-                "".to_string(),
-                "utf-8".to_string(),
-                None,
-                None,
-                false,
-            )
-            .unwrap();
-
-            let template_string = PyString::new(py, "Hello {{ user }}!");
-            let template = engine.from_string(template_string).unwrap();
-            let context = PyDict::new(py);
-
-            assert_eq!(template.render(py, Some(context), None).unwrap(), "Hello !");
         })
     }
 }
