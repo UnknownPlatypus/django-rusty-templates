@@ -10,7 +10,7 @@ pub mod django_rusty_templates {
     use pyo3::import_exception_bound;
     use pyo3::intern;
     use pyo3::prelude::*;
-    use pyo3::types::{PyBool, PyDict, PyList, PyString, PyTuple};
+    use pyo3::types::{PyBool, PyDict, PyIterator, PyList, PyString, PyTuple};
 
     use crate::error::RenderError;
     use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader, LocMemLoader};
@@ -143,11 +143,10 @@ pub mod django_rusty_templates {
     impl Engine {
         fn get_template_loaders<'py>(
             py: Python<'py>,
-            template_loaders: &Bound<'_, PyList>,
+            template_loaders: Bound<'_, PyIterator>,
         ) -> Result<Vec<Loader>, PyErr> {
             template_loaders
-                .iter()
-                .map(|template_loader| Self::find_template_loader(py, template_loader))
+                .map(|template_loader| template_loader.and_then(|template_loader| Self::find_template_loader(py, template_loader)))
                 .collect()
         }
 
@@ -290,10 +289,8 @@ pub mod django_rusty_templates {
                     );
                     return Err(err);
                 }
-                Some(_loaders) => {
-                    let py_loaders = _loaders.downcast::<PyList>().unwrap();
-
-                    let loaders = match Self::get_template_loaders(_py, py_loaders) {
+                Some(loaders) => {
+                    match Self::get_template_loaders(_py, loaders.clone().try_iter()?){
                         Ok(loaders) => loaders,
                         Err(err) => {
                             let error = format!(
@@ -302,9 +299,7 @@ pub mod django_rusty_templates {
                             );
                             return Err(InvalidTemplateLibrary::new_err(error));
                         }
-                    };
-
-                    loaders
+                    }
                 }
                 None => {
                     let filesystem_loader =
