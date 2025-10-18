@@ -63,7 +63,7 @@ fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> Result<Vec<PathBuf>, 
 
     Ok(template_dirs)
 }
-
+#[derive(Debug)]
 pub struct FileSystemLoader {
     dirs: Vec<PathBuf>,
     encoding: &'static Encoding,
@@ -108,7 +108,7 @@ impl FileSystemLoader {
         Err(LoaderError { tried })
     }
 }
-
+#[derive(Debug)]
 pub struct AppDirsLoader {
     encoding: &'static Encoding,
 }
@@ -132,7 +132,7 @@ impl AppDirsLoader {
         filesystem_loader.get_template(py, template_name, engine)
     }
 }
-
+#[derive(Debug)]
 pub struct CachedLoader {
     cache: HashMap<String, Result<Template, LoaderError>>,
     pub loaders: Vec<Loader>,
@@ -176,7 +176,7 @@ impl CachedLoader {
         }
     }
 }
-
+#[derive(Debug)]
 pub struct LocMemLoader {
     templates: HashMap<String, String>,
 }
@@ -210,7 +210,7 @@ impl LocMemLoader {
         }
     }
 }
-
+#[derive(Debug)]
 pub struct ExternalLoader {}
 
 impl ExternalLoader {
@@ -224,6 +224,7 @@ impl ExternalLoader {
     }
 }
 
+#[derive(Debug)]
 pub enum Loader {
     FileSystem(FileSystemLoader),
     AppDirs(AppDirsLoader),
