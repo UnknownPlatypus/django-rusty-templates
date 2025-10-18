@@ -74,12 +74,16 @@ impl ResolveFilter for AddSlashesFilter {
         context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
         let content = match variable {
-            Some(content) => content
-                .render(context)?
-                .replace(r"\", r"\\")
-                .replace("\"", "\\\"")
-                .replace("'", r"\'")
-                .into_content(),
+            Some(content) => {
+                let content_string = content.resolve_string(context)?;
+                content_string.map_content(|raw| {
+                    Cow::Owned(
+                        raw.replace(r"\", r"\\")
+                            .replace("\"", "\\\"")
+                            .replace("'", r"\'")
+                    )
+                })
+            }
             None => "".as_content(),
         };
         Ok(Some(content))
