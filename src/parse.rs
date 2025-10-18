@@ -22,6 +22,7 @@ use crate::filters::LowerFilter;
 use crate::filters::SafeFilter;
 use crate::filters::SlugifyFilter;
 use crate::filters::UpperFilter;
+use crate::filters::WordwrapFilter;
 use crate::lex::START_TAG_LEN;
 use crate::lex::autoescape::{AutoescapeEnabled, AutoescapeError, lex_autoescape_argument};
 use crate::lex::common::{LexerError, text_content_at, translated_text_content_at};
@@ -144,6 +145,10 @@ impl Filter {
             "upper" => match right {
                 Some(right) => return Err(unexpected_argument("upper", right)),
                 None => FilterType::Upper(UpperFilter),
+            },
+            "wordwrap" => match right {
+                Some(right) => FilterType::Wordwrap(WordwrapFilter::new(right)),
+                None => return Err(ParseError::MissingArgument { at: at.into() }),
             },
             external => {
                 let external = match parser.external_filters.get(external) {

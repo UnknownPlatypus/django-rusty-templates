@@ -12,6 +12,7 @@ use crate::error::RenderError;
 use crate::filters::{
     AddFilter, AddSlashesFilter, CapfirstFilter, CenterFilter, DefaultFilter, EscapeFilter,
     ExternalFilter, FilterType, LowerFilter, SafeFilter, SlugifyFilter, UpperFilter,
+    WordwrapFilter,
 };
 use crate::parse::Filter;
 use crate::render::types::{AsBorrowedContent, Content, ContentString, Context, IntoOwnedContent};
@@ -51,6 +52,7 @@ impl Resolve for Filter {
             FilterType::Safe(filter) => filter.resolve(left, py, template, context),
             FilterType::Slugify(filter) => filter.resolve(left, py, template, context),
             FilterType::Upper(filter) => filter.resolve(left, py, template, context),
+            FilterType::Wordwrap(filter) => filter.resolve(left, py, template, context),
         }
     }
 }
@@ -414,6 +416,132 @@ impl ResolveFilter for UpperFilter {
             None => "".as_content(),
         };
         Ok(Some(content))
+    }
+}
+
+fn wordwrap(text: &str, width: usize) -> Result<String, PyErr> {
+    if width == 0 {
+        return Err(pyo3::exceptions::PyValueError::new_err(
+            "invalid width 0 (must be > 0)",
+        ));
+    }
+    
+    let mut result = Vec::new();
+    
+    for line in text.split('\n') {
+        if line.is_empty() {
+            result.push(String::new());
+            continue;
+        }
+        
+        // Check if line is only whitespace
+        if line.chars().all(|c| c.is_whitespace()) {
+            result.push(line.to_string());
+            continue;
+        }
+        
+        let mut current_line = String::new();
+        let mut current_len = 0;
+        let mut words = line.split_whitespace().peekable();
+        
+        while let Some(word) = words.next() {
+            let word_len = word.len();
+            
+            if current_len == 0 {
+                // First word on the line
+                current_line.push_str(word);
+                current_len = word_len;
+            } else if current_len + 1 + word_len <= width {
+                // Word fits on current line
+                current_line.push(' ');
+                current_line.push_str(word);
+                current_len += 1 + word_len;
+            } else {
+                // Word doesn't fit, start new line
+                result.push(current_line);
+                current_line = word.to_string();
+                current_len = word_len;
+            }
+        }
+        
+        if !current_line.is_empty() {
+            result.push(current_line);
+        }
+    }
+    
+    Ok(result.join("\n"))
+}
+
+impl ResolveFilter for WordwrapFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        let Some(content) = variable else {
+            return Ok(Some("".as_content()));
+        };
+        
+        let text = content.resolve_string(context)?;
+        
+        let arg = self
+            .argument
+            .resolve(py, template, context, ResolveFailures::Raise)?
+            .expect("missing argument in context should already have raised");
+        
+        let width = match arg {
+            Content::Int(n) => resolve_bigint(n, self.argument.at)?,
+            Content::String(s) => match s.as_raw().parse::<BigInt>() {
+                Ok(n) => resolve_bigint(n, self.argument.at)?,
+                Err(_) => {
+                    return Err(RenderError::InvalidArgumentInteger {
+                        argument: format!("'{}'", s.as_raw()),
+                        argument_at: self.argument.at.into(),
+                    }
+                    .into());
+                }
+            },
+            Content::Float(f) => match f.trunc().to_bigint() {
+                Some(n) => resolve_bigint(n, self.argument.at)?,
+                None => {
+                    return Err(RenderError::InvalidArgumentFloat {
+                        argument: f.to_string(),
+                        argument_at: self.argument.at.into(),
+                    }
+                    .into());
+                }
+            },
+            Content::Py(obj) => match obj.extract::<BigInt>() {
+                Ok(n) => resolve_bigint(n, self.argument.at)?,
+                Err(_) => {
+                    let argument = obj.to_string();
+                    let argument_at = self.argument.at.into();
+                    let err = match obj.extract::<f64>() {
+                        Ok(_) => RenderError::InvalidArgumentFloat {
+                            argument,
+                            argument_at,
+                        },
+                        Err(_) => RenderError::InvalidArgumentInteger {
+                            argument,
+                            argument_at,
+                        },
+                    };
+                    return Err(err.into());
+                }
+            },
+            Content::Bool(_) => {
+                return Err(RenderError::InvalidArgumentInteger {
+                    argument: arg.render(context)?.to_string(),
+                    argument_at: self.argument.at.into(),
+                }
+                .into());
+            }
+        };
+        
+        let wrapped = wordwrap(text.as_raw(), width)?;
+        Ok(Some(text.map_content(|_| Cow::Owned(wrapped))))
     }
 }
 

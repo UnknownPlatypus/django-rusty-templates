@@ -17,6 +17,7 @@ pub enum FilterType {
     Safe(SafeFilter),
     Slugify(SlugifyFilter),
     Upper(UpperFilter),
+    Wordwrap(WordwrapFilter),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -97,3 +98,14 @@ pub struct SlugifyFilter;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UpperFilter;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct WordwrapFilter {
+    pub argument: Argument,
+}
+
+impl WordwrapFilter {
+    pub fn new(argument: Argument) -> Self {
+        Self { argument }
+    }
+}
