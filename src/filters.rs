@@ -17,6 +17,7 @@ pub enum FilterType {
     Safe(SafeFilter),
     Slugify(SlugifyFilter),
     Upper(UpperFilter),
+    YesNo(YesNoFilter),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -97,3 +98,14 @@ pub struct SlugifyFilter;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UpperFilter;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct YesNoFilter {
+    pub argument: Option<Argument>,
+}
+
+impl YesNoFilter {
+    pub fn new(argument: Option<Argument>) -> Self {
+        Self { argument }
+    }
+}

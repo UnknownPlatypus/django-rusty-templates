@@ -12,6 +12,7 @@ use crate::error::RenderError;
 use crate::filters::{
     AddFilter, AddSlashesFilter, CapfirstFilter, CenterFilter, DefaultFilter, EscapeFilter,
     ExternalFilter, FilterType, LowerFilter, SafeFilter, SlugifyFilter, UpperFilter,
+    YesNoFilter,
 };
 use crate::parse::Filter;
 use crate::render::types::{AsBorrowedContent, Content, ContentString, Context, IntoOwnedContent};
@@ -51,6 +52,7 @@ impl Resolve for Filter {
             FilterType::Safe(filter) => filter.resolve(left, py, template, context),
             FilterType::Slugify(filter) => filter.resolve(left, py, template, context),
             FilterType::Upper(filter) => filter.resolve(left, py, template, context),
+            FilterType::YesNo(filter) => filter.resolve(left, py, template, context),
         }
     }
 }
@@ -414,6 +416,93 @@ impl ResolveFilter for UpperFilter {
             None => "".as_content(),
         };
         Ok(Some(content))
+    }
+}
+
+impl ResolveFilter for YesNoFilter {
+    fn resolve<'t, 'py>(
+        &self,
+        variable: Option<Content<'t, 'py>>,
+        py: Python<'py>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> ResolveResult<'t, 'py> {
+        // Get the argument or use default "yes,no,maybe"
+        let arg_string = match &self.argument {
+            Some(arg) => {
+                let arg_content = arg
+                    .resolve(py, template, context, ResolveFailures::Raise)?
+                    .expect("missing argument in context should already have raised");
+                arg_content.resolve_string(context)?.into_raw().into_owned()
+            }
+            None => "yes,no,maybe".to_string(),
+        };
+
+        // Split the argument by comma
+        let bits: Vec<&str> = arg_string.split(',').collect();
+        
+        // If less than 2 values, return the value as-is (invalid arg)
+        if bits.len() < 2 {
+            return match variable {
+                Some(content) => {
+                    let content_string = content.resolve_string(context)?;
+                    Ok(Some(Content::String(content_string)))
+                }
+                None => Ok(Some("".as_content())),
+            };
+        }
+
+        // Extract yes, no, and maybe values
+        let yes = bits[0];
+        let no = bits[1];
+        let maybe = if bits.len() >= 3 { bits[2] } else { bits[1] };
+
+        // Determine which value to return based on the variable
+        let result = match variable {
+            // Missing variables are treated as empty string (falsy)
+            None => no.to_string(),
+            Some(content) => {
+                // Check if the value is truthy or falsy
+                let chosen = match content {
+                    Content::Bool(true) => yes,
+                    Content::Bool(false) => no,
+                    Content::Int(ref n) => {
+                        if n == &BigInt::from(0) {
+                            no
+                        } else {
+                            yes
+                        }
+                    }
+                    Content::Float(f) => {
+                        if f == 0.0 {
+                            no
+                        } else {
+                            yes
+                        }
+                    }
+                    Content::String(ref s) => {
+                        if s.as_raw().is_empty() {
+                            no
+                        } else {
+                            yes
+                        }
+                    }
+                    Content::Py(ref obj) => {
+                        // Check if the Python object is None first
+                        if obj.is_none() {
+                            maybe
+                        } else if obj.is_truthy()? {
+                            yes
+                        } else {
+                            no
+                        }
+                    }
+                };
+                chosen.to_string()
+            }
+        };
+
+        Ok(Some(result.into_content()))
     }
 }
 
