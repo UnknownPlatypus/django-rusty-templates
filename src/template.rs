@@ -224,6 +224,10 @@ pub mod django_rusty_templates {
             })
         }
 
+        /// Return a compiled Template object for the given template name,
+        /// handling template inheritance recursively.
+        ///
+        /// See https://docs.djangoproject.com/en/stable/ref/templates/api/#django.template.Engine.get_template
         pub fn get_template(
             &mut self,
             py: Python<'_>,
