@@ -224,6 +224,10 @@ pub mod django_rusty_templates {
             })
         }
 
+        /// Return a compiled Template object for the given template name,
+        /// handling template inheritance recursively.
+        ///
+        /// See https://docs.djangoproject.com/en/stable/ref/templates/api/#django.template.Engine.get_template
         pub fn get_template(
             &mut self,
             py: Python<'_>,
@@ -237,6 +241,30 @@ pub mod django_rusty_templates {
                 }
             }
             Err(TemplateDoesNotExist::new_err((template_name, tried)))
+        }
+
+        /// Given a list of template names, return the first that can be loaded.
+        ///
+        /// See https://docs.djangoproject.com/en/stable/ref/templates/api/#django.template.Engine.select_template
+        pub fn select_template(
+            &mut self,
+            py: Python<'_>,
+            template_name_list: Vec<String>,
+        ) -> PyResult<Template> {
+            if template_name_list.is_empty() {
+                return Err(TemplateDoesNotExist::new_err("No template names provided"));
+            }
+            let mut not_found = Vec::new();
+            for template_name in template_name_list {
+                match self.get_template(py, template_name) {
+                    Ok(template) => return Ok(template),
+                    Err(e) if e.is_instance_of::<TemplateDoesNotExist>(py) => {
+                        not_found.push(e.value(py).to_string())
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            Err(TemplateDoesNotExist::new_err(not_found.join(", ")))
         }
 
         #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
