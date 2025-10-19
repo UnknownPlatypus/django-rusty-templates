@@ -3,15 +3,11 @@ from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 
 
-def test_escape():
+def test_escape(assert_render):
     template = "{{ html|escape }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
     escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == escaped
-    assert rust_template.render({"html": html}) == escaped
+    assert_render(template=template, context={"html": html}, expected=escaped)
 
 
 def test_escape_with_argument():
@@ -36,70 +32,42 @@ def test_escape_with_argument():
     assert str(exc_info.value) == expected
 
 
-def test_escape_missing_value():
+def test_escape_missing_value(assert_render):
     template = "{{ html|escape }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == ""
-    assert rust_template.render({}) == ""
+    assert_render(template=template, context={}, expected="")
 
 
-def test_already_escaped():
+def test_already_escaped(assert_render):
     template = "{{ html|escape|escape }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
     escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == escaped
-    assert rust_template.render({"html": html}) == escaped
+    assert_render(template=template, context={"html": html}, expected=escaped)
 
 
-def test_escape_integer():
+def test_escape_integer(assert_render):
     template = "{{ num|default:100|escape }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "100"
-    assert rust_template.render({}) == "100"
+    assert_render(template=template, context={}, expected="100")
 
 
-def test_escape_float():
+def test_escape_float(assert_render):
     template = "{{ num|default:1.6|escape }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "1.6"
-    assert rust_template.render({}) == "1.6"
+    assert_render(template=template, context={}, expected="1.6")
 
 
-def test_escape_bool():
+def test_escape_bool(assert_render):
     template = "{% for x in 'xy' %}{{ forloop.first|escape }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "TrueFalse"
-    assert rust_template.render({}) == "TrueFalse"
+    assert_render(template=template, context={}, expected="TrueFalse")
 
 
-def test_escape_autoescape_off():
+def test_escape_autoescape_off(assert_render):
     template = "{% autoescape off %}{{ html|escape }}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
     escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == escaped
-    assert rust_template.render({"html": html}) == escaped
+    assert_render(template=template, context={"html": html}, expected=escaped)
 
 
-def test_escape_autoescape_off_lower():
+def test_escape_autoescape_off_lower(assert_render):
     template = "{% autoescape off %}{{ html|lower|escape }}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
     escaped = "&lt;p&gt;hello world!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == escaped
-    assert rust_template.render({"html": html}) == escaped
+    assert_render(template=template, context={"html": html}, expected=escaped)
