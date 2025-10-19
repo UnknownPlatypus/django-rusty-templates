@@ -17,14 +17,14 @@ use crate::types::Text;
 use crate::types::TranslatedText;
 use crate::types::Variable;
 
-fn has_truthy_attr(variable: &Bound<'_, PyAny>, attr: &Bound<'_, PyString>) -> Result<bool, PyErr> {
+fn has_truthy_attr(variable: &Bound<'_, PyAny>, attr: &Bound<'_, PyString>) -> PyResult<bool> {
     match variable.getattr(attr) {
         Ok(attr) if attr.is_truthy()? => Ok(true),
         _ => Ok(false),
     }
 }
 
-fn resolve_callable(variable: Bound<'_, PyAny>) -> Result<Option<Bound<'_, PyAny>>, PyErr> {
+fn resolve_callable(variable: Bound<'_, PyAny>) -> PyResult<Option<Bound<'_, PyAny>>> {
     if !variable.is_callable() {
         return Ok(Some(variable));
     }
