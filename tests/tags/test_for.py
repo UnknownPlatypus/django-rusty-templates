@@ -23,46 +23,28 @@ class BrokenIterator2:
         1 / 0
 
 
-def test_render_for_loop():
+def test_render_for_loop(assert_render):
     template = "{% for x in y %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = [1, 2, "foo"]
     expected = "12foo"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_reversed():
+def test_render_for_loop_reversed(assert_render):
     template = "{% for x in y reversed %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = [1, 2, "foo"]
     expected = "foo21"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_string():
+def test_render_for_loop_string(assert_render):
     template = "{% for x in 'y' %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    expected = "y"
-    assert django_template.render() == expected
-    assert rust_template.render() == expected
+    assert_render(template=template, context={}, expected="y")
 
 
-def test_render_for_loop_translated_string():
+def test_render_for_loop_translated_string(assert_render):
     template = "{% for x in _('y') %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    expected = "y"
-    assert django_template.render() == expected
-    assert rust_template.render() == expected
+    assert_render(template=template, context={}, expected="y")
 
 
 def test_render_for_loop_numeric():
@@ -88,225 +70,145 @@ def test_render_for_loop_numeric():
     assert str(exc_info.value) == expected
 
 
-def test_render_for_loop_filter():
+def test_render_for_loop_filter(assert_render):
     template = "{% for x in y|upper %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = "foo"
     expected = "FOO"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_filter_reversed():
+def test_render_for_loop_filter_reversed(assert_render):
     template = "{% for x in y|upper reversed %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = "foo"
     expected = "OOF"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_unpack_tuple():
+def test_render_for_loop_unpack_tuple(assert_render):
     template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     l = [(1, 2, 3), ("foo", "bar", "spam")]
     expected = "1-2-3\nfoo-bar-spam\n"
-    assert django_template.render({"l": l}) == expected
-    assert rust_template.render({"l": l}) == expected
+    assert_render(template=template, context={"l": l}, expected=expected)
 
 
-def test_render_for_loop_unpack_tuple_no_whitespace():
+def test_render_for_loop_unpack_tuple_no_whitespace(assert_render):
     template = "{% for x,y in l %}{{ x }}-{{ y }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     l = [(1, 2), ("foo", "bar")]
     expected = "1-2\nfoo-bar\n"
-    assert django_template.render({"l": l}) == expected
-    assert rust_template.render({"l": l}) == expected
+    assert_render(template=template, context={"l": l}, expected=expected)
 
 
-def test_render_for_loop_unpack_dict_items():
+def test_render_for_loop_unpack_dict_items(assert_render):
     template = "{% for x, y in d.items %}{{ x }}: {{ y }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     d = {"foo": 1, "bar": 2}
     expected = "foo: 1\nbar: 2\n"
-    assert django_template.render({"d": d}) == expected
-    assert rust_template.render({"d": d}) == expected
+    assert_render(template=template, context={"d": d}, expected=expected)
 
 
-def test_render_for_loop_counter():
+def test_render_for_loop_counter(assert_render):
     template = "{% for x in y %}{{ x }}: {{ forloop.counter }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo", "bar", "spam"]
     expected = "foo: 1\nbar: 2\nspam: 3\n"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_counter0():
+def test_render_for_loop_counter0(assert_render):
     template = "{% for x in y %}{{ x }}: {{ forloop.counter0 }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo", "bar", "spam"]
     expected = "foo: 0\nbar: 1\nspam: 2\n"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_revcounter():
+def test_render_for_loop_revcounter(assert_render):
     template = "{% for x in y %}{{ x }}: {{ forloop.revcounter }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo", "bar", "spam"]
     expected = "foo: 3\nbar: 2\nspam: 1\n"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_revcounter0():
+def test_render_for_loop_revcounter0(assert_render):
     template = "{% for x in y %}{{ x }}: {{ forloop.revcounter0 }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo", "bar", "spam"]
     expected = "foo: 2\nbar: 1\nspam: 0\n"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_first():
+def test_render_for_loop_first(assert_render):
     template = "{% for x in y %}{{ x }}: {{ forloop.first }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo", "bar", "spam"]
     expected = "foo: True\nbar: False\nspam: False\n"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_last():
+def test_render_for_loop_last(assert_render):
     template = "{% for x in y %}{{ x }}: {{ forloop.last }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo", "bar", "spam"]
     expected = "foo: False\nbar: False\nspam: True\n"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_forloop_variable():
+def test_render_for_loop_forloop_variable(assert_render):
     template = "{% autoescape off %}{% for x in y %}{{ forloop }}{% endfor %}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = "{'parentloop': {}, 'counter0': 0, 'counter': 1, 'revcounter': 1, 'revcounter0': 0, 'first': True, 'last': True}"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_forloop_variable_escaped():
+def test_render_for_loop_forloop_variable_escaped(assert_render):
     template = "{% autoescape on %}{% for x in y %}{{ forloop }}{% endfor %}{% endautoescape on %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = "{'parentloop': {}, 'counter0': 0, 'counter': 1, 'revcounter': 1, 'revcounter0': 0, 'first': True, 'last': True}".replace(
         "'", "&#x27;"
     )
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_forloop_variable_nested():
+def test_render_for_loop_forloop_variable_nested(assert_render):
     template = "{% autoescape off %}{% for x in y %}{% for x in y %}{{ forloop }}{% endfor %}{% endfor %}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = "{'parentloop': {'parentloop': {}, 'counter0': 0, 'counter': 1, 'revcounter': 1, 'revcounter0': 0, 'first': True, 'last': True}, 'counter0': 0, 'counter': 1, 'revcounter': 1, 'revcounter0': 0, 'first': True, 'last': True}"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_parentloop_variable():
+def test_render_for_loop_parentloop_variable(assert_render):
     template = "{% autoescape off %}{% for x in y %}{% for x2 in y %}{{ forloop.parentloop }}{% endfor %}{% endfor %}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = "{'parentloop': {}, 'counter0': 0, 'counter': 1, 'revcounter': 1, 'revcounter0': 0, 'first': True, 'last': True}"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_forloop_variable_no_loop():
+def test_render_for_loop_forloop_variable_no_loop(assert_render):
     template = "{% autoescape off %}{{ forloop }}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "foo"
-    assert django_template.render({"forloop": "foo"}) == expected
-    assert rust_template.render({"forloop": "foo"}) == expected
+    assert_render(template=template, context={"forloop": "foo"}, expected=expected)
 
 
-def test_render_for_loop_parentloop_variable_no_inner_loop():
+def test_render_for_loop_parentloop_variable_no_inner_loop(assert_render):
     template = "{% autoescape off %}{% for x in y %}{{ forloop.parentloop }}{% endfor %}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = "{}"
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_parentloop_variable_no_inner_loop_twice():
+def test_render_for_loop_parentloop_variable_no_inner_loop_twice(assert_render):
     template = "{% autoescape off %}{% for x in y %}{{ forloop.parentloop.parentloop }}{% endfor %}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = ""
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_invalid_forloop_variable():
+def test_render_for_loop_invalid_forloop_variable(assert_render):
     template = "{% autoescape off %}{% for x in y %}{{ forloop.invalid }}{% endfor %}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = ""
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_invalid_parentloop_variable():
+def test_render_for_loop_invalid_parentloop_variable(assert_render):
     template = "{% autoescape off %}{% for x in y %}{{ forloop.invalid.parentloop }}{% endfor %}{% endautoescape off %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     y = ["foo"]
     expected = ""
-    assert django_template.render({"y": y}) == expected
-    assert rust_template.render({"y": y}) == expected
+    assert_render(template=template, context={"y": y}, expected=expected)
 
 
 def test_render_for_loop_parentloop():
@@ -349,7 +251,7 @@ def test_render_for_loop_parentloop():
     )
 
 
-def test_render_for_loop_empty():
+def test_render_for_loop_empty(assert_render):
     template = dedent("""
     <ul>
     {% for athlete in athlete_list %}
@@ -359,9 +261,6 @@ def test_render_for_loop_empty():
     {% endfor %}
     </ul>
     """)
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = dedent("""
     <ul>
 
@@ -369,54 +268,37 @@ def test_render_for_loop_empty():
 
     </ul>
     """)
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template=template, context={}, expected=expected)
 
 
-def test_render_for_loop_shadowing_context():
+def test_render_for_loop_shadowing_context(assert_render):
     template = "{{ x }}{% for x in y %}{{ x }}{% for x in z %}{{ x }}{% endfor %}{{ x }}{% endfor %}{{ x }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     context = {"x": 1, "y": [2], "z": [3]}
     expected = "12321"
-    assert django_template.render(context) == expected
-    assert rust_template.render(context) == expected
+    assert_render(template=template, context=context, expected=expected)
 
 
-def test_render_for_loop_url_shadowing():
+def test_render_for_loop_url_shadowing(assert_render):
     template = (
         "{{ x }}{% for x in y %}{{ x }}{% url 'home' as x %}{{ x }}{% endfor %}{{ x }}"
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     context = {"x": 1, "y": [2]}
     expected = "12/1"
-    assert django_template.render(context) == expected
-    assert rust_template.render(context) == expected
+    assert_render(template=template, context=context, expected=expected)
 
 
-def test_render_in_in_in():
+def test_render_in_in_in(assert_render):
     template = "{% for in in in %}{{ in }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     l = (1, 2, 3)
     expected = "1\n2\n3\n"
-    assert django_template.render({"in": l}) == expected
-    assert rust_template.render({"in": l}) == expected
+    assert_render(template=template, context={"in": l}, expected=expected)
 
 
-def test_render_number_in_expression():
+def test_render_number_in_expression(assert_render):
     template = "{% for 1 in l %}{{ 1 }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     l = (1, 2, 3)
     expected = "1\n1\n1\n"
-    assert django_template.render({"l": l}) == expected
-    assert rust_template.render({"l": l}) == expected
+    assert_render(template=template, context={"l": l}, expected=expected)
 
 
 def test_missing_variable_no_in():
