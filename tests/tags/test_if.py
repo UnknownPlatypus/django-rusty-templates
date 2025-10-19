@@ -17,107 +17,66 @@ from hypothesis.strategies import (
 )
 
 
-def test_render_if_true():
+def test_render_if_true(assert_render):
     template = "{% if foo %}{{ foo }}{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     foo = "Foo"
-    assert django_template.render({"foo": foo}) == foo
-    assert rust_template.render({"foo": foo}) == foo
+    assert_render(template=template, context={"foo": foo}, expected=foo)
 
 
-def test_render_if_false():
+def test_render_if_false(assert_render):
     template = "{% if foo %}{{ foo }}{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == ""
-    assert rust_template.render({}) == ""
+    assert_render(template=template, context={}, expected="")
 
 
-def test_render_elif():
+def test_render_elif(assert_render):
     template = "{% if False %}foo{% elif True %}bar{% else %}baz{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render() == "bar"
-    assert rust_template.render() == "bar"
+    assert_render(template=template, context={}, expected="bar")
 
 
-def test_render_if_true_literal():
+def test_render_if_true_literal(assert_render):
     template = "{% if True %}foo{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "foo"
-    assert rust_template.render({}) == "foo"
+    assert_render(template=template, context={}, expected="foo")
 
 
-def test_render_translated_literal():
+def test_render_translated_literal(template_engine):
     template = "{% if _('Welcome') %}foo{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
+    template_obj = template_engine.from_string(template)
 
     with override("de"):
-        assert django_template.render({}) == "foo"
-        assert rust_template.render({}) == "foo"
+        assert template_obj.render({}) == "foo"
 
 
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0])
-def test_render_and(a, b):
+def test_render_and(a, b, assert_render):
     template = "{% if a and b %}foo{% else %}bar{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "foo" if a and b else "bar"
-
-    assert django_template.render({"a": a, "b": b}) == expected
-    assert rust_template.render({"a": a, "b": b}) == expected
+    assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
-def test_render_and_literals():
+def test_render_and_literals(assert_render):
     template = """{% if a and "b" and 'c' and 1 and 2.0 %}foo{% endif %}"""
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"a": "a"}) == "foo"
-    assert rust_template.render({"a": "a"}) == "foo"
+    assert_render(template=template, context={"a": "a"}, expected="foo")
 
 
-def test_render_or_literals():
+def test_render_or_literals(assert_render):
     template = """{% if a or "" or '' or 0 or 0.0 %}foo{% endif %}"""
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"a": ""}) == ""
-    assert rust_template.render({"a": ""}) == ""
+    assert_render(template=template, context={"a": ""}, expected="")
 
 
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0])
-def test_render_or(a, b):
+def test_render_or(a, b, assert_render):
     template = "{% if a or b %}foo{% else %}bar{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "foo" if a or b else "bar"
-
-    assert django_template.render({"a": a, "b": b}) == expected
-    assert rust_template.render({"a": a, "b": b}) == expected
+    assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0])
-def test_render_not(a):
+def test_render_not(a, assert_render):
     template = "{% if not a %}foo{% else %}bar{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "foo" if not a else "bar"
-
-    assert django_template.render({"a": a}) == expected
-    assert rust_template.render({"a": a}) == expected
+    assert_render(template=template, context={"a": a}, expected=expected)
 
 
 def compare(op, left, right):
@@ -186,43 +145,28 @@ class Float:
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_render_op_var_var(a, b, op):
-    template = f"{{% if a {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
+def test_render_op_var_var(a, b, op, assert_render):
+    template = f"{{%if a {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
     expected = "truthy" if compare(op, a, b) else "falsey"
-
-    assert django_template.render({"a": a, "b": b}) == expected
-    assert rust_template.render({"a": a, "b": b}) == expected
+    assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("b", ["foo", "", 1, 0, 1.5, -3.7])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_render_op_var_literal(a, b, op):
-    template = f"{{% if a {op} {b!r} %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
+def test_render_op_var_literal(a, b, op, assert_render):
+    template = f"{{%if a {op} {b!r} %}}truthy{{% else %}}falsey{{% endif %}}"
     expected = "truthy" if compare(op, a, b) else "falsey"
-
-    assert django_template.render({"a": a}) == expected
-    assert rust_template.render({"a": a}) == expected
+    assert_render(template=template, context={"a": a}, expected=expected)
 
 
 @pytest.mark.parametrize("a", ["foo", "", 1, 0, 1.5, -3.7])
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_render_op_literal_var(a, b, op):
-    template = f"{{% if {a!r} {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
+def test_render_op_literal_var(a, b, op, assert_render):
+    template = f"{{%if {a!r} {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
     expected = "truthy" if compare(op, a, b) else "falsey"
-
-    assert django_template.render({"b": b}) == expected
-    assert rust_template.render({"b": b}) == expected
+    assert_render(template=template, context={"b": b}, expected=expected)
 
 
 @pytest.mark.parametrize(
@@ -256,73 +200,48 @@ def test_render_op_literal_var(a, b, op):
     ],
 )
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_render_op_literal_literal(a, b, op):
+def test_render_op_literal_literal(a, b, op, assert_render):
     template = f"{{% if {a!r} {op} {b!r} %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "truthy" if compare(op, a, b) else "falsey"
-
-    assert django_template.render({}) == expected, f"Django: {a!r} {op} {b!r}"
-    assert rust_template.render({}) == expected, f"Rust: {a!r} {op} {b!r}"
+    assert_render(template=template, context={}, expected=expected)
 
 
 @pytest.mark.parametrize("a", ["foo", 1, "", 0])
 @pytest.mark.parametrize("b", ["foobar", "bar", [1, 2], ["foobar", 1]])
-def test_render_in(a, b):
+def test_render_in(a, b, assert_render):
     template = "{% if a in b %}foo{% else %}bar{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     try:
         expected = "foo" if a in b else "bar"
     except TypeError:
         expected = "bar"
-
-    assert django_template.render({"a": a, "b": b}) == expected
-    assert rust_template.render({"a": a, "b": b}) == expected
+    assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
 @pytest.mark.parametrize("a", ["foo", 1, "", 0])
 @pytest.mark.parametrize("b", ["foobar", "bar", [1, 2], ["foobar", 1]])
-def test_render_not_in(a, b):
+def test_render_not_in(a, b, assert_render):
     template = "{% if a not in b %}foo{% else %}bar{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     try:
         expected = "foo" if a not in b else "bar"
     except TypeError:
         expected = "bar"
-
-    assert django_template.render({"a": a, "b": b}) == expected
-    assert rust_template.render({"a": a, "b": b}) == expected
+    assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0, None])
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0, None])
-def test_render_is(a, b):
+def test_render_is(a, b, assert_render):
     template = "{% if a is b %}foo{% else %}bar{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "foo" if a is b else "bar"
-
-    assert django_template.render({"a": a, "b": b}) == expected
-    assert rust_template.render({"a": a, "b": b}) == expected
+    assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
 @pytest.mark.parametrize("a", [True, False, "foo", 1, "", 0, None])
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0, None])
-def test_render_is_not(a, b):
+def test_render_is_not(a, b, assert_render):
     template = "{% if a is not b %}foo{% else %}bar{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "foo" if a is not b else "bar"
-
-    assert django_template.render({"a": a, "b": b}) == expected
-    assert rust_template.render({"a": a, "b": b}) == expected
+    assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
 def test_invalid_and_position():
