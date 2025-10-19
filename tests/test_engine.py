@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
-from django.template import engines
+from django.template import engines, Context
 from django.template.engine import Engine
 from django.template.library import InvalidTemplateLibrary
-
+from django.template.exceptions import TemplateDoesNotExist
 from django_rusty_templates import RustyTemplates
 
 
@@ -76,10 +76,20 @@ def test_select_template_first_exists():
     )
     assert template.render({"user": "Lily"}) == "Hello Lily!\n"
 
+    template = engines["django"].engine.select_template(
+        ["basic.txt", "full_example.html"]
+    )
+    assert template.render(Context({"user": "Lily"})) == "Hello Lily!\n"
+
 
 def test_select_template_second_exists():
     template = engines["rusty"].engine.select_template(["nonexistent.txt", "basic.txt"])
     assert template.render({"user": "Lily"}) == "Hello Lily!\n"
+
+    template = engines["django"].engine.select_template(
+        ["nonexistent.txt", "basic.txt"]
+    )
+    assert template.render(Context({"user": "Lily"})) == "Hello Lily!\n"
 
 
 @pytest.mark.parametrize(
@@ -93,15 +103,13 @@ def test_select_template_second_exists():
         ),
     ],
 )
-def test_select_template_errors(template_list, expected_error):
-    from django.template.exceptions import TemplateDoesNotExist
-
+def test_select_template_errors(template_engine, template_list, expected_error):
     with pytest.raises(TemplateDoesNotExist) as exc_info:
-        engines["rusty"].engine.select_template(template_list)
+        template_engine.engine.select_template(template_list)
 
     assert str(exc_info.value) == expected_error
 
 
-def test_select_template_invalid():
+def test_select_template_invalid(template_engine):
     with pytest.raises(UnicodeError):
-        engines["rusty"].engine.select_template(["invalid.txt"])
+        template_engine.engine.select_template(["invalid.txt"])
