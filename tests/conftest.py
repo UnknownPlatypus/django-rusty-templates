@@ -22,7 +22,10 @@ def assert_render(template_engine):
             assert_render(template="{% url home %}", context={"home": "home"}, expected="/")
     """
 
-    def assert_render_template(template, context, expected):
-        assert template_engine.from_string(template).render(context) == expected
+    def assert_render_template(template, context, expected, request_factory=None):
+        assert (
+            template_engine.from_string(template).render(context, request_factory)
+            == expected
+        )
 
     return assert_render_template
