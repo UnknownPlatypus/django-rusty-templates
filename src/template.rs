@@ -130,18 +130,24 @@ pub mod django_rusty_templates {
             Some(item) => item?,
             None => return Err(ImproperlyConfigured::new_err("Configuration is empty")),
         };
-        let loader_path = first_item.downcast::<PyString>()
+        let loader_path = first_item
+            .downcast::<PyString>()
             .map_err(|_| {
-                ImproperlyConfigured::new_err("First element of tuple configuration must be a Loader class name")
+                ImproperlyConfigured::new_err(
+                    "First element of tuple configuration must be a Loader class name",
+                )
             })?
             .clone();
         let remaining_args = match items.next() {
             Some(item) => item?,
-            None => return Err(ImproperlyConfigured::new_err("Missing second element in tuple configuration")),
+            None => {
+                return Err(ImproperlyConfigured::new_err(
+                    "Missing second element in tuple configuration",
+                ));
+            }
         };
         Ok((loader_path, remaining_args))
     }
-
 
     #[pyclass]
     pub struct Engine {
@@ -167,17 +173,21 @@ pub mod django_rusty_templates {
         fn get_template_loaders<'py>(
             py: Python<'py>,
             template_loaders: Bound<'_, PyIterator>,
-            encoding: &'static Encoding
+            encoding: &'static Encoding,
         ) -> PyResult<Vec<Loader>> {
             template_loaders
-                .map(|template_loader| template_loader.and_then(|template_loader| Self::find_template_loader(py, template_loader, encoding)))
+                .map(|template_loader| {
+                    template_loader.and_then(|template_loader| {
+                        Self::find_template_loader(py, template_loader, encoding)
+                    })
+                })
                 .collect()
         }
 
         fn find_template_loader<'py>(
             py: Python<'py>,
             loader: Bound<'_, PyAny>,
-            encoding: &'static Encoding
+            encoding: &'static Encoding,
         ) -> PyResult<Loader> {
             if let Ok(loader_str) = loader.downcast::<PyString>() {
                 return Self::map_loader(py, loader_str.to_str()?, None, encoding);
@@ -197,7 +207,7 @@ pub mod django_rusty_templates {
             py: Python<'_>,
             loader_path: &str,
             args: Option<Bound<'_, PyAny>>,
-            encoding: &'static Encoding
+            encoding: &'static Encoding,
         ) -> PyResult<Loader> {
             match loader_path {
                 "django.template.loaders.filesystem.Loader" => {
@@ -213,10 +223,7 @@ pub mod django_rusty_templates {
                         .transpose()?
                         .unwrap_or_default();
 
-                    Ok(Loader::FileSystem(FileSystemLoader::new(
-                        paths,
-                        encoding,
-                    )))
+                    Ok(Loader::FileSystem(FileSystemLoader::new(paths, encoding)))
                 }
                 "django.template.loaders.app_directories.Loader" => {
                     Ok(Loader::AppDirs(AppDirsLoader::new(encoding)))
@@ -287,9 +294,7 @@ pub mod django_rusty_templates {
                     );
                     return Err(err);
                 }
-                Some(loaders) => {
-                    Self::get_template_loaders(_py, loaders.try_iter()?, encoding)?
-                }
+                Some(loaders) => Self::get_template_loaders(_py, loaders.try_iter()?, encoding)?,
                 None => {
                     let filesystem_loader =
                         Loader::FileSystem(FileSystemLoader::new(dirs.clone(), encoding));
@@ -349,7 +354,10 @@ pub mod django_rusty_templates {
 
         #[getter]
         pub fn dirs(&self) -> Vec<String> {
-            self.dirs.iter().map(|p| p.to_string_lossy().to_string()).collect()
+            self.dirs
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect()
         }
         #[getter]
         pub fn file_charset(&self) -> String {
@@ -723,9 +731,17 @@ user = User(["Lily"])
 
             let engine = Engine::new(
                 py,
-                Some(vec!["tests/templates", "other/templates"].into_pyobject(py).unwrap()),
+                Some(
+                    vec!["tests/templates", "other/templates"]
+                        .into_pyobject(py)
+                        .unwrap(),
+                ),
                 true,
-                Some(vec!["django.template.context_processors.debug"].into_pyobject(py).unwrap()),
+                Some(
+                    vec!["django.template.context_processors.debug"]
+                        .into_pyobject(py)
+                        .unwrap(),
+                ),
                 true,
                 None,
                 "INVALID".to_string(),
@@ -758,14 +774,17 @@ user = User(["Lily"])
             assert!(dirs[0].ends_with("tests/templates"));
             assert!(dirs[1].ends_with("other/templates"));
 
-            let file_charset: String = py_engine.getattr("file_charset").unwrap().extract().unwrap();
+            let file_charset: String = py_engine
+                .getattr("file_charset")
+                .unwrap()
+                .extract()
+                .unwrap();
             assert_eq!(file_charset, "UTF-8");
 
             // TODO: support this once #89 lands
             // let loaders: Vec<String> = py_engine.getattr("loaders").unwrap().extract().unwrap();
             // assert_eq!(loaders.len(), 1);
             // assert_eq!(loaders[0], "django.template.loaders.cached.Loader");
-
         })
     }
 }
