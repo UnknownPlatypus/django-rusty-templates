@@ -26,11 +26,3 @@ repos:
     rev: dea2de902af82db3de7418a1fcd1b0042418885f # frozen: 0.4.0
     hooks:
       - id: cargo-fmt
-      - id: cargo-clippy
-        args: [
-          "--all-targets",
-          "--all-features",
-          "--fix",
-          "--allow-staged",
-          "--allow-dirty",
-        ]
