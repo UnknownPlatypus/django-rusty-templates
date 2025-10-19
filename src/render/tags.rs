@@ -779,7 +779,7 @@ fn add_context_to_args<'py>(
     py: Python<'py>,
     args: &mut VecDeque<Bound<'py, PyAny>>,
     context: &mut Context,
-) -> Result<Bound<'py, PyAny>, PyErr> {
+) -> PyResult<Bound<'py, PyAny>> {
     // Take ownership of `context` so we can pass it to Python.
     // The `context` variable now points to an empty `Context` instance which will not be
     // used except as a placeholder.

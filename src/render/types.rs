@@ -307,7 +307,7 @@ impl PyContext {
         guard.get(&key).is_some()
     }
 
-    fn __getitem__<'py>(&self, py: Python<'py>, key: String) -> Result<Bound<'py, PyAny>, PyErr> {
+    fn __getitem__<'py>(&self, py: Python<'py>, key: String) -> PyResult<Bound<'py, PyAny>> {
         let guard = self
             .context
             .lock_py_attached(py)

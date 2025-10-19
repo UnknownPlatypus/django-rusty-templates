@@ -74,12 +74,16 @@ impl ResolveFilter for AddSlashesFilter {
         context: &mut Context,
     ) -> ResolveResult<'t, 'py> {
         let content = match variable {
-            Some(content) => content
-                .render(context)?
-                .replace(r"\", r"\\")
-                .replace("\"", "\\\"")
-                .replace("'", r"\'")
-                .into_content(),
+            Some(content) => {
+                let content_string = content.resolve_string(context)?;
+                content_string.map_content(|raw| {
+                    Cow::Owned(
+                        raw.replace(r"\", r"\\")
+                            .replace("\"", "\\\"")
+                            .replace("'", r"\'"),
+                    )
+                })
+            }
             None => "".as_content(),
         };
         Ok(Some(content))
@@ -425,7 +429,7 @@ mod tests {
     use pyo3::types::{PyDict, PyString};
     static MARK_SAFE: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
 
-    fn mark_safe(py: Python<'_>, string: String) -> Result<Py<PyAny>, PyErr> {
+    fn mark_safe(py: Python<'_>, string: String) -> PyResult<Py<PyAny>> {
         let mark_safe = match MARK_SAFE.get(py) {
             Some(mark_safe) => mark_safe,
             None => {

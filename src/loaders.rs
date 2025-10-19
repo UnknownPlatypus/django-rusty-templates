@@ -31,7 +31,7 @@ fn safe_join(directory: &Path, template_name: &str) -> Option<PathBuf> {
     }
 }
 
-fn get_app_template_dir(path: Bound<'_, PyAny>, dirname: &str) -> Result<Option<PathBuf>, PyErr> {
+fn get_app_template_dir(path: Bound<'_, PyAny>, dirname: &str) -> PyResult<Option<PathBuf>> {
     if path.is_truthy()? {
         let path_buf: PathBuf = path.extract()?;
         let template_path = path_buf.join(dirname);
@@ -48,7 +48,7 @@ fn get_app_template_dir(path: Bound<'_, PyAny>, dirname: &str) -> Result<Option<
     key = "String",      // Use owned String as key
     convert = r##"{ dirname.to_string() }"## // Convert &str to String
 )]
-fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> Result<Vec<PathBuf>, PyErr> {
+fn get_app_template_dirs(py: Python<'_>, dirname: &str) -> PyResult<Vec<PathBuf>> {
     let apps_module = PyModule::import(py, "django.apps")?;
     let apps = apps_module.getattr("apps")?;
     let app_configs = apps.call_method0("get_app_configs")?;

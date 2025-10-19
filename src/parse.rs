@@ -812,7 +812,7 @@ pub enum PyParseError {
 }
 
 impl PyParseError {
-    pub fn try_into_parse_error(self) -> Result<ParseError, PyErr> {
+    pub fn try_into_parse_error(self) -> PyResult<ParseError> {
         match self {
             Self::ParseError(err) => Ok(err),
             Self::PyErr(err) => Err(err),
@@ -1359,7 +1359,7 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
                 .map(|v| v?.getattr("cell_contents"))
                 .collect::<Result<Vec<_>, _>>()?;
 
-            fn get_defaults_count(defaults: &Bound<'_, PyAny>) -> Result<usize, PyErr> {
+            fn get_defaults_count(defaults: &Bound<'_, PyAny>) -> PyResult<usize> {
                 match defaults.is_none() {
                     true => Ok(0),
                     false => defaults.len(),
@@ -1368,13 +1368,13 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
 
             fn get_kwonly_defaults(
                 kwonly_defaults: &Bound<'_, PyAny>,
-            ) -> Result<HashSet<String>, PyErr> {
+            ) -> PyResult<HashSet<String>> {
                 match kwonly_defaults.is_none() {
                     true => Ok(HashSet::new()),
                     false => kwonly_defaults
                         .try_iter()?
                         .map(|item| item?.extract())
-                        .collect::<Result<_, PyErr>>(),
+                        .collect::<PyResult<_>>(),
                 }
             }
 
@@ -1485,14 +1485,14 @@ impl<'t, 'l, 'py> Parser<'t, 'l, 'py> {
     fn get_tags(
         &mut self,
         library: &Bound<'py, PyAny>,
-    ) -> Result<HashMap<String, Bound<'py, PyAny>>, PyErr> {
+    ) -> PyResult<HashMap<String, Bound<'py, PyAny>>> {
         library.getattr(intern!(self.py, "tags"))?.extract()
     }
 
     fn get_filters(
         &mut self,
         library: &Bound<'py, PyAny>,
-    ) -> Result<HashMap<String, Bound<'py, PyAny>>, PyErr> {
+    ) -> PyResult<HashMap<String, Bound<'py, PyAny>>> {
         library.getattr(intern!(self.py, "filters"))?.extract()
     }
 

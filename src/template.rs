@@ -7,7 +7,7 @@ pub mod django_rusty_templates {
 
     use encoding_rs::Encoding;
     use pyo3::exceptions::{PyAttributeError, PyImportError, PyOverflowError, PyValueError};
-    use pyo3::import_exception_bound;
+    use pyo3::import_exception;
     use pyo3::intern;
     use pyo3::prelude::*;
     use pyo3::types::{PyBool, PyDict, PyIterator, PyString};
@@ -20,12 +20,12 @@ pub mod django_rusty_templates {
     use crate::types::TemplateString;
     use crate::utils::PyResultMethods;
 
-    import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
-    import_exception_bound!(django.template.base, VariableDoesNotExist);
-    import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
-    import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
-    import_exception_bound!(django.template.library, InvalidTemplateLibrary);
-    import_exception_bound!(django.urls, NoReverseMatch);
+    import_exception!(django.core.exceptions, ImproperlyConfigured);
+    import_exception!(django.template.base, VariableDoesNotExist);
+    import_exception!(django.template.exceptions, TemplateDoesNotExist);
+    import_exception!(django.template.exceptions, TemplateSyntaxError);
+    import_exception!(django.template.library, InvalidTemplateLibrary);
+    import_exception!(django.urls, NoReverseMatch);
 
     trait WithSourceCode {
         fn with_source_code(
@@ -131,7 +131,7 @@ pub mod django_rusty_templates {
             None => return Err(ImproperlyConfigured::new_err("Configuration is empty")),
         };
         let loader_path = first_item
-            .downcast::<PyString>()
+            .cast::<PyString>()
             .map_err(|_| {
                 ImproperlyConfigured::new_err(
                     "First element of tuple configuration must be a Loader class name",
@@ -189,7 +189,7 @@ pub mod django_rusty_templates {
             loader: Bound<'_, PyAny>,
             encoding: &'static Encoding,
         ) -> PyResult<Loader> {
-            if let Ok(loader_str) = loader.downcast::<PyString>() {
+            if let Ok(loader_str) = loader.cast::<PyString>() {
                 return Self::map_loader(py, loader_str.to_str()?, None, encoding);
             }
 
@@ -330,6 +330,10 @@ pub mod django_rusty_templates {
             })
         }
 
+        /// Return a compiled Template object for the given template name,
+        /// handling template inheritance recursively.
+        ///
+        /// See https://docs.djangoproject.com/en/stable/ref/templates/api/#django.template.Engine.get_template
         pub fn get_template(
             &mut self,
             py: Python<'_>,
@@ -343,6 +347,30 @@ pub mod django_rusty_templates {
                 }
             }
             Err(TemplateDoesNotExist::new_err((template_name, tried)))
+        }
+
+        /// Given a list of template names, return the first that can be loaded.
+        ///
+        /// See https://docs.djangoproject.com/en/stable/ref/templates/api/#django.template.Engine.select_template
+        pub fn select_template(
+            &mut self,
+            py: Python<'_>,
+            template_name_list: Vec<String>,
+        ) -> PyResult<Template> {
+            if template_name_list.is_empty() {
+                return Err(TemplateDoesNotExist::new_err("No template names provided"));
+            }
+            let mut not_found = Vec::new();
+            for template_name in template_name_list {
+                match self.get_template(py, template_name) {
+                    Ok(template) => return Ok(template),
+                    Err(e) if e.is_instance_of::<TemplateDoesNotExist>(py) => {
+                        not_found.push(e.value(py).to_string())
+                    }
+                    Err(e) => return Err(e),
+                }
+            }
+            Err(TemplateDoesNotExist::new_err(not_found.join(", ")))
         }
 
         #[allow(clippy::wrong_self_convention)] // We're implementing a Django interface
@@ -685,7 +713,7 @@ user = User(["Lily"])
         Python::attach(|py| {
             let cwd = std::env::current_dir().unwrap();
             let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
-            let sys_path = sys_path.downcast().unwrap();
+            let sys_path = sys_path.cast().unwrap();
             sys_path.append(cwd.to_string_lossy()).unwrap();
             let mut engine = Engine::new(
                 py,
@@ -726,7 +754,7 @@ user = User(["Lily"])
         Python::attach(|py| {
             let cwd = std::env::current_dir().unwrap();
             let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
-            let sys_path = sys_path.downcast().unwrap();
+            let sys_path = sys_path.cast().unwrap();
             sys_path.append(cwd.to_string_lossy()).unwrap();
 
             let engine = Engine::new(

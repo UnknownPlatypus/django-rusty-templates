@@ -22,6 +22,10 @@ repos:
       - id: ruff-check
         args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
+  - repo: https://github.com/AndrejOrsula/pre-commit-cargo
+    rev: dea2de902af82db3de7418a1fcd1b0042418885f # frozen: 0.4.0
+    hooks:
+      - id: cargo-fmt
   - repo: https://github.com/astral-sh/uv-pre-commit
     rev: 80fe261104b5578bc533ff3a10efb10449677b90 # frozen: v0.8.19
     hooks:
