@@ -167,18 +167,20 @@ pub mod django_rusty_templates {
         fn get_template_loaders<'py>(
             py: Python<'py>,
             template_loaders: Bound<'_, PyIterator>,
+            encoding: &'static Encoding
         ) -> PyResult<Vec<Loader>> {
             template_loaders
-                .map(|template_loader| template_loader.and_then(|template_loader| Self::find_template_loader(py, template_loader)))
+                .map(|template_loader| template_loader.and_then(|template_loader| Self::find_template_loader(py, template_loader, encoding)))
                 .collect()
         }
 
         fn find_template_loader<'py>(
             py: Python<'py>,
             loader: Bound<'_, PyAny>,
+            encoding: &'static Encoding
         ) -> PyResult<Loader> {
             if let Ok(loader_str) = loader.downcast::<PyString>() {
-                return Self::map_loader(py, loader_str.to_str()?, None);
+                return Self::map_loader(py, loader_str.to_str()?, None, encoding);
             }
 
             let (loader_path, args) = unpack(loader.clone()).map_err(|e| {
@@ -188,13 +190,14 @@ pub mod django_rusty_templates {
                 ))
             })?;
 
-            Self::map_loader(py, loader_path.to_str()?, Some(args))
+            Self::map_loader(py, loader_path.to_str()?, Some(args), encoding)
         }
 
         fn map_loader(
             py: Python<'_>,
             loader_path: &str,
             args: Option<Bound<'_, PyAny>>,
+            encoding: &'static Encoding
         ) -> PyResult<Loader> {
             match loader_path {
                 "django.template.loaders.filesystem.Loader" => {
@@ -212,11 +215,11 @@ pub mod django_rusty_templates {
 
                     Ok(Loader::FileSystem(FileSystemLoader::new(
                         paths,
-                        encoding_rs::UTF_8,
+                        encoding,
                     )))
                 }
                 "django.template.loaders.app_directories.Loader" => {
-                    Ok(Loader::AppDirs(AppDirsLoader::new(encoding_rs::UTF_8)))
+                    Ok(Loader::AppDirs(AppDirsLoader::new(encoding)))
                 }
                 "django.template.loaders.locmem.Loader" => {
                     let templates = args
@@ -234,7 +237,7 @@ pub mod django_rusty_templates {
                             )
                         })?
                         .try_iter()?
-                        .map(|inner_loader| Self::find_template_loader(py, inner_loader?))
+                        .map(|inner_loader| Self::find_template_loader(py, inner_loader?, encoding))
                         .collect::<PyResult<Vec<_>>>()?;
 
                     Ok(Loader::Cached(CachedLoader::new(nested_loaders)))
@@ -285,7 +288,7 @@ pub mod django_rusty_templates {
                     return Err(err);
                 }
                 Some(loaders) => {
-                    Self::get_template_loaders(_py, loaders.try_iter()?)?
+                    Self::get_template_loaders(_py, loaders.try_iter()?, encoding)?
                 }
                 None => {
                     let filesystem_loader =
