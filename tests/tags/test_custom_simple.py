@@ -108,7 +108,7 @@ def test_simple_tag_takes_context(assert_render):
     assert_render(
         template=template,
         context={"bar": "bar"},
-        request_factory=request,
+        request=request,
         expected="/foo/bar",
     )
 

@@ -146,7 +146,7 @@ class Float:
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
 def test_render_op_var_var(a, b, op, assert_render):
-    template = f"{{%if a {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
+    template = f"{{% if a {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
     expected = "truthy" if compare(op, a, b) else "falsey"
     assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
@@ -155,7 +155,7 @@ def test_render_op_var_var(a, b, op, assert_render):
 @pytest.mark.parametrize("b", ["foo", "", 1, 0, 1.5, -3.7])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
 def test_render_op_var_literal(a, b, op, assert_render):
-    template = f"{{%if a {op} {b!r} %}}truthy{{% else %}}falsey{{% endif %}}"
+    template = f"{{% if a {op} {b!r} %}}truthy{{% else %}}falsey{{% endif %}}"
     expected = "truthy" if compare(op, a, b) else "falsey"
     assert_render(template=template, context={"a": a}, expected=expected)
 
@@ -164,7 +164,7 @@ def test_render_op_var_literal(a, b, op, assert_render):
 @pytest.mark.parametrize("b", [True, False, "foo", 1, "", 0])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
 def test_render_op_literal_var(a, b, op, assert_render):
-    template = f"{{%if {a!r} {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
+    template = f"{{% if {a!r} {op} b %}}truthy{{% else %}}falsey{{% endif %}}"
     expected = "truthy" if compare(op, a, b) else "falsey"
     assert_render(template=template, context={"b": b}, expected=expected)
 

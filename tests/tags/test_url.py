@@ -66,9 +66,7 @@ def test_render_url_current_app_unset(assert_render):
     request = factory.get("/")
 
     expected = "/users/lily/"
-    assert_render(
-        template=template, context={}, request_factory=request, expected=expected
-    )
+    assert_render(template=template, context={}, request=request, expected=expected)
 
 
 def test_render_url_current_app(assert_render):
@@ -78,9 +76,7 @@ def test_render_url_current_app(assert_render):
     request.current_app = "members"
 
     expected = "/members/lily/"
-    assert_render(
-        template=template, context={}, request_factory=request, expected=expected
-    )
+    assert_render(template=template, context={}, request=request, expected=expected)
 
 
 def test_render_url_current_app_kwargs(assert_render):
@@ -90,9 +86,7 @@ def test_render_url_current_app_kwargs(assert_render):
     request.current_app = "members"
 
     expected = "/members/lily/"
-    assert_render(
-        template=template, context={}, request_factory=request, expected=expected
-    )
+    assert_render(template=template, context={}, request=request, expected=expected)
 
 
 def test_render_url_current_app_resolver_match(assert_render):
@@ -102,9 +96,7 @@ def test_render_url_current_app_resolver_match(assert_render):
     request.resolver_match = resolve("/members/bryony/")
 
     expected = "/members/lily/"
-    assert_render(
-        template=template, context={}, request_factory=request, expected=expected
-    )
+    assert_render(template=template, context={}, request=request, expected=expected)
 
 
 def test_render_url_view_name_error():
