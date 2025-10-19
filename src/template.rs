@@ -10,10 +10,10 @@ pub mod django_rusty_templates {
     use pyo3::import_exception;
     use pyo3::intern;
     use pyo3::prelude::*;
-    use pyo3::types::{PyBool, PyDict, PyString};
+    use pyo3::types::{PyBool, PyDict, PyIterator, PyString};
 
     use crate::error::RenderError;
-    use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader};
+    use crate::loaders::{AppDirsLoader, CachedLoader, FileSystemLoader, Loader, LocMemLoader};
     use crate::parse::{Parser, TokenTree};
     use crate::render::Render;
     use crate::render::types::Context;
@@ -120,6 +120,111 @@ pub mod django_rusty_templates {
         Ok(libs)
     }
 
+    /// Helper function to unpack a loader tuple configuration.
+    /// See https://docs.djangoproject.com/en/stable/ref/templates/api/#django.template.Engine
+    fn unpack<'py>(loader: &Bound<'py, PyAny>) -> PyResult<(String, Bound<'py, PyAny>)> {
+        let mut items = loader.try_iter()?;
+        let first_item = match items.next() {
+            Some(item) => item?,
+            None => return Err(ImproperlyConfigured::new_err("Configuration is empty")),
+        };
+        let loader_path = first_item.extract::<String>().map_err(|_| {
+            ImproperlyConfigured::new_err(
+                "First element of tuple configuration must be a Loader class name",
+            )
+        })?;
+        let remaining_args = match items.next() {
+            Some(item) => item?,
+            None => {
+                return Err(ImproperlyConfigured::new_err(
+                    "Missing second element in tuple configuration",
+                ));
+            }
+        };
+        Ok((loader_path, remaining_args))
+    }
+    fn get_template_loaders<'py>(
+        py: Python<'py>,
+        template_loaders: Bound<'_, PyIterator>,
+        encoding: &'static Encoding,
+    ) -> PyResult<Vec<Loader>> {
+        template_loaders
+            .map(|template_loader| {
+                template_loader
+                    .and_then(|template_loader| find_template_loader(py, template_loader, encoding))
+            })
+            .collect()
+    }
+
+    fn find_template_loader<'py>(
+        py: Python<'py>,
+        loader: Bound<'_, PyAny>,
+        encoding: &'static Encoding,
+    ) -> PyResult<Loader> {
+        if let Ok(loader_str) = loader.extract::<String>() {
+            return map_loader(py, &loader_str, None, encoding);
+        }
+
+        let (loader_path, args) = unpack(&loader).map_err(|e| {
+            ImproperlyConfigured::new_err(format!(
+                "Invalid template loader: {loader}. {}",
+                e.value(py),
+            ))
+        })?;
+
+        map_loader(py, &loader_path, Some(args), encoding)
+    }
+
+    fn map_loader(
+        py: Python<'_>,
+        loader_path: &str,
+        args: Option<Bound<'_, PyAny>>,
+        encoding: &'static Encoding,
+    ) -> PyResult<Loader> {
+        match loader_path {
+            "django.template.loaders.filesystem.Loader" => {
+                let paths = args
+                    .map(|arg| {
+                        arg.try_iter()?
+                            .map(|item| item?.extract::<PathBuf>())
+                            .collect::<PyResult<Vec<_>>>()
+                    })
+                    .transpose()?
+                    .unwrap_or_default();
+
+                Ok(Loader::FileSystem(FileSystemLoader::new(paths, encoding)))
+            }
+            "django.template.loaders.app_directories.Loader" => {
+                Ok(Loader::AppDirs(AppDirsLoader::new(encoding)))
+            }
+            "django.template.loaders.locmem.Loader" => {
+                let templates = args
+                    .map(|arg| arg.extract())
+                    .transpose()?
+                    .unwrap_or_default();
+
+                Ok(Loader::LocMem(LocMemLoader::new(templates)))
+            }
+            "django.template.loaders.cached.Loader" => {
+                let nested_loaders = args
+                    .ok_or_else(|| {
+                        ImproperlyConfigured::new_err(
+                            "django.template.loaders.cached.Loader requires a list/tuple of loaders"
+                        )
+                    })?
+                    .try_iter()?
+                    .map(|inner_loader| find_template_loader(py, inner_loader?, encoding))
+                    .collect::<PyResult<Vec<_>>>()?;
+
+                Ok(Loader::Cached(CachedLoader::new(nested_loaders)))
+            }
+            // TODO: Return an `ExternalLoader` when it's fully implemented
+            unknown => Err(ImproperlyConfigured::new_err(format!(
+                "Invalid template loader class: {}",
+                unknown
+            ))),
+        }
+    }
     #[pyclass]
     pub struct Engine {
         #[allow(dead_code)]
@@ -138,17 +243,6 @@ pub mod django_rusty_templates {
         #[pyo3(get)]
         builtins: Vec<String>,
         data: EngineData,
-    }
-
-    impl Engine {
-        #[allow(dead_code)]
-        fn find_template_loader<'py>(
-            _py: Python<'py>,
-            _loader: &str,
-            _args: Option<Bound<'py, PyAny>>,
-        ) -> PyResult<Bound<'py, PyAny>> {
-            todo!()
-        }
     }
 
     #[pymethods]
@@ -188,7 +282,7 @@ pub mod django_rusty_templates {
                     );
                     return Err(err);
                 }
-                Some(_loaders) => todo!(),
+                Some(loaders) => get_template_loaders(_py, loaders.try_iter()?, encoding)?,
                 None => {
                     let filesystem_loader =
                         Loader::FileSystem(FileSystemLoader::new(dirs.clone(), encoding));
