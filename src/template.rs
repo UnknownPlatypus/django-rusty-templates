@@ -126,20 +126,20 @@ pub mod django_rusty_templates {
         loader: Bound<'py, PyAny>,
     ) -> PyResult<(Bound<'py, PyString>, Bound<'py, PyAny>)> {
         let mut items = loader.try_iter()?;
-        let first_item = items
-            .next()
-            .ok_or_else(|| {
-                ImproperlyConfigured::new_err("Configuration is empty")
-            })?;
-        let loader_path = first_item?.downcast::<PyString>()
+        let first_item = match items.next() {
+            Some(item) => item?,
+            None => return Err(ImproperlyConfigured::new_err("Configuration is empty")),
+        };
+        let loader_path = first_item.downcast::<PyString>()
             .map_err(|_| {
                 ImproperlyConfigured::new_err("First element of tuple configuration must be a Loader class name")
             })?
             .clone();
-        let remaining_args = items.next().ok_or_else(|| {
-            ImproperlyConfigured::new_err("Missing second element in tuple configuration")
-        })?;
-        Ok((loader_path, remaining_args?))
+        let remaining_args = match items.next() {
+            Some(item) => item?,
+            None => return Err(ImproperlyConfigured::new_err("Missing second element in tuple configuration")),
+        };
+        Ok((loader_path, remaining_args))
     }
 
 
