@@ -244,18 +244,10 @@ def test_render_is_not(a, b, assert_render):
     assert_render(template=template, context={"a": a, "b": b}, expected=expected)
 
 
-def test_invalid_and_position():
+def test_invalid_and_position(assert_parse_error):
     template = "{% if and %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Not expecting 'and' in this position in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Not expecting 'and' in this position in if tag."
+    rusty_message = """\
   × Not expecting 'and' in this position
    ╭────
  1 │ {% if and %}{{ foo }}{% endif %}
@@ -263,21 +255,15 @@ def test_invalid_and_position():
    ·        ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_invalid_or_position():
+def test_invalid_or_position(assert_parse_error):
     template = "{% if or %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Not expecting 'or' in this position in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Not expecting 'or' in this position in if tag."
+    rusty_message = """\
   × Not expecting 'or' in this position
    ╭────
  1 │ {% if or %}{{ foo }}{% endif %}
@@ -285,21 +271,15 @@ def test_invalid_or_position():
    ·        ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_no_condition():
+def test_no_condition(assert_parse_error):
     template = "{% if %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Unexpected end of expression in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Unexpected end of expression in if tag."
+    rusty_message = """\
   × Missing boolean expression
    ╭────
  1 │ {% if %}{{ foo }}{% endif %}
@@ -307,21 +287,15 @@ def test_no_condition():
    ·     ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_unexpected_end_of_expression():
+def test_unexpected_end_of_expression(assert_parse_error):
     template = "{% if not %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Unexpected end of expression in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Unexpected end of expression in if tag."
+    rusty_message = """\
   × Unexpected end of expression
    ╭────
  1 │ {% if not %}{{ foo }}{% endif %}
@@ -329,21 +303,15 @@ def test_unexpected_end_of_expression():
    ·        ╰── after this
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_invalid_in_position():
+def test_invalid_in_position(assert_parse_error):
     template = "{% if in %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Not expecting 'in' in this position in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Not expecting 'in' in this position in if tag."
+    rusty_message = """\
   × Not expecting 'in' in this position
    ╭────
  1 │ {% if in %}{{ foo }}{% endif %}
@@ -351,21 +319,15 @@ def test_invalid_in_position():
    ·        ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_invalid_not_in_position():
+def test_invalid_not_in_position(assert_parse_error):
     template = "{% if not in %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Not expecting 'not in' in this position in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Not expecting 'not in' in this position in if tag."
+    rusty_message = """\
   × Not expecting 'not in' in this position
    ╭────
  1 │ {% if not in %}{{ foo }}{% endif %}
@@ -373,21 +335,15 @@ def test_invalid_not_in_position():
    ·          ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_invalid_is_position():
+def test_invalid_is_position(assert_parse_error):
     template = "{% if is %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Not expecting 'is' in this position in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Not expecting 'is' in this position in if tag."
+    rusty_message = """\
   × Not expecting 'is' in this position
    ╭────
  1 │ {% if is %}{{ foo }}{% endif %}
@@ -395,21 +351,15 @@ def test_invalid_is_position():
    ·        ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_invalid_is_not_position():
+def test_invalid_is_not_position(assert_parse_error):
     template = "{% if is not %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Not expecting 'is not' in this position in if tag."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Not expecting 'is not' in this position in if tag."
+    rusty_message = """\
   × Not expecting 'is not' in this position
    ╭────
  1 │ {% if is not %}{{ foo }}{% endif %}
@@ -417,21 +367,15 @@ def test_invalid_is_not_position():
    ·          ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_no_operator():
+def test_no_operator(assert_parse_error):
     template = "{% if foo bar spam %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Unused 'bar' at end of if expression."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Unused 'bar' at end of if expression."
+    rusty_message = """\
   × Unused expression 'bar' in if tag
    ╭────
  1 │ {% if foo bar spam %}{{ foo }}{% endif %}
@@ -439,21 +383,15 @@ def test_no_operator():
    ·            ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_invalid_token():
+def test_invalid_token(assert_parse_error):
     template = "{% if foo 'bar %}{{ foo }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Could not parse the remainder: ''bar' from ''bar'"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: ''bar' from ''bar'"
+    rusty_message = """\
   × Expected a complete string literal
    ╭────
  1 │ {% if foo 'bar %}{{ foo }}{% endif %}
@@ -461,7 +399,9 @@ def test_invalid_token():
    ·             ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 VALID_VARIABLE_NAMES = text(
@@ -567,55 +507,30 @@ def test_render_same_result_no_integers(template):
         assert rust_template.render(context) == django_template.render(context)
 
 
-def test_render_none_is_not_none_equal_none():
+def test_render_none_is_not_none_equal_none(assert_render):
     template = "{% if None is not None == None %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_render_none_equal_none_is_not_not_none():
+def test_render_none_equal_none_is_not_not_none(assert_render):
     template = "{% if None == None is not not None %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_number_less_than_false():
+def test_number_less_than_false(assert_render):
     template = "{% if 1 < False %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_escaped_unicode_escape():
+def test_escaped_unicode_escape(assert_render):
     template = "{% if '\\\x80' %}truthy{% else %}falsey{% endif %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_incomplete_escape():
+def test_incomplete_escape(assert_parse_error):
     template = "{% if '\\ %}truthy{% else %}falsey{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Could not parse the remainder: ''\\' from ''\\'"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: ''\\' from ''\\'"
+    rusty_message = """\
   × Expected a complete string literal
    ╭────
  1 │ {% if '\\ %}truthy{% else %}falsey{% endif %}
@@ -623,62 +538,37 @@ def test_incomplete_escape():
    ·        ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_zero_less_than_not_none():
+def test_zero_less_than_not_none(assert_render):
     template = "{% if 0.0 < not None %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_zero_not_in_zero():
+def test_zero_not_in_zero(assert_render):
     template = "{% if 0.0 not in 0.0 %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_text_is_not_not_variable():
+def test_text_is_not_not_variable(assert_render):
     template = (
         '{% if "õeS" is not not WQWJXO52RWIA0D %}truthy{% else %}falsey{% endif %}'
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_none_equal_none_not_in_zero():
+def test_none_equal_none_not_in_zero(assert_render):
     template = "{% if None == None not in 0.0 %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_if_tag_split_by_newline():
+def test_if_tag_split_by_newline(assert_parse_error):
     template = "{% if '\n' %}truthy{% else %}falsey{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Invalid block tag on line 2: 'else'. Did you forget to register or load this tag?"
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Invalid block tag on line 2: 'else'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag else
    ╭─[2:11]
  1 │ {% if '
@@ -687,42 +577,25 @@ def test_if_tag_split_by_newline():
    ·                ╰── unexpected tag
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_var_lte_var():
-    template = "{% if B <= A %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
-
-
-def test_variable_filter_argument_negative_number():
-    template = "{% if a|default:-22569 %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
-
-
-def test_unexpected_tag_elif():
-    template = "{% elif foo %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Invalid block tag on line 1: 'elif'. Did you forget to register or load this tag?"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_var_lte_var(assert_render):
+    template = "{% if B <= A %}truthy{% else %}falsey{% endif %}"
+    assert_render(template=template, context={}, expected="falsey")
+
+
+def test_variable_filter_argument_negative_number(assert_render):
+    template = "{% if a|default:-22569 %}truthy{% else %}falsey{% endif %}"
+    assert_render(template=template, context={}, expected="truthy")
+
+
+def test_unexpected_tag_elif(assert_parse_error):
+    template = "{% elif foo %}"
+    django_message = "Invalid block tag on line 1: 'elif'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag elif
    ╭────
  1 │ {% elif foo %}
@@ -730,24 +603,15 @@ def test_unexpected_tag_elif():
    ·        ╰── unexpected tag
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_unexpected_tag_else():
-    template = "{% else %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Invalid block tag on line 1: 'else'. Did you forget to register or load this tag?"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_unexpected_tag_else(assert_parse_error):
+    template = "{% else %}"
+    django_message = "Invalid block tag on line 1: 'else'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag else
    ╭────
  1 │ {% else %}
@@ -755,24 +619,15 @@ def test_unexpected_tag_else():
    ·      ╰── unexpected tag
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_unexpected_tag_endif():
-    template = "{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Invalid block tag on line 1: 'endif'. Did you forget to register or load this tag?"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_unexpected_tag_endif(assert_parse_error):
+    template = "{% endif %}"
+    django_message = "Invalid block tag on line 1: 'endif'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag endif
    ╭────
  1 │ {% endif %}
@@ -780,158 +635,97 @@ def test_unexpected_tag_endif():
    ·      ╰── unexpected tag
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_false_not_equal_var():
+def test_false_not_equal_var(assert_render):
     template = "{% if False != inf %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_var_not_equal_false():
+def test_var_not_equal_false(assert_render):
     template = "{% if inf != False %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_false_not_equal_default_var():
+def test_false_not_equal_default_var(assert_render):
     template = "{% if False != foo|default:bar %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_default_var_not_equal_false():
+def test_default_var_not_equal_false(assert_render):
     template = "{% if foo|default:bar != False %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
 @pytest.mark.parametrize("a", [None, True, False])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_not_equal_not_default(a, op):
+def test_not_equal_not_default(assert_render, a, op):
     template = (
         f"{{% if {a} {op} not foo|default:foo %}}truthy{{% else %}}falsey{{% endif %}}"
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "truthy" if compare(op, a, False) else "falsey"
-
-    assert django_template.render({"a": a}) == expected
-    assert rust_template.render({"a": a}) == expected
+    assert_render(template=template, context={"a": a}, expected=expected)
 
 
-def test_var_equal_var():
+def test_var_equal_var(assert_render):
     template = "{% if A == A %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_default_equal_default():
+def test_default_equal_default(assert_render):
     template = (
         "{% if foo|default:foo == bar|default:bar %}truthy{% else %}falsey{% endif %}"
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_not_default_var():
+def test_not_default_var(assert_render):
     template = "{% if not foo|default:foo %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_not_none_eq_default_var():
+def test_not_none_eq_default_var(assert_render):
     template = "{% if not None == foo|default:foo %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_render_truthy_op_not_default(op):
+def test_render_truthy_op_not_default(assert_render, op):
     template = f"{{% if None == None {op} not A|default:A %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "truthy" if compare(op, True, False) else "falsey"
-
-    assert django_template.render() == expected
-    assert rust_template.render() == expected
+    assert_render(template=template, context={}, expected=expected)
 
 
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_render_falsey_op_not_default(op):
+def test_render_falsey_op_not_default(assert_render, op):
     template = f"{{% if None != None {op} not A|default:A %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "truthy" if compare(op, False, False) else "falsey"
-
-    assert django_template.render() == expected
-    assert rust_template.render() == expected
+    assert_render(template=template, context={}, expected=expected)
 
 
-def test_render_none_eq_none_is_var():
+def test_render_none_eq_none_is_var(assert_render):
     template = "{% if None == None is foo %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_render_default_or_1():
+def test_render_default_or_1(assert_render):
     template = "{% if A|default:A or 1 %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_render_none_or_default_or_1():
+def test_render_none_or_default_or_1(assert_render):
     template = "{% if None or A|default:A or 1 %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_render_default_and_none_or_not_none():
+def test_render_default_and_none_or_not_none(assert_render):
     template = (
         "{% if A|default:inf and None or not None %}truthy{% else %}falsey{% endif %}"
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
 @pytest.mark.parametrize("a", ["foo", "bar"])
@@ -939,7 +733,7 @@ def test_render_default_and_none_or_not_none():
 @pytest.mark.parametrize("a_format", ["variable", "repr", "safe"])
 @pytest.mark.parametrize("b_format", ["variable", "repr", "safe"])
 @pytest.mark.parametrize("op", ["==", "!=", "<", ">", "<=", ">="])
-def test_comparison_autoescape_off(op, a, b, a_format, b_format):
+def test_comparison_autoescape_off(assert_render, op, a, b, a_format, b_format):
     context = {"a": a, "b": b}
     expected = "truthy" if compare(op, a, b) else "falsey"
 
@@ -958,283 +752,167 @@ def test_comparison_autoescape_off(op, a, b, a_format, b_format):
         b = "b"
 
     template = f"{{% autoescape off %}}{{% if {a} {op} {b} %}}truthy{{% else %}}falsey{{% endif %}}{{% endautoescape %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render(context) == expected
-    assert rust_template.render(context) == expected
+    assert_render(template=template, context=context, expected=expected)
 
 
-def test_string_content_autoescape_off():
+def test_string_content_autoescape_off(assert_render):
     template = "{% autoescape off %}{% if 'foo' %}truthy{% else %}falsey{% endif %}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
 @pytest.mark.parametrize("a", [repr("foo"), False, "missing"])
 @pytest.mark.parametrize("op", ["==", "!="])
-def test_op_not(a, op):
+def test_op_not(assert_render, a, op):
     expected = "truthy" if compare(op, a, False) else "falsey"
     template = f"{{% if {a} {op} not 'bar' %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template=template, context={}, expected=expected)
 
 
 @pytest.mark.parametrize("op", ["==", "!="])
-def test_comparison_op_not(op):
+def test_comparison_op_not(assert_render, op):
     expected = "truthy" if compare(op, True, False) else "falsey"
     template = (
         f"{{% if 'foo' == 'foo' {op} not 'bar' %}}truthy{{% else %}}falsey{{% endif %}}"
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template=template, context={}, expected=expected)
 
 
 @pytest.mark.parametrize("op", ["<", ">", "<=", ">="])
-def test_missing_op_other(op):
+def test_missing_op_other(assert_render, op):
     template = f"{{% if foo {op} 2 %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
 @pytest.mark.parametrize("number", [2, 2.0])
 @pytest.mark.parametrize("op", ["==", "<", ">", "<=", ">="])
 @pytest.mark.parametrize("boolean", [True, False])
-def test_number_op_boolean(number, op, boolean):
+def test_number_op_boolean(assert_render, number, op, boolean):
     expected = "truthy" if compare(op, number, boolean) else "falsey"
     boolean = not boolean
     template = (
         f"{{% if {number} {op} not {boolean} %}}truthy{{% else %}}falsey{{% endif %}}"
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template=template, context={}, expected=expected)
 
 
 @pytest.mark.parametrize("op", ["<", ">", "<=", ">=", "in", "not in", "is", "is not"])
-def test_op_with_error(op):
+def test_op_with_error(assert_render, op):
     template = f"{{% if missing|default:missing {op} 'foo' %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
 @pytest.mark.parametrize("value", [1, 1.0])
-def test_variable_in_value(value):
+def test_variable_in_value(assert_render, value):
     template = f"{{% if foo in {value} %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": "foo"}) == "falsey"
-    assert rust_template.render({"foo": "foo"}) == "falsey"
+    assert_render(template=template, context={"foo": "foo"}, expected="falsey")
 
 
 @pytest.mark.parametrize("value", ["foo", 1, 1.0])
-def test_missing_in_value(value):
+def test_missing_in_value(assert_render, value):
     template = f"{{% if missing in {value} %}}truthy{{% else %}}falsey{{% endif %}}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": "foo"}) == "falsey"
-    assert rust_template.render({"foo": "foo"}) == "falsey"
+    assert_render(template=template, context={"foo": "foo"}, expected="falsey")
 
 
-def test_value_in_missing():
+def test_value_in_missing(assert_render):
     template = "{% if foo in missing %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": "foo"}) == "falsey"
-    assert rust_template.render({"foo": "foo"}) == "falsey"
+    assert_render(template=template, context={"foo": "foo"}, expected="falsey")
 
 
-def test_int_in_string():
+def test_int_in_string(assert_render):
     template = "{% if 1 in 'foo' %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_float_in_string():
+def test_float_in_string(assert_render):
     template = "{% if 1.0 in 'foo' %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_int_in_variable():
+def test_int_in_variable(assert_render):
     template = "{% if 1 in foo %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": "foo"}) == "falsey"
-    assert rust_template.render({"foo": "foo"}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_float_in_variable():
+def test_float_in_variable(assert_render):
     template = "{% if 1.0 in foo %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": "foo"}) == "falsey"
-    assert rust_template.render({"foo": "foo"}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_string_in_int():
+def test_string_in_int(assert_render):
     template = "{% if 'foo' in 1 %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_string_in_float():
+def test_string_in_float(assert_render):
     template = "{% if 'foo' in 1.0 %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_string_in_variable():
+def test_string_in_variable(assert_render):
     template = "{% if 'foo' in bar %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"bar": "bar"}) == "falsey"
-    assert rust_template.render({"bar": "bar"}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_missing_is_missing():
+def test_missing_is_missing(assert_render):
     template = "{% if foo is bar %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_missing_is_variable():
+def test_missing_is_variable(assert_render):
     template = "{% if foo is bar %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"bar": ""}) == "falsey"
-    assert rust_template.render({"bar": ""}) == "falsey"
+    assert_render(template=template, context={"bar": ""}, expected="falsey")
 
 
-def test_variable_is_missing():
+def test_variable_is_missing(assert_render):
     template = "{% if foo is bar %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": ""}) == "falsey"
-    assert rust_template.render({"foo": ""}) == "falsey"
+    assert_render(template=template, context={"foo": ""}, expected="falsey")
 
 
-def test_string_is_string():
+def test_string_is_string(assert_render):
     template = "{% if '' is '' %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": ""}) == "falsey"
-    assert rust_template.render({"foo": ""}) == "falsey"
+    assert_render(template=template, context={"foo": ""}, expected="falsey")
 
 
-def test_expr_is_string():
+def test_expr_is_string(assert_render):
     template = "{% if 'foo' == 'foo' is 'bar' %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "falsey"
-    assert rust_template.render({}) == "falsey"
+    assert_render(template=template, context={}, expected="falsey")
 
 
-def test_expr_is_not_string():
+def test_expr_is_not_string(assert_render):
     template = "{% if 'foo' == 'foo' is not 'bar' %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_string_is_not_expr():
+def test_string_is_not_expr(assert_render):
     template = "{% if 'foo' is not not 'bar' %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_bool_is_not_expr():
+def test_bool_is_not_expr(assert_render):
     template = "{% if True is not not 'bar' %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_string_is_not_missing():
+def test_string_is_not_missing(assert_render):
     template = (
         "{% if 'foo' is not not bar|default:bar %}truthy{% else %}falsey{% endif %}"
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_not_inf_or_not_none():
+def test_not_inf_or_not_none(assert_render):
     template = "{% if not A|default:inf or not None %}truthy{% else %}falsey{% endif %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "truthy"
-    assert rust_template.render({}) == "truthy"
+    assert_render(template=template, context={}, expected="truthy")
 
 
-def test_if_forloop_first():
+def test_if_forloop_first(assert_render):
     template = "{% for x in y %}{% if forloop.first %}truthy{% else %}falsey{% endif %}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"y": "12"}) == "truthyfalsey"
-    assert rust_template.render({"y": "12"}) == "truthyfalsey"
+    assert_render(template=template, context={"y": "12"}, expected="truthyfalsey")
 
 
-def test_if_not_bool():
+def test_if_not_bool(assert_render):
     template = "{% for x in y %}{% if not forloop.first %}truthy{% else %}falsey{% endif %}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"y": "12"}) == "falseytruthy"
-    assert rust_template.render({"y": "12"}) == "falseytruthy"
+    assert_render(template=template, context={"y": "12"}, expected="falseytruthy")
 
 
 @pytest.mark.parametrize(
@@ -1264,16 +942,12 @@ def test_if_not_bool():
         (-1.0, "forloop.first", "ff"),
     ],
 )
-def test_if_eq_bool(first, second, expected):
+def test_if_eq_bool(assert_render, first, second, expected):
     template = (
         "{%% for x in y %%}{%% if %s == %s %%}t{%% else %%}f{%% endif %%}{%% endfor %%}"
         % (first, second)
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"y": "12"}) == expected
-    assert rust_template.render({"y": "12"}) == expected
+    assert_render(template=template, context={"y": "12"}, expected=expected)
 
 
 @pytest.mark.parametrize(
@@ -1303,16 +977,12 @@ def test_if_eq_bool(first, second, expected):
         (-1.0, "forloop.first", "tt"),
     ],
 )
-def test_if_lt_bool(first, second, expected):
+def test_if_lt_bool(assert_render, first, second, expected):
     template = (
         "{%% for x in y %%}{%% if %s < %s %%}t{%% else %%}f{%% endif %%}{%% endfor %%}"
         % (first, second)
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"y": "12"}) == expected
-    assert rust_template.render({"y": "12"}) == expected
+    assert_render(template=template, context={"y": "12"}, expected=expected)
 
 
 @pytest.mark.parametrize(
@@ -1342,16 +1012,12 @@ def test_if_lt_bool(first, second, expected):
         (-1.0, "forloop.first", "tt"),
     ],
 )
-def test_if_lte_bool(first, second, expected):
+def test_if_lte_bool(assert_render, first, second, expected):
     template = (
         "{%% for x in y %%}{%% if %s <= %s %%}t{%% else %%}f{%% endif %%}{%% endfor %%}"
         % (first, second)
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"y": "12"}) == expected
-    assert rust_template.render({"y": "12"}) == expected
+    assert_render(template=template, context={"y": "12"}, expected=expected)
 
 
 @pytest.mark.parametrize(
@@ -1381,16 +1047,12 @@ def test_if_lte_bool(first, second, expected):
         (-1.0, "forloop.first", "ff"),
     ],
 )
-def test_if_gt_bool(first, second, expected):
+def test_if_gt_bool(assert_render, first, second, expected):
     template = (
         "{%% for x in y %%}{%% if %s > %s %%}t{%% else %%}f{%% endif %%}{%% endfor %%}"
         % (first, second)
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"y": "12"}) == expected
-    assert rust_template.render({"y": "12"}) == expected
+    assert_render(template=template, context={"y": "12"}, expected=expected)
 
 
 @pytest.mark.parametrize(
@@ -1420,16 +1082,12 @@ def test_if_gt_bool(first, second, expected):
         (-1.0, "forloop.first", "ff"),
     ],
 )
-def test_if_gte_bool(first, second, expected):
+def test_if_gte_bool(assert_render, first, second, expected):
     template = (
         "{%% for x in y %%}{%% if %s >= %s %%}t{%% else %%}f{%% endif %%}{%% endfor %%}"
         % (first, second)
     )
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"y": "12"}) == expected
-    assert rust_template.render({"y": "12"}) == expected
+    assert_render(template=template, context={"y": "12"}, expected=expected)
 
 
 def test_if_not_numeric():
@@ -1453,19 +1111,10 @@ def test_if_not_numeric():
     assert str(exc_info.value) == expected
 
 
-def test_if_invalid_variable():
+def test_if_invalid_variable(assert_parse_error):
     template = "{% if a- %}foo{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "Could not parse the remainder: '-' from 'a-'"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '-' from 'a-'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {% if a- %}foo{% endif %}
@@ -1473,22 +1122,15 @@ def test_if_invalid_variable():
    ·        ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_if_invalid_content():
+def test_if_invalid_content(assert_parse_error):
     template = "{% if a %}{{ a- }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "Could not parse the remainder: '-' from 'a-'"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '-' from 'a-'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {% if a %}{{ a- }}{% endif %}
@@ -1496,22 +1138,15 @@ def test_if_invalid_content():
    ·               ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_if_invalid_content_tag():
+def test_if_invalid_content_tag(assert_parse_error):
     template = "{% if a %}{% if a- %}{% endif %}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "Could not parse the remainder: '-' from 'a-'"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '-' from 'a-'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {% if a %}{% if a- %}{% endif %}{% endif %}
@@ -1519,22 +1154,15 @@ def test_if_invalid_content_tag():
    ·                  ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_elif_invalid_content():
+def test_elif_invalid_content(assert_parse_error):
     template = "{% if a %}{% elif b %}{{ a- }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "Could not parse the remainder: '-' from 'a-'"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '-' from 'a-'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {% if a %}{% elif b %}{{ a- }}{% endif %}
@@ -1542,22 +1170,15 @@ def test_elif_invalid_content():
    ·                           ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_else_invalid_content():
+def test_else_invalid_content(assert_parse_error):
     template = "{% if a %}{% else %}{{ a- }}{% endif %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "Could not parse the remainder: '-' from 'a-'"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '-' from 'a-'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {% if a %}{% else %}{{ a- }}{% endif %}
@@ -1565,4 +1186,6 @@ def test_else_invalid_content():
    ·                         ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )

@@ -1,7 +1,6 @@
 import pytest
 from django.template import engines
 from django.template.base import VariableDoesNotExist
-from django.template.exceptions import TemplateSyntaxError
 
 
 def test_add_integers(assert_render):
@@ -82,18 +81,10 @@ def test_add_incompatible_float(assert_render):
     assert_render(template=template, context={"foo": [1]}, expected="")
 
 
-def test_add_missing_argument():
+def test_add_missing_argument(assert_parse_error):
     template = "{{ foo|add }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "add requires 2 arguments, 1 provided"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "add requires 2 arguments, 1 provided"
+    rusty_message = """\
   × Expected an argument
    ╭────
  1 │ {{ foo|add }}
@@ -101,7 +92,9 @@ def test_add_missing_argument():
    ·         ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_add_safe(assert_render):

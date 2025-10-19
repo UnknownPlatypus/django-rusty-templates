@@ -1,26 +1,13 @@
-import pytest
-from django.template import engines
-from django.template.exceptions import TemplateSyntaxError
-
-
 def test_safe(assert_render):
     template = "{{ html|safe }}"
     html = "<p>Hello World!</p>"
     assert_render(template=template, context={"html": html}, expected=html)
 
 
-def test_safe_with_argument():
+def test_safe_with_argument(assert_parse_error):
     template = "{{ html|safe:invalid }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "safe requires 1 arguments, 2 provided"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "safe requires 1 arguments, 2 provided"
+    rusty_message = """\
   × safe filter does not take an argument
    ╭────
  1 │ {{ html|safe:invalid }}
@@ -28,7 +15,9 @@ def test_safe_with_argument():
    ·                 ╰── unexpected argument
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_safe_missing_value(assert_render):

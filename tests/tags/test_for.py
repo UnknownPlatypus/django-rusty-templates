@@ -301,20 +301,10 @@ def test_render_number_in_expression(assert_render):
     assert_render(template=template, context={"l": l}, expected=expected)
 
 
-def test_missing_variable_no_in():
+def test_missing_variable_no_in(assert_parse_error):
     template = "{% for %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value) == "'for' statements should have at least four words: for"
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "'for' statements should have at least four words: for"
+    rusty_message = """\
   × Expected at least one variable name in for loop:
    ╭────
  1 │ {% for %}{% endfor %}
@@ -322,24 +312,15 @@ def test_missing_variable_no_in():
    ·     ╰── in this tag
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_missing_variable_before_in():
-    template = "{% for in %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'for' statements should have at least four words: for in"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_missing_variable_before_in(assert_parse_error):
+    template = "{% for in %}{% endfor %}"
+    django_message = "'for' statements should have at least four words: for in"
+    rusty_message = """\
   × Expected a variable name before the 'in' keyword:
    ╭────
  1 │ {% for in %}{% endfor %}
@@ -347,24 +328,15 @@ def test_missing_variable_before_in():
    ·         ╰── before this keyword
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_missing_variable_before_in_four_words():
-    template = "{% for in xs reversed %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'for' tag received an invalid argument: for in xs reversed"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_missing_variable_before_in_four_words(assert_parse_error):
+    template = "{% for in xs reversed %}{% endfor %}"
+    django_message = "'for' tag received an invalid argument: for in xs reversed"
+    rusty_message = """\
   × Expected a variable name before the 'in' keyword:
    ╭────
  1 │ {% for in xs reversed %}{% endfor %}
@@ -372,23 +344,15 @@ def test_missing_variable_before_in_four_words():
    ·         ╰── before this keyword
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_missing_in():
-    template = "{% for x %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value) == "'for' statements should have at least four words: for x"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_missing_in(assert_parse_error):
+    template = "{% for x %}{% endfor %}"
+    django_message = "'for' statements should have at least four words: for x"
+    rusty_message = """\
   × Expected the 'in' keyword or a variable name:
    ╭────
  1 │ {% for x %}{% endfor %}
@@ -396,24 +360,15 @@ def test_missing_in():
    ·        ╰── after this name
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_missing_expression_after_in():
-    template = "{% for x in %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'for' statements should have at least four words: for x in"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_missing_expression_after_in(assert_parse_error):
+    template = "{% for x in %}{% endfor %}"
+    django_message = "'for' statements should have at least four words: for x in"
+    rusty_message = """\
   × Expected an expression after the 'in' keyword:
    ╭────
  1 │ {% for x in %}{% endfor %}
@@ -421,24 +376,15 @@ def test_missing_expression_after_in():
    ·           ╰── after this keyword
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_missing_expression_after_in_four_words():
-    template = "{% for x, z in %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'for' statements should use the format 'for x in y': for x, z in"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_missing_expression_after_in_four_words(assert_parse_error):
+    template = "{% for x, z in %}{% endfor %}"
+    django_message = "'for' statements should use the format 'for x in y': for x, z in"
+    rusty_message = """\
   × Expected an expression after the 'in' keyword:
    ╭────
  1 │ {% for x, z in %}{% endfor %}
@@ -446,21 +392,15 @@ def test_missing_expression_after_in_four_words():
    ·              ╰── after this keyword
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_unpack_1_tuple():
+def test_unpack_1_tuple(assert_parse_error):
     template = "{% for x, in l %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "'for' tag received an invalid argument: for x, in l"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "'for' tag received an invalid argument: for x, in l"
+    rusty_message = """\
   × Expected another variable when unpacking in for loop:
    ╭────
  1 │ {% for x, in l %}{% endfor %}
@@ -468,23 +408,15 @@ def test_unpack_1_tuple():
    ·        ╰── after this variable
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_invalid_variable_in_unpack():
-    template = "{% for x, '2' in l %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value) == "'for' tag received an invalid argument: for x, '2' in l"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_invalid_variable_in_unpack(assert_parse_error):
+    template = "{% for x, '2' in l %}{% endfor %}"
+    django_message = "'for' tag received an invalid argument: for x, '2' in l"
+    rusty_message = """\
   × Invalid variable name '2' in for loop:
    ╭────
  1 │ {% for x, '2' in l %}{% endfor %}
@@ -492,21 +424,15 @@ def test_invalid_variable_in_unpack():
    ·            ╰── invalid variable name
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_unexpected_expression_before_in():
+def test_unexpected_expression_before_in(assert_parse_error):
     template = "{% for x y in l %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "'for' tag received an invalid argument: for x y in l"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "'for' tag received an invalid argument: for x y in l"
+    rusty_message = """\
   × Unexpected expression in for loop. Did you miss a comma when unpacking?
    ╭────
  1 │ {% for x y in l %}{% endfor %}
@@ -514,24 +440,15 @@ def test_unexpected_expression_before_in():
    ·          ╰── unexpected expression
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_unexpected_expression_before_in_longer():
-    template = "{% for x, y, z w in l %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'for' tag received an invalid argument: for x, y, z w in l"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_unexpected_expression_before_in_longer(assert_parse_error):
+    template = "{% for x, y, z w in l %}{% endfor %}"
+    django_message = "'for' tag received an invalid argument: for x, y, z w in l"
+    rusty_message = """\
   × Unexpected expression in for loop. Did you miss a comma when unpacking?
    ╭────
  1 │ {% for x, y, z w in l %}{% endfor %}
@@ -539,24 +456,15 @@ def test_unexpected_expression_before_in_longer():
    ·                ╰── unexpected expression
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_unexpected_expression_after_in():
-    template = "{% for x in l m %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'for' statements should use the format 'for x in y': for x in l m"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_unexpected_expression_after_in(assert_parse_error):
+    template = "{% for x in l m %}{% endfor %}"
+    django_message = "'for' statements should use the format 'for x in y': for x in l m"
+    rusty_message = """\
   × Unexpected expression in for loop:
    ╭────
  1 │ {% for x in l m %}{% endfor %}
@@ -564,24 +472,17 @@ def test_unexpected_expression_after_in():
    ·               ╰── unexpected expression
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_unexpected_expression_after_reversed():
-    template = "{% for x in l reversed m %}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'for' statements should use the format 'for x in y': for x in l reversed m"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_unexpected_expression_after_reversed(assert_parse_error):
+    template = "{% for x in l reversed m %}{% endfor %}"
+    django_message = (
+        "'for' statements should use the format 'for x in y': for x in l reversed m"
+    )
+    rusty_message = """\
   × Unexpected expression in for loop:
    ╭────
  1 │ {% for x in l reversed m %}{% endfor %}
@@ -589,7 +490,9 @@ def test_unexpected_expression_after_reversed():
    ·                        ╰── unexpected expression
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_render_for_loop_unpack_tuple_mismatch():
@@ -729,21 +632,10 @@ def test_render_for_loop_unpack_string():
     assert str(exc_info.value) == expected
 
 
-def test_render_for_loop_invalid_variable():
+def test_render_for_loop_invalid_variable(assert_parse_error):
     template = "{% for x in _a %}{{ x }}{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Variables and attributes may not begin with underscores: '_a'"
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Variables and attributes may not begin with underscores: '_a'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {% for x in _a %}{{ x }}{% endfor %}
@@ -751,24 +643,15 @@ def test_render_for_loop_invalid_variable():
    ·              ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_render_empty_tag():
-    template = "{% empty %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Invalid block tag on line 1: 'empty'. Did you forget to register or load this tag?"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_render_empty_tag(assert_parse_error):
+    template = "{% empty %}"
+    django_message = "Invalid block tag on line 1: 'empty'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag empty
    ╭────
  1 │ {% empty %}
@@ -776,24 +659,15 @@ def test_render_empty_tag():
    ·      ╰── unexpected tag
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_render_endfor_tag():
-    template = "{% endfor %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Invalid block tag on line 1: 'endfor'. Did you forget to register or load this tag?"
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_render_endfor_tag(assert_parse_error):
+    template = "{% endfor %}"
+    django_message = "Invalid block tag on line 1: 'endfor'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag endfor
    ╭────
  1 │ {% endfor %}
@@ -801,24 +675,15 @@ def test_render_endfor_tag():
    ·       ╰── unexpected tag
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_render_missing_endfor_tag():
-    template = "{% for x in 'a' %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Unclosed tag on line 1: 'for'. Looking for one of: empty, endfor."
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_render_missing_endfor_tag(assert_parse_error):
+    template = "{% for x in 'a' %}"
+    django_message = "Unclosed tag on line 1: 'for'. Looking for one of: empty, endfor."
+    rusty_message = """\
   × Unclosed 'for' tag. Looking for one of: empty, endfor
    ╭────
  1 │ {% for x in 'a' %}
@@ -826,24 +691,15 @@ def test_render_missing_endfor_tag():
    ·          ╰── started here
    ╰────
 """
-    assert str(exc_info.value) == expected
-
-
-def test_render_missing_endfor_tag_after_empty():
-    template = "{% for x in 'a' %}{% empty %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Unclosed tag on line 1: 'for'. Looking for one of: endfor."
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
 
-    expected = """\
+def test_render_missing_endfor_tag_after_empty(assert_parse_error):
+    template = "{% for x in 'a' %}{% empty %}"
+    django_message = "Unclosed tag on line 1: 'for'. Looking for one of: endfor."
+    rusty_message = """\
   × Unclosed 'empty' tag. Looking for one of: endfor
    ╭────
  1 │ {% for x in 'a' %}{% empty %}
@@ -851,7 +707,9 @@ def test_render_missing_endfor_tag_after_empty():
    ·                        ╰── started here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_render_for_loop_not_iterable():

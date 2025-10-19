@@ -1,7 +1,6 @@
 import pytest
 from django.template import engines
 from django.template.base import VariableDoesNotExist
-from django.template.exceptions import TemplateSyntaxError
 from django.test import RequestFactory
 from django.urls import resolve, NoReverseMatch
 
@@ -126,19 +125,10 @@ def test_render_url_view_name_error():
     assert str(rust_error.value) == expected
 
 
-def test_render_url_invalid_keyword():
+def test_render_url_invalid_keyword(assert_parse_error):
     template = "{% url foo= %}"
-
-    with pytest.raises(TemplateSyntaxError) as django_error:
-        engines["django"].from_string(template)
-
-    msg = "Could not parse the remainder: '=' from 'foo='"
-    assert str(django_error.value) == msg
-
-    with pytest.raises(TemplateSyntaxError) as rust_error:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '=' from 'foo='"
+    rusty_message = """\
   × Incomplete keyword argument
    ╭────
  1 │ {% url foo= %}
@@ -146,22 +136,15 @@ def test_render_url_invalid_keyword():
    ·          ╰── here
    ╰────
 """
-    assert str(rust_error.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_render_url_invalid_dotted_lookup_keyword():
+def test_render_url_invalid_dotted_lookup_keyword(assert_parse_error):
     template = "{% url foo.bar= %}"
-
-    with pytest.raises(TemplateSyntaxError) as django_error:
-        engines["django"].from_string(template)
-
-    msg = "Could not parse the remainder: '=' from 'foo.bar='"
-    assert str(django_error.value) == msg
-
-    with pytest.raises(TemplateSyntaxError) as rust_error:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '=' from 'foo.bar='"
+    rusty_message = """\
   × Could not parse the remainder
    ╭────
  1 │ {% url foo.bar= %}
@@ -169,22 +152,15 @@ def test_render_url_invalid_dotted_lookup_keyword():
    ·               ╰── here
    ╰────
 """
-    assert str(rust_error.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_render_url_dotted_lookup_keyword():
+def test_render_url_dotted_lookup_keyword(assert_parse_error):
     template = "{% url foo.bar='lily' %}"
-
-    with pytest.raises(TemplateSyntaxError) as django_error:
-        engines["django"].from_string(template)
-
-    msg = "Could not parse the remainder: '='lily'' from 'foo.bar='lily''"
-    assert str(django_error.value) == msg
-
-    with pytest.raises(TemplateSyntaxError) as rust_error:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '='lily'' from 'foo.bar='lily''"
+    rusty_message = """\
   × Could not parse the remainder
    ╭────
  1 │ {% url foo.bar='lily' %}
@@ -192,7 +168,9 @@ def test_render_url_dotted_lookup_keyword():
    ·                  ╰── here
    ╰────
 """
-    assert str(rust_error.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_render_url_dotted_lookup_filter_with_equal_char(template_engine):

@@ -1,6 +1,4 @@
 import pytest
-from django.template import engines
-from django.template.exceptions import TemplateSyntaxError
 
 
 def test_load_empty(assert_render):
@@ -8,13 +6,9 @@ def test_load_empty(assert_render):
     assert_render(template=template, context={}, expected="")
 
 
-def test_load_missing():
+def test_load_missing(assert_parse_error):
     template = "{% load missing_filters %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = """\
+    django_message = """\
 'missing_filters' is not a registered tag library. Must be one of:
 cache
 custom_filters
@@ -27,12 +21,7 @@ no_filters
 no_tags
 static
 tz"""
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    rusty_message = """\
   × 'missing_filters' is not a registered tag library.
    ╭────
  1 │ {% load missing_filters %}
@@ -52,22 +41,17 @@ tz"""
         static
         tz
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_load_missing_filter():
+def test_load_missing_filter(assert_parse_error):
     template = "{% load missing from custom_filters %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "'missing' is not a valid tag or filter in tag library 'custom_filters'"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = (
+        "'missing' is not a valid tag or filter in tag library 'custom_filters'"
+    )
+    rusty_message = """\
   × 'missing' is not a valid tag or filter in tag library 'custom_filters'
    ╭────
  1 │ {% load missing from custom_filters %}
@@ -76,21 +60,15 @@ def test_load_missing_filter():
    ·            ╰── tag or filter
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_unknown_filter():
+def test_unknown_filter(assert_parse_error):
     template = "{{ foo|bar }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Invalid filter: 'bar'"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Invalid filter: 'bar'"
+    rusty_message = """\
   × Invalid filter: 'bar'
    ╭────
  1 │ {{ foo|bar }}
@@ -98,24 +76,20 @@ def test_unknown_filter():
    ·         ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_load_no_filters():
+def test_load_no_filters(template_engine):
     template = "{% load no_filters %}"
 
     with pytest.raises(AttributeError):
-        engines["django"].from_string(template)
-
-    with pytest.raises(AttributeError):
-        engines["rusty"].from_string(template)
+        template_engine.from_string(template)
 
 
-def test_load_no_tags():
+def test_load_no_tags(template_engine):
     template = "{% load no_tags %}"
 
     with pytest.raises(AttributeError):
-        engines["django"].from_string(template)
-
-    with pytest.raises(AttributeError):
-        engines["rusty"].from_string(template)
+        template_engine.from_string(template)

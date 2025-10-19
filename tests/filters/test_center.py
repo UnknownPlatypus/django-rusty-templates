@@ -1,6 +1,5 @@
 import pytest
 from django.template import engines
-from django.template.exceptions import TemplateSyntaxError
 
 
 def test_center(assert_render):
@@ -35,17 +34,10 @@ def test_center_with_odd_width(assert_render):
     assert_render(template, context, expected)
 
 
-def test_add_no_argument():
+def test_add_no_argument(assert_parse_error):
     template = "{{ foo|center }}"
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "center requires 2 arguments, 1 provided"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "center requires 2 arguments, 1 provided"
+    rusty_message = """\
   × Expected an argument
    ╭────
  1 │ {{ foo|center }}
@@ -53,7 +45,9 @@ def test_add_no_argument():
    ·           ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_argument_not_integer():

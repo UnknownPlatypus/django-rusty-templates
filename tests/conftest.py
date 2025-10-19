@@ -1,5 +1,5 @@
 import pytest
-from django.template import engines
+from django.template import engines, TemplateSyntaxError
 
 
 @pytest.fixture(params=["rusty", "django"])
@@ -27,3 +27,30 @@ def assert_render(template_engine):
         assert template.render(context, request) == expected
 
     return assert_render_template
+
+
+@pytest.fixture
+def assert_parse_error():
+    """
+    A convenient method to test `TemplateSyntaxError` for both engines.
+
+    Example:
+        def test_error(assert_parse_error):
+            assert_parse_error(
+                template=...,
+                django_message="invalid literal for int() with base 10: '-5.5'",
+                rusty_message="  × Couldn't convert argument (-5.5) to integer..."
+            )
+
+    """
+
+    def _assert_parse_error(template, django_message, rusty_message):
+        with pytest.raises(TemplateSyntaxError) as exc_info:
+            engines["django"].from_string(template)
+        assert str(exc_info.value) == django_message
+
+        with pytest.raises(TemplateSyntaxError) as exc_info:
+            engines["rusty"].from_string(template)
+        assert str(exc_info.value) == rusty_message
+
+    return _assert_parse_error
