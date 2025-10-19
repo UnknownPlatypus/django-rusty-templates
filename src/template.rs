@@ -122,22 +122,17 @@ pub mod django_rusty_templates {
 
     /// Helper function to unpack a loader tuple configuration.
     /// See https://docs.djangoproject.com/en/stable/ref/templates/api/#django.template.Engine
-    fn unpack<'py>(
-        loader: Bound<'py, PyAny>,
-    ) -> PyResult<(Bound<'py, PyString>, Bound<'py, PyAny>)> {
+    fn unpack<'py>(loader: &Bound<'py, PyAny>) -> PyResult<(String, Bound<'py, PyAny>)> {
         let mut items = loader.try_iter()?;
         let first_item = match items.next() {
             Some(item) => item?,
             None => return Err(ImproperlyConfigured::new_err("Configuration is empty")),
         };
-        let loader_path = first_item
-            .cast::<PyString>()
-            .map_err(|_| {
-                ImproperlyConfigured::new_err(
-                    "First element of tuple configuration must be a Loader class name",
-                )
-            })?
-            .clone();
+        let loader_path = first_item.extract::<String>().map_err(|_| {
+            ImproperlyConfigured::new_err(
+                "First element of tuple configuration must be a Loader class name",
+            )
+        })?;
         let remaining_args = match items.next() {
             Some(item) => item?,
             None => {
@@ -170,14 +165,14 @@ pub mod django_rusty_templates {
             return map_loader(py, &loader_str, None, encoding);
         }
 
-        let (loader_path, args) = unpack(loader.clone()).map_err(|e| {
+        let (loader_path, args) = unpack(&loader).map_err(|e| {
             ImproperlyConfigured::new_err(format!(
                 "Invalid template loader: {loader}. {}",
                 e.value(py),
             ))
         })?;
 
-        map_loader(py, loader_path.to_str()?, Some(args), encoding)
+        map_loader(py, &loader_path, Some(args), encoding)
     }
 
     fn map_loader(
