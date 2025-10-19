@@ -9,141 +9,102 @@ from django.urls import resolve, NoReverseMatch
 factory = RequestFactory()
 
 
-def test_render_url():
+def test_render_url(assert_render):
     template = "{% url 'home' %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "/"
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template, {}, expected)
 
 
-def test_render_url_variable():
+def test_render_url_variable(assert_render):
+    assert_render(template="{% url home %}", context={"home": "home"}, expected="/")
+
+
+def test_render_url_variable_missing(template_engine):
     template = "{% url home %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
+    template = template_engine.from_string(template)
 
-    expected = "/"
-    assert django_template.render({"home": "home"}) == expected
-    assert rust_template.render({"home": "home"}) == expected
-
-
-def test_render_url_variable_missing():
-    template = "{% url home %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(NoReverseMatch) as django_error:
-        django_template.render({})
-
-    with pytest.raises(NoReverseMatch) as rust_error:
-        rust_template.render({})
+    with pytest.raises(NoReverseMatch) as exc_info:
+        template.render({})
 
     msg = "Reverse for '' not found. '' is not a valid view function or pattern name."
-    assert django_error.value.args[0] == msg
-    assert rust_error.value.args[0] == msg
+    assert str(exc_info.value) == msg
 
 
-def test_render_url_view_missing_as():
+def test_render_url_view_missing_as(assert_render):
     template = "{% url 'missing' as missing %}{{ missing }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = ""
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template, {}, expected)
 
 
-def test_render_url_arg():
+def test_render_url_arg(assert_render):
     template = "{% url 'bio' 'lily' %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "/bio/lily/"
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template, {}, expected)
 
 
-def test_render_url_kwarg():
+def test_render_url_kwarg(assert_render):
     template = "{% url 'bio' username='lily' %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "/bio/lily/"
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template, {}, expected)
 
 
-def test_render_url_arg_as_variable():
+def test_render_url_arg_as_variable(assert_render):
     template = "{% url 'bio' 'lily' as bio %}https://example.com{{ bio }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "https://example.com/bio/lily/"
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template, {}, expected)
 
 
-def test_render_url_kwarg_as_variable():
+def test_render_url_kwarg_as_variable(assert_render):
     template = "{% url 'bio' username='lily' as bio %}https://example.com{{ bio }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "https://example.com/bio/lily/"
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template, {}, expected)
 
 
-def test_render_url_current_app_unset():
+def test_render_url_current_app_unset(assert_render):
     template = "{% url 'users:user' 'lily' %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
 
     request = factory.get("/")
 
     expected = "/users/lily/"
-    assert django_template.render({}, request) == expected
-    assert rust_template.render({}, request) == expected
+    assert_render(
+        template=template, context={}, request_factory=request, expected=expected
+    )
 
 
-def test_render_url_current_app():
+def test_render_url_current_app(assert_render):
     template = "{% url 'users:user' 'lily' %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
 
     request = factory.get("/")
     request.current_app = "members"
 
     expected = "/members/lily/"
-    assert django_template.render({}, request) == expected
-    assert rust_template.render({}, request) == expected
+    assert_render(
+        template=template, context={}, request_factory=request, expected=expected
+    )
 
 
-def test_render_url_current_app_kwargs():
+def test_render_url_current_app_kwargs(assert_render):
     template = "{% url 'users:user' username='lily' %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
 
     request = factory.get("/")
     request.current_app = "members"
 
     expected = "/members/lily/"
-    assert django_template.render({}, request) == expected
-    assert rust_template.render({}, request) == expected
+    assert_render(
+        template=template, context={}, request_factory=request, expected=expected
+    )
 
 
-def test_render_url_current_app_resolver_match():
+def test_render_url_current_app_resolver_match(assert_render):
     template = "{% url 'users:user' username='lily' %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
 
     request = factory.get("/")
     request.resolver_match = resolve("/members/bryony/")
 
     expected = "/members/lily/"
-    assert django_template.render({}, request) == expected
-    assert rust_template.render({}, request) == expected
+    assert_render(
+        template=template, context={}, request_factory=request, expected=expected
+    )
 
 
 def test_render_url_view_name_error():
@@ -242,19 +203,12 @@ def test_render_url_dotted_lookup_keyword():
     assert str(rust_error.value) == expected
 
 
-def test_render_url_dotted_lookup_filter_with_equal_char():
+def test_render_url_dotted_lookup_filter_with_equal_char(template_engine):
     template = "{% url foo.bar|default:'=' %}"
+    template_obj = template_engine.from_string(template)
 
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(NoReverseMatch) as django_error:
-        django_template.render({})
+    with pytest.raises(NoReverseMatch) as exc_info:
+        template_obj.render({})
 
     msg = "Reverse for '=' not found. '=' is not a valid view function or pattern name."
-    assert django_error.value.args[0] == msg
-
-    with pytest.raises(NoReverseMatch) as rust_error:
-        rust_template.render({})
-
-    assert rust_error.value.args[0] == msg
+    assert str(exc_info.value) == msg
