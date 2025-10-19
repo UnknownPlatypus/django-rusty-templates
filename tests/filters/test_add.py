@@ -1,5 +1,3 @@
-import pytest
-from django.template import engines
 from django.template.base import VariableDoesNotExist
 
 
@@ -13,21 +11,13 @@ def test_add_no_variable(assert_render):
     assert_render(template=template, context={}, expected="")
 
 
-def test_add_no_argument():
-    template = "{{ foo|add:bar }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({"foo": 1})
-
-    expected = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {'foo': 1}]"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({"foo": 1})
-
-    expected = """\
+def test_add_no_argument(assert_render_error):
+    assert_render_error(
+        template="{{ foo|add:bar }}",
+        context={"foo": 1},
+        exception=VariableDoesNotExist,
+        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {'foo': 1}]",
+        rusty_message="""\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True, "foo": 1}
    ╭────
@@ -35,8 +25,8 @@ def test_add_no_argument():
    ·            ─┬─
    ·             ╰── key
    ╰────
-"""
-    assert str(exc_info.value) == expected
+""",
+    )
 
 
 def test_add_integer_strings(assert_render):

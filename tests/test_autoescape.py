@@ -1,5 +1,3 @@
-import pytest
-from django.template import engines
 from django.utils.safestring import mark_safe
 
 
@@ -31,36 +29,34 @@ def test_autoescape_not_string(assert_render):
     assert_render(template=template, context={"html": html}, expected=expected)
 
 
-def test_autoescape_invalid_str_method():
+def test_autoescape_invalid_str_method(assert_render_error):
     class Broken:
         def __str__(self):
             1 / 0
 
     broken = Broken()
-    template = "{{ broken }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
+    assert_render_error(
+        template="{{ broken }}",
+        context={"broken": broken},
+        exception=ZeroDivisionError,
+        django_message="division by zero",
+        rusty_message="division by zero",
+    )
 
-    with pytest.raises(ZeroDivisionError):
-        django_template.render({"broken": broken})
-    with pytest.raises(ZeroDivisionError):
-        rust_template.render({"broken": broken})
 
-
-def test_autoescape_invalid_html_method():
+def test_autoescape_invalid_html_method(assert_render_error):
     class Broken(str):
         def __html__(self):
             1 / 0
 
     broken = Broken("")
-    template = "{{ broken }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(ZeroDivisionError):
-        django_template.render({"broken": broken})
-    with pytest.raises(ZeroDivisionError):
-        rust_template.render({"broken": broken})
+    assert_render_error(
+        template="{{ broken }}",
+        context={"broken": broken},
+        exception=ZeroDivisionError,
+        django_message="division by zero",
+        rusty_message="division by zero",
+    )
 
 
 def test_mark_safe_filter_lower(assert_render):

@@ -1,5 +1,3 @@
-import pytest
-from django.template import engines
 from django.template.base import VariableDoesNotExist
 
 
@@ -102,53 +100,30 @@ def test_simple_block_tag_end_tag_only(assert_parse_error):
     )
 
 
-def test_simple_block_tag_missing_argument():
-    template = "{% load repeat from custom_tags %}{% repeat five %}{% endrepeat %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(TypeError) as exc_info:
-        django_template.render({})
-
-    assert str(exc_info.value) == "can't multiply sequence by non-int of type 'str'"
-
-    with pytest.raises(TypeError) as exc_info:
-        rust_template.render({})
-
-    assert (
-        str(exc_info.value)
-        == """\
+def test_simple_block_tag_missing_argument(assert_render_error):
+    assert_render_error(
+        template="{% load repeat from custom_tags %}{% repeat five %}{% endrepeat %}",
+        context={},
+        exception=TypeError,
+        django_message="can't multiply sequence by non-int of type 'str'",
+        rusty_message="""\
   × can't multiply sequence by non-int of type 'str'
    ╭────
  1 │ {% load repeat from custom_tags %}{% repeat five %}{% endrepeat %}
    ·                                   ────────┬────────
    ·                                           ╰── here
    ╰────
-"""
+""",
     )
 
 
-def test_simple_block_tag_invalid_argument():
-    template = "{% load repeat from custom_tags %}{% repeat five|default:five %}{% endrepeat %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({})
-
-    assert (
-        str(exc_info.value)
-        == "Failed lookup for key [five] in [{'True': True, 'False': False, 'None': None}, {}]"
-    )
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({})
-
-    assert (
-        str(exc_info.value)
-        == """\
+def test_simple_block_tag_invalid_argument(assert_render_error):
+    assert_render_error(
+        template="{% load repeat from custom_tags %}{% repeat five|default:five %}{% endrepeat %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message="Failed lookup for key [five] in [{'True': True, 'False': False, 'None': None}, {}]",
+        rusty_message="""\
   × Failed lookup for key [five] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -156,7 +131,7 @@ def test_simple_block_tag_invalid_argument():
    ·                                                          ──┬─
    ·                                                            ╰── key
    ╰────
-"""
+""",
     )
 
 
@@ -176,22 +151,13 @@ def test_simple_block_tag_argument_syntax_error(assert_parse_error):
     )
 
 
-def test_simple_block_tag_content_render_error():
-    template = "{% load repeat from custom_tags %}{% repeat 2 %}{{ foo|default:bar }}{% endrepeat %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({})
-
-    error = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]"
-    assert str(exc_info.value) == error
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({})
-
-    error = """\
+def test_simple_block_tag_content_render_error(assert_render_error):
+    assert_render_error(
+        template="{% load repeat from custom_tags %}{% repeat 2 %}{{ foo|default:bar }}{% endrepeat %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]",
+        rusty_message="""\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -199,5 +165,5 @@ def test_simple_block_tag_content_render_error():
    ·                                                                ─┬─
    ·                                                                 ╰── key
    ╰────
-"""
-    assert str(exc_info.value) == error
+""",
+    )

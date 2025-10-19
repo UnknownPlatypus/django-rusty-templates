@@ -1,5 +1,3 @@
-import pytest
-from django.template import engines
 from django.template.base import VariableDoesNotExist
 
 
@@ -36,23 +34,16 @@ def test_load_and_render_multiple_filter_libraries(assert_render):
     assert_render(template=template, context={"num": 2}, expected="16")
 
 
-def test_resolve_filter_arg_error():
-    template = """\
+def test_resolve_filter_arg_error(assert_render_error):
+    assert_render_error(
+        template="""\
 {% load multiply from custom_filters %}
 {{ num|multiply:foo.bar.1b.baz }}
-"""
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({"num": 2, "foo": {"bar": 3}})
-
-    assert str(exc_info.value) == "Failed lookup for key [1b] in 3"
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({"num": 2, "foo": {"bar": 3}})
-
-    expected = """\
+""",
+        context={"num": 2, "foo": {"bar": 3}},
+        exception=VariableDoesNotExist,
+        django_message="Failed lookup for key [1b] in 3",
+        rusty_message="""\
   × Failed lookup for key [1b] in 3
    ╭─[2:17]
  1 │ {% load multiply from custom_filters %}
@@ -61,31 +52,25 @@ def test_resolve_filter_arg_error():
    ·                    │     ╰── key
    ·                    ╰── 3
    ╰────
-"""
-    assert str(exc_info.value) == expected
+""",
+    )
 
 
-def test_filter_error():
-    template = "{% load custom_filters %}{{ num|divide_by_zero }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(ZeroDivisionError):
-        django_template.render({"num": 1})
-
-    with pytest.raises(ZeroDivisionError):
-        rust_template.render({"num": 1})
+def test_filter_error(assert_render_error):
+    assert_render_error(
+        template="{% load custom_filters %}{{ num|divide_by_zero }}",
+        context={"num": 1},
+        exception=ZeroDivisionError,
+        django_message="division by zero",
+        rusty_message="division by zero",
+    )
 
 
-def test_filter_error_with_argument():
-    template = "{% load custom_filters %}{{ num|divide_by_zero:0 }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(ZeroDivisionError):
-        django_template.render({"num": 1})
-
-    with pytest.raises(ZeroDivisionError):
-        rust_template.render({"num": 1})
+def test_filter_error_with_argument(assert_render_error):
+    assert_render_error(
+        template="{% load custom_filters %}{{ num|divide_by_zero:0 }}",
+        context={"num": 1},
+        exception=ZeroDivisionError,
+        django_message="division by zero",
+        rusty_message="division by zero",
+    )

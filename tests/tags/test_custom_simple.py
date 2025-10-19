@@ -1,8 +1,6 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-import pytest
-from django.template import engines
 from django.template.base import VariableDoesNotExist
 from django.test import RequestFactory
 
@@ -22,32 +20,20 @@ def test_simple_tag_double_missing_variable(assert_render):
     assert_render(template=template, context={}, expected="")
 
 
-def test_simple_tag_multiply_missing_variables():
-    template = "{% load multiply from custom_tags %}{% multiply foo bar eggs %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(TypeError) as exc_info:
-        django_template.render({})
-
-    error = str(exc_info.value)
-    assert error == "can't multiply sequence by non-int of type 'str'"
-
-    with pytest.raises(TypeError) as exc_info:
-        rust_template.render({})
-
-    error = str(exc_info.value)
-    assert (
-        error
-        == """\
+def test_simple_tag_multiply_missing_variables(assert_render_error):
+    assert_render_error(
+        template="{% load multiply from custom_tags %}{% multiply foo bar eggs %}",
+        context={},
+        exception=TypeError,
+        django_message="can't multiply sequence by non-int of type 'str'",
+        rusty_message="""\
   × can't multiply sequence by non-int of type 'str'
    ╭────
  1 │ {% load multiply from custom_tags %}{% multiply foo bar eggs %}
    ·                                     ─────────────┬─────────────
    ·                                                  ╰── here
    ╰────
-"""
+""",
     )
 
 
@@ -154,31 +140,25 @@ def test_simple_tag_takes_context_setitem_in_loop(assert_render):
     assert_render(template=template, context={"items": [1, 0, 4, 0]}, expected="1122")
 
 
-def test_simple_tag_takes_context_getitem_missing():
-    template = "{% load local_time from custom_tags %}{% local_time dt %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
+def test_simple_tag_takes_context_getitem_missing(assert_render_error):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
 
     source_time = datetime(2025, 8, 31, 9, 14, tzinfo=ZoneInfo("Europe/London"))
-    context = {"dt": source_time}
-    with pytest.raises(KeyError) as exc_info:
-        django_template.render(context)
-
-    assert str(exc_info.value) == "'timezone'"
-
-    with pytest.raises(KeyError) as exc_info:
-        rust_template.render(context)
-
-    expected = """\
+    assert_render_error(
+        template="{% load local_time from custom_tags %}{% local_time dt %}",
+        context={"dt": source_time},
+        exception=KeyError,
+        django_message="'timezone'",
+        rusty_message="""\
   × 'timezone'
    ╭────
  1 │ {% load local_time from custom_tags %}{% local_time dt %}
    ·                                       ─────────┬─────────
    ·                                                ╰── here
    ╰────
-"""
-    assert str(exc_info.value) == expected
+""",
+    )
 
 
 def test_simple_tag_positional_after_kwarg(assert_parse_error):
@@ -433,49 +413,30 @@ def test_simple_tag_invalid_filter_in_keyword_argument(assert_parse_error):
     )
 
 
-def test_simple_tag_render_error():
-    template = "{% load custom_tags %}{% combine operation='divide' %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(RuntimeError) as exc_info:
-        django_template.render({})
-
-    assert str(exc_info.value) == "Unknown operation"
-
-    with pytest.raises(RuntimeError) as exc_info:
-        rust_template.render({})
-
-    assert (
-        str(exc_info.value)
-        == """\
+def test_simple_tag_render_error(assert_render_error):
+    assert_render_error(
+        template="{% load custom_tags %}{% combine operation='divide' %}",
+        context={},
+        exception=RuntimeError,
+        django_message="Unknown operation",
+        rusty_message="""\
   × Unknown operation
    ╭────
  1 │ {% load custom_tags %}{% combine operation='divide' %}
    ·                       ────────────────┬───────────────
    ·                                       ╰── here
    ╰────
-"""
+""",
     )
 
 
-def test_simple_tag_argument_error():
-    template = "{% load double from custom_tags %}{% double foo|default:bar %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({})
-
-    expected = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({})
-
-    expected = """\
+def test_simple_tag_argument_error(assert_render_error):
+    assert_render_error(
+        template="{% load double from custom_tags %}{% double foo|default:bar %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]",
+        rusty_message="""\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -483,26 +444,17 @@ def test_simple_tag_argument_error():
    ·                                                         ─┬─
    ·                                                          ╰── key
    ╰────
-"""
-    assert str(exc_info.value) == expected
+""",
+    )
 
 
-def test_simple_tag_keyword_argument_error():
-    template = "{% load double from custom_tags %}{% double value=foo|default:bar %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({})
-
-    expected = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({})
-
-    expected = """\
+def test_simple_tag_keyword_argument_error(assert_render_error):
+    assert_render_error(
+        template="{% load double from custom_tags %}{% double value=foo|default:bar %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]",
+        rusty_message="""\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -510,8 +462,8 @@ def test_simple_tag_keyword_argument_error():
    ·                                                               ─┬─
    ·                                                                ╰── key
    ╰────
-"""
-    assert str(exc_info.value) == expected
+""",
+    )
 
 
 def test_simple_tag_missing_keyword_argument(assert_parse_error):
