@@ -261,7 +261,7 @@ pub mod django_rusty_templates {
                     Err(e) if e.is_instance_of::<TemplateDoesNotExist>(py) => {
                         not_found.push(e.value(py).to_string())
                     }
-                    Err(e) => return Err(e)
+                    Err(e) => return Err(e),
                 }
             }
             Err(TemplateDoesNotExist::new_err(not_found.join(", ")))
