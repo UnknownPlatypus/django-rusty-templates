@@ -248,7 +248,10 @@ pub mod django_rusty_templates {
 
         #[getter]
         pub fn dirs(&self) -> Vec<String> {
-            self.dirs.iter().map(|p| p.to_string_lossy().to_string()).collect()
+            self.dirs
+                .iter()
+                .map(|p| p.to_string_lossy().to_string())
+                .collect()
         }
         #[getter]
         pub fn file_charset(&self) -> String {
@@ -622,9 +625,17 @@ user = User(["Lily"])
 
             let engine = Engine::new(
                 py,
-                Some(vec!["tests/templates", "other/templates"].into_pyobject(py).unwrap()),
+                Some(
+                    vec!["tests/templates", "other/templates"]
+                        .into_pyobject(py)
+                        .unwrap(),
+                ),
                 true,
-                Some(vec!["django.template.context_processors.debug"].into_pyobject(py).unwrap()),
+                Some(
+                    vec!["django.template.context_processors.debug"]
+                        .into_pyobject(py)
+                        .unwrap(),
+                ),
                 true,
                 None,
                 "INVALID".to_string(),
@@ -657,14 +668,17 @@ user = User(["Lily"])
             assert!(dirs[0].ends_with("tests/templates"));
             assert!(dirs[1].ends_with("other/templates"));
 
-            let file_charset: String = py_engine.getattr("file_charset").unwrap().extract().unwrap();
+            let file_charset: String = py_engine
+                .getattr("file_charset")
+                .unwrap()
+                .extract()
+                .unwrap();
             assert_eq!(file_charset, "UTF-8");
 
             // TODO: support this once #89 lands
             // let loaders: Vec<String> = py_engine.getattr("loaders").unwrap().extract().unwrap();
             // assert_eq!(loaders.len(), 1);
             // assert_eq!(loaders[0], "django.template.loaders.cached.Loader");
-
         })
     }
 }
