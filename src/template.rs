@@ -7,7 +7,7 @@ pub mod django_rusty_templates {
 
     use encoding_rs::Encoding;
     use pyo3::exceptions::{PyAttributeError, PyImportError, PyOverflowError, PyValueError};
-    use pyo3::import_exception_bound;
+    use pyo3::import_exception;
     use pyo3::intern;
     use pyo3::prelude::*;
     use pyo3::types::{PyBool, PyDict, PyString};
@@ -20,12 +20,12 @@ pub mod django_rusty_templates {
     use crate::types::TemplateString;
     use crate::utils::PyResultMethods;
 
-    import_exception_bound!(django.core.exceptions, ImproperlyConfigured);
-    import_exception_bound!(django.template.base, VariableDoesNotExist);
-    import_exception_bound!(django.template.exceptions, TemplateDoesNotExist);
-    import_exception_bound!(django.template.exceptions, TemplateSyntaxError);
-    import_exception_bound!(django.template.library, InvalidTemplateLibrary);
-    import_exception_bound!(django.urls, NoReverseMatch);
+    import_exception!(django.core.exceptions, ImproperlyConfigured);
+    import_exception!(django.template.base, VariableDoesNotExist);
+    import_exception!(django.template.exceptions, TemplateDoesNotExist);
+    import_exception!(django.template.exceptions, TemplateSyntaxError);
+    import_exception!(django.template.library, InvalidTemplateLibrary);
+    import_exception!(django.urls, NoReverseMatch);
 
     trait WithSourceCode {
         fn with_source_code(
@@ -607,7 +607,7 @@ user = User(["Lily"])
         Python::attach(|py| {
             let cwd = std::env::current_dir().unwrap();
             let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
-            let sys_path = sys_path.downcast().unwrap();
+            let sys_path = sys_path.cast().unwrap();
             sys_path.append(cwd.to_string_lossy()).unwrap();
             let mut engine = Engine::new(
                 py,
@@ -648,7 +648,7 @@ user = User(["Lily"])
         Python::attach(|py| {
             let cwd = std::env::current_dir().unwrap();
             let sys_path = py.import("sys").unwrap().getattr("path").unwrap();
-            let sys_path = sys_path.downcast().unwrap();
+            let sys_path = sys_path.cast().unwrap();
             sys_path.append(cwd.to_string_lossy()).unwrap();
 
             let engine = Engine::new(
