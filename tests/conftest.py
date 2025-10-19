@@ -51,3 +51,33 @@ def assert_parse_error(request):
         assert str(exc_info.value) == message
 
     return _assert_parse_error
+
+
+@pytest.fixture
+def assert_render_error():
+    """
+    A convenient method to test rendering exception with both engines.
+
+    Example:
+        def test_error(assert_render_error):
+            assert_render_error(
+                template="{{ foo|center:bar }}",
+                context={"foo": "test", "bar": "-5.5"},
+                exception=ValueError,
+                django_message="invalid literal for int() with base 10: '-5.5'",
+                rusty_message="  × Couldn't convert argument (-5.5) to integer..."
+            )
+    """
+
+    def _assert_render_error(
+        template, context, exception, django_message, rusty_message
+    ):
+        with pytest.raises(exception) as exc_info:
+            engines["django"].from_string(template).render(context)
+        assert str(exc_info.value) == django_message
+
+        with pytest.raises(exception) as exc_info:
+            engines["rusty"].from_string(template).render(context)
+        assert str(exc_info.value) == rusty_message
+
+    return _assert_render_error
