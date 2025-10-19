@@ -3,58 +3,34 @@ from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 
 
-def test_render_variable():
+def test_render_variable(assert_render):
     template = "{{ foo }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": 3}) == "3"
-    assert rust_template.render({"foo": 3}) == "3"
+    assert_render(template=template, context={"foo": 3}, expected="3")
 
 
-def test_render_int():
+def test_render_int(assert_render):
     template = "{{ 1 }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"1": 2}) == "1"
-    assert rust_template.render({"1": 2}) == "1"
+    assert_render(template=template, context={"1": 2}, expected="1")
 
 
-def test_render_float():
+def test_render_float(assert_render):
     template = "{{ 1.2 }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"1.2": 2}) == "1.2"
-    assert rust_template.render({"1.2": 2}) == "1.2"
+    assert_render(template=template, context={"1.2": 2}, expected="1.2")
 
 
-def test_render_negative_int():
+def test_render_negative_int(assert_render):
     template = "{{ -1 }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"-1": 2}) == "-1"
-    assert rust_template.render({"-1": 2}) == "-1"
+    assert_render(template=template, context={"-1": 2}, expected="-1")
 
 
-def test_render_negative_float():
+def test_render_negative_float(assert_render):
     template = "{{ -1.2 }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"-1.2": 2}) == "-1.2"
-    assert rust_template.render({"-1.2": 2}) == "-1.2"
+    assert_render(template=template, context={"-1.2": 2}, expected="-1.2")
 
 
-def test_render_attribute_int():
+def test_render_attribute_int(assert_render):
     template = "{{ foo.1 }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": {1: 3}}) == "3"
-    assert rust_template.render({"foo": {1: 3}}) == "3"
+    assert_render(template=template, context={"foo": {1: 3}}, expected="3")
 
 
 def test_render_variable_hyphen():
@@ -123,22 +99,14 @@ def test_render_invalid_variable():
     assert str(exc_info.value) == expected
 
 
-def test_render_variable_callable():
+def test_render_variable_callable(assert_render):
     template = "{{ foo }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": lambda: 3}) == "3"
-    assert rust_template.render({"foo": lambda: 3}) == "3"
+    assert_render(template=template, context={"foo": lambda: 3}, expected="3")
 
 
-def test_render_attribute_callable():
+def test_render_attribute_callable(assert_render):
     template = "{{ foo.bar }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"foo": {"bar": lambda: 3}}) == "3"
-    assert rust_template.render({"foo": {"bar": lambda: 3}}) == "3"
+    assert_render(template=template, context={"foo": {"bar": lambda: 3}}, expected="3")
 
 
 class DoNotCall:
@@ -177,60 +145,37 @@ class Both:
         return "not called"
 
 
-def test_render_callable_do_not_call_in_templates():
+def test_render_callable_do_not_call_in_templates(assert_render):
     template = "{{ do_not_call }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     context = {"do_not_call": DoNotCall()}
-    assert django_template.render(context) == "not called"
-    assert rust_template.render(context) == "not called"
+    assert_render(template=template, context=context, expected="not called")
 
 
-def test_render_callable_do_not_call_in_templates_attribute():
+def test_render_callable_do_not_call_in_templates_attribute(assert_render):
     template = "{{ do_not_call.attr }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     context = {"do_not_call": DoNotCall()}
-    assert django_template.render(context) == "attribute"
-    assert rust_template.render(context) == "attribute"
+    assert_render(template=template, context=context, expected="attribute")
 
 
-def test_render_callable_attribute_alters_data():
+def test_render_callable_attribute_alters_data(assert_render):
     template = "{{ foo.increment }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     mutable = AltersData()
     context = {"foo": mutable}
-    assert django_template.render(context) == ""
-    assert mutable.data == 0
-    assert rust_template.render(context) == ""
+    assert_render(template=template, context=context, expected="")
     assert mutable.data == 0
 
 
-def test_render_callable_variable_alters_data():
+def test_render_callable_variable_alters_data(assert_render):
     template = "{{ increment }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     mutable = AltersData()
     context = {"increment": mutable.increment}
-    assert django_template.render(context) == ""
-    assert mutable.data == 0
-    assert rust_template.render(context) == ""
+    assert_render(template=template, context=context, expected="")
     assert mutable.data == 0
 
 
-def test_do_not_call_and_alters_data():
+def test_do_not_call_and_alters_data(assert_render):
     template = "{{ foo.data }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     both = Both()
     context = {"foo": both}
-    assert django_template.render(context) == "0"
-    assert both.data == 0
-    assert rust_template.render(context) == "0"
+    assert_render(template=template, context=context, expected="0")
     assert both.data == 0
