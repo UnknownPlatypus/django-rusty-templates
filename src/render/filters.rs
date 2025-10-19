@@ -80,7 +80,7 @@ impl ResolveFilter for AddSlashesFilter {
                     Cow::Owned(
                         raw.replace(r"\", r"\\")
                             .replace("\"", "\\\"")
-                            .replace("'", r"\'")
+                            .replace("'", r"\'"),
                     )
                 })
             }
