@@ -14,7 +14,7 @@ pub enum PyRenderError {
 }
 
 impl PyRenderError {
-    pub fn try_into_render_error(self) -> Result<RenderError, PyErr> {
+    pub fn try_into_render_error(self) -> PyResult<RenderError> {
         match self {
             Self::RenderError(err) => Ok(err),
             Self::PyErr(err) => Err(err),
