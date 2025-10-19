@@ -8,34 +8,19 @@ from django.template.exceptions import TemplateSyntaxError
 from django.test import RequestFactory
 
 
-def test_simple_tag_double():
+def test_simple_tag_double(assert_render):
     template = "{% load double from custom_tags %}{% double 3 %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "6"
-    assert rust_template.render({}) == "6"
+    assert_render(template=template, context={}, expected="6")
 
 
-def test_simple_tag_double_kwarg():
+def test_simple_tag_double_kwarg(assert_render):
     template = "{% load double from custom_tags %}{% double value=3 %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "6"
-    assert rust_template.render({}) == "6"
+    assert_render(template=template, context={}, expected="6")
 
 
-def test_simple_tag_double_missing_variable():
+def test_simple_tag_double_missing_variable(assert_render):
     template = "{% load double from custom_tags %}{% double foo %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == ""
-    assert rust_template.render({}) == ""
+    assert_render(template=template, context={}, expected="")
 
 
 def test_simple_tag_multiply_missing_variables():
@@ -67,166 +52,107 @@ def test_simple_tag_multiply_missing_variables():
     )
 
 
-def test_simple_tag_kwargs():
+def test_simple_tag_kwargs(assert_render):
     template = "{% load table from custom_tags %}{% table foo='bar' spam=1 %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "foo-bar\nspam-1"
-    assert rust_template.render({}) == "foo-bar\nspam-1"
+    assert_render(template=template, context={}, expected="foo-bar\nspam-1")
 
 
-def test_simple_tag_positional_and_kwargs():
+def test_simple_tag_positional_and_kwargs(assert_render):
     template = "{% load multiply from custom_tags %}{% multiply 3 b=2 c=4 %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "24"
-    assert rust_template.render({}) == "24"
+    assert_render(template=template, context={}, expected="24")
 
 
-def test_simple_tag_double_as_variable():
+def test_simple_tag_double_as_variable(assert_render):
     template = (
         "{% load double from custom_tags %}{% double 3 as foo %}{{ foo }}{{ foo }}"
     )
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "66"
-    assert rust_template.render({}) == "66"
+    assert_render(template=template, context={}, expected="66")
 
 
-def test_simple_tag_double_kwarg_as_variable():
+def test_simple_tag_double_kwarg_as_variable(assert_render):
     template = "{% load double from custom_tags %}{% double value=3 as foo %}{{ foo }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "6"
-    assert rust_template.render({}) == "6"
+    assert_render(template=template, context={}, expected="6")
 
 
-def test_simple_tag_as_variable_after_default():
+def test_simple_tag_as_variable_after_default(assert_render):
     template = "{% load invert from custom_tags %}{% invert as foo %}{{ foo }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "0.5"
-    assert rust_template.render({}) == "0.5"
+    assert_render(template=template, context={}, expected="0.5")
 
 
-def test_simple_tag_varargs():
+def test_simple_tag_varargs(assert_render):
     template = "{% load combine from custom_tags %}{% combine 2 3 4 as foo %}{{ foo }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "9"
-    assert rust_template.render({}) == "9"
+    assert_render(template=template, context={}, expected="9")
 
 
-def test_simple_tag_varargs_with_kwarg():
+def test_simple_tag_varargs_with_kwarg(assert_render):
     template = "{% load combine from custom_tags %}{% combine 2 3 4 operation='multiply' as foo %}{{ foo }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "24"
-    assert rust_template.render({}) == "24"
+    assert_render(template=template, context={}, expected="24")
 
 
-def test_simple_tag_keyword_only():
+def test_simple_tag_keyword_only(assert_render):
     template = "{% load list from custom_tags %}{% list items header='Items' %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = """\
 # Items
 * 1
 * 2
 * 3"""
-    assert django_template.render({"items": [1, 2, 3]}) == expected
-    assert rust_template.render({"items": [1, 2, 3]}) == expected
+    assert_render(template=template, context={"items": [1, 2, 3]}, expected=expected)
 
 
-def test_simple_tag_takes_context():
+def test_simple_tag_takes_context(assert_render):
     template = "{% load request_path from custom_tags %}{% request_path %}{{ bar }}"
 
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     factory = RequestFactory()
     request = factory.get("/foo/")
-    assert django_template.render({"bar": "bar"}, request) == "/foo/bar"
-    assert rust_template.render({"bar": "bar"}, request) == "/foo/bar"
+
+    assert_render(
+        template=template,
+        context={"bar": "bar"},
+        request_factory=request,
+        expected="/foo/bar",
+    )
 
 
-def test_simple_tag_takes_context_context_reference_held():
+def test_simple_tag_takes_context_context_reference_held(template_engine):
     template = "{% load request_path from invalid_tags %}{% request_path %}{{ bar }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
+    template_obj = template_engine.from_string(template)
 
     factory = RequestFactory()
     request = factory.get("/foo/")
-    assert django_template.render({"bar": "bar"}, request) == "/foo/bar"
-    assert rust_template.render({"bar": "bar"}, request) == "/foo/bar"
+    assert template_obj.render({"bar": "bar"}, request) == "/foo/bar"
 
 
-def test_simple_tag_takes_context_get_variable():
+def test_simple_tag_takes_context_get_variable(assert_render):
     template = """\
 {% load greeting from custom_tags %}{% greeting 'Charlie' %}
 {% for user in users %}{% greeting 'Lily' %}{% endfor %}
 {% greeting 'George' %}"""
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = """\
 Hello Charlie from Django!
 Hello Lily from Rusty Templates!
 Hello George from Django!"""
-    assert django_template.render({"users": ["Rusty Templates"]}) == expected
-    assert rust_template.render({"users": ["Rusty Templates"]}) == expected
+    assert_render(
+        template=template, context={"users": ["Rusty Templates"]}, expected=expected
+    )
 
 
-def test_simple_tag_takes_context_getitem():
+def test_simple_tag_takes_context_getitem(assert_render):
     template = "{% load local_time from custom_tags %}{% local_time dt %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     source_time = datetime(2025, 8, 31, 9, 14, tzinfo=ZoneInfo("Europe/London"))
     destination_timezone = ZoneInfo("Australia/Melbourne")
     context = {"dt": source_time, "timezone": destination_timezone}
     expected = str(source_time.astimezone(destination_timezone))
-    assert django_template.render(context) == expected
-    assert rust_template.render(context) == expected
+    assert_render(template=template, context=context, expected=expected)
 
 
-def test_simple_tag_takes_context_setitem():
+def test_simple_tag_takes_context_setitem(assert_render):
     template = "{% load counter from custom_tags %}{% counter %}{{ count }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "1"
-    assert rust_template.render({}) == "1"
+    assert_render(template=template, context={}, expected="1")
 
 
-def test_simple_tag_takes_context_setitem_in_loop():
+def test_simple_tag_takes_context_setitem_in_loop(assert_render):
     template = "{% load counter from custom_tags %}{% for item in items %}{% if item %}{% counter %}{% endif %}{{ count }}{% endfor %}{{ count }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"items": [1, 0, 4, 0]}) == "1122"
-    assert rust_template.render({"items": [1, 0, 4, 0]}) == "1122"
+    assert_render(template=template, context={"items": [1, 0, 4, 0]}, expected="1122")
 
 
 def test_simple_tag_takes_context_getitem_missing():
