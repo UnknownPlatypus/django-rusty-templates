@@ -3,14 +3,10 @@ from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 
 
-def test_autoescape_off():
+def test_autoescape_off(assert_render):
     html = "<p>Hello World!</p>"
     template = "{% autoescape off %}{{ html }}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"html": html}) == html
-    assert rust_template.render({"html": html}) == html
+    assert_render(template=template, context={"html": html}, expected=html)
 
 
 def test_missing_argument():
@@ -128,53 +124,34 @@ def test_wrong_end_tag():
     assert str(exc_info.value) == expected
 
 
-def test_endautoescape_argument():
+def test_endautoescape_argument(assert_render):
     html = "<p>Hello World!</p>"
     template = "{% autoescape off %}{{ html }}{% endautoescape extra %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({"html": html}) == html
-    assert rust_template.render({"html": html}) == html
+    assert_render(template=template, context={"html": html}, expected=html)
 
 
-def test_nested_autoescape():
+def test_nested_autoescape(assert_render):
     html = "<p>Hello World!</p>"
     template = "{{ html }}{% autoescape off %}{{ html }}{% autoescape on %}{{ html }}{% endautoescape %}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == f"{escaped}{html}{escaped}"
-    assert rust_template.render({"html": html}) == f"{escaped}{html}{escaped}"
+    assert_render(
+        template=template, context={"html": html}, expected=f"{escaped}{html}{escaped}"
+    )
 
 
-def test_autoescape_text():
+def test_autoescape_text(assert_render):
     template = "{% autoescape off %}<p>Hello World!</p>{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    html = "<p>Hello World!</p>"
-    assert django_template.render({}) == html
-    assert rust_template.render({}) == html
+    assert_render(template=template, context={}, expected="<p>Hello World!</p>")
 
 
-def test_autoescape_comment():
+def test_autoescape_comment(assert_render):
     template = "{% autoescape off %}{# comment #}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == ""
-    assert rust_template.render({}) == ""
+    assert_render(template=template, context={}, expected="")
 
 
-def test_autoescape_url():
+def test_autoescape_url(assert_render):
     template = "{% autoescape off %}{% url 'home' %}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "/"
-    assert rust_template.render({}) == "/"
+    assert_render(template=template, context={}, expected="/")
 
 
 def test_unexpected_end_tag():
