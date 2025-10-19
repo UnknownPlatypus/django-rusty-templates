@@ -3,29 +3,21 @@ from django.template import engines
 from django.utils.safestring import mark_safe
 
 
-def test_mark_safe():
+def test_mark_safe(assert_render):
     html = mark_safe("<p>Hello World!</p>")
     template = "{{ html }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "<p>Hello World!</p>"
-    assert django_template.render({"html": html}) == expected
-    assert rust_template.render({"html": html}) == expected
+    assert_render(template=template, context={"html": html}, expected=expected)
 
 
-def test_autoescape():
+def test_autoescape(assert_render):
     html = "<p>Hello World!</p>"
     template = "{{ html }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "&lt;p&gt;Hello World!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == expected
-    assert rust_template.render({"html": html}) == expected
+    assert_render(template=template, context={"html": html}, expected=expected)
 
 
-def test_autoescape_not_string():
+def test_autoescape_not_string(assert_render):
     class Html:
         def __init__(self, html):
             self.html = html
@@ -35,12 +27,8 @@ def test_autoescape_not_string():
 
     html = Html("<p>Hello World!</p>")
     template = "{{ html }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "&lt;p&gt;Hello World!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == expected
-    assert rust_template.render({"html": html}) == expected
+    assert_render(template=template, context={"html": html}, expected=expected)
 
 
 def test_autoescape_invalid_str_method():
@@ -75,34 +63,22 @@ def test_autoescape_invalid_html_method():
         rust_template.render({"broken": broken})
 
 
-def test_mark_safe_filter_lower():
+def test_mark_safe_filter_lower(assert_render):
     html = mark_safe("<p>Hello World!</p>")
     template = "{{ html|lower }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "<p>hello world!</p>"
-    assert django_template.render({"html": html}) == expected
-    assert rust_template.render({"html": html}) == expected
+    assert_render(template=template, context={"html": html}, expected=expected)
 
 
-def test_autoescape_filter_lower():
+def test_autoescape_filter_lower(assert_render):
     html = "<p>Hello World!</p>"
     template = "{{ html|lower }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "&lt;p&gt;hello world!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == expected
-    assert rust_template.render({"html": html}) == expected
+    assert_render(template=template, context={"html": html}, expected=expected)
 
 
-def test_safe_lower():
+def test_safe_lower(assert_render):
     html = "<p>Hello World!</p>"
     template = "{{ html|safe|lower }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     expected = "<p>hello world!</p>"
-    assert django_template.render({"html": html}) == expected
-    assert rust_template.render({"html": html}) == expected
+    assert_render(template=template, context={"html": html}, expected=expected)

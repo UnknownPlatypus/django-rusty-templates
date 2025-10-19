@@ -3,14 +3,10 @@ from django.template import engines
 from django.template.exceptions import TemplateSyntaxError
 
 
-def test_safe():
+def test_safe(assert_render):
     template = "{{ html|safe }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
-    assert django_template.render({"html": html}) == html
-    assert rust_template.render({"html": html}) == html
+    assert_render(template=template, context={"html": html}, expected=html)
 
 
 def test_safe_with_argument():
@@ -35,78 +31,46 @@ def test_safe_with_argument():
     assert str(exc_info.value) == expected
 
 
-def test_safe_missing_value():
+def test_safe_missing_value(assert_render):
     template = "{{ html|safe }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == ""
-    assert rust_template.render({}) == ""
+    assert_render(template=template, context={}, expected="")
 
 
-def test_safe_already_safe():
+def test_safe_already_safe(assert_render):
     template = "{{ html|safe|safe }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
-    assert django_template.render({"html": html}) == html
-    assert rust_template.render({"html": html}) == html
+    assert_render(template=template, context={"html": html}, expected=html)
 
 
-def test_safe_integer():
+def test_safe_integer(assert_render):
     template = "{{ num|default:100|safe }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "100"
-    assert rust_template.render({}) == "100"
+    assert_render(template=template, context={}, expected="100")
 
 
-def test_safe_float():
+def test_safe_float(assert_render):
     template = "{{ num|default:1.6|safe }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "1.6"
-    assert rust_template.render({}) == "1.6"
+    assert_render(template=template, context={}, expected="1.6")
 
 
-def test_safe_escaped():
+def test_safe_escaped(assert_render):
     template = "{{ html|escape|safe }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
     escaped = "&lt;p&gt;Hello World!&lt;/p&gt;"
-    assert django_template.render({"html": html}) == escaped
-    assert rust_template.render({"html": html}) == escaped
+    assert_render(template=template, context={"html": html}, expected=escaped)
 
 
-def test_safe_bool():
+def test_safe_bool(assert_render):
     template = "{% for x in 'xy' %}{{ forloop.first|safe }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    assert django_template.render({}) == "TrueFalse"
-    assert rust_template.render({}) == "TrueFalse"
+    assert_render(template=template, context={}, expected="TrueFalse")
 
 
-def test_safe_autoescape_off():
+def test_safe_autoescape_off(assert_render):
     template = "{% autoescape off %}{{ html|safe }}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
-    assert django_template.render({"html": html}) == html
-    assert rust_template.render({"html": html}) == html
+    assert_render(template=template, context={"html": html}, expected=html)
 
 
-def test_safe_autoescape_off_lower():
+def test_safe_autoescape_off_lower(assert_render):
     template = "{% autoescape off %}{{ html|lower|safe }}{% endautoescape %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     html = "<p>Hello World!</p>"
-    assert django_template.render({"html": html}) == html.lower()
-    assert rust_template.render({"html": html}) == html.lower()
+    assert_render(template=template, context={"html": html}, expected=html.lower())

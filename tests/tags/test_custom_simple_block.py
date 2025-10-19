@@ -4,38 +4,20 @@ from django.template.base import VariableDoesNotExist
 from django.template.exceptions import TemplateSyntaxError
 
 
-def test_simple_block_tag_repeat():
+def test_simple_block_tag_repeat(assert_render):
     template = "{% load repeat from custom_tags %}{% repeat 5 %}foo{% endrepeat %}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    expected = "foofoofoofoofoo"
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template=template, context={}, expected="foofoofoofoofoo")
 
 
-def test_simple_block_tag_repeat_as():
+def test_simple_block_tag_repeat_as(assert_render):
     template = "{% load repeat from custom_tags %}{% repeat 2 as bar %}foo{% endrepeat %}{{ bar }}{{ bar|upper }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    expected = "foofooFOOFOO"
-    assert django_template.render({}) == expected
-    assert rust_template.render({}) == expected
+    assert_render(template=template, context={}, expected="foofooFOOFOO")
 
 
-def test_with_block():
+def test_with_block(assert_render):
     template = "{% load with_block from custom_tags %}{% with_block var='name' %}{{ user }}{% end_with_block %}{{ name|lower }}"
-
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
     context = {"user": "Lily"}
-    expected = "lily"
-    assert django_template.render(context) == expected
-    assert rust_template.render(context) == expected
+    assert_render(template=template, context=context, expected="lily")
 
 
 def test_simple_block_tag_missing_context():
