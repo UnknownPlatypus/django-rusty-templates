@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 from django.conf import settings
+from django.template import engines
 from django.template.engine import Engine
 from django.template.library import InvalidTemplateLibrary
 
@@ -67,3 +68,40 @@ def test_pathlib_dirs():
 
     template = engine.get_template("basic.txt")
     assert template.render({"user": "Lily"}) == "Hello Lily!\n"
+
+
+def test_select_template_first_exists():
+    template = engines["rusty"].engine.select_template(
+        ["basic.txt", "full_example.html"]
+    )
+    assert template.render({"user": "Lily"}) == "Hello Lily!\n"
+
+
+def test_select_template_second_exists():
+    template = engines["rusty"].engine.select_template(["nonexistent.txt", "basic.txt"])
+    assert template.render({"user": "Lily"}) == "Hello Lily!\n"
+
+
+@pytest.mark.parametrize(
+    "template_list,expected_error",
+    [
+        pytest.param([], "No template names provided", id="Empty list"),
+        pytest.param(
+            ["nonexistent1.txt", "nonexistent2.txt"],
+            "nonexistent1.txt, nonexistent2.txt",
+            id="None exist",
+        ),
+    ],
+)
+def test_select_template_errors(template_list, expected_error):
+    from django.template.exceptions import TemplateDoesNotExist
+
+    with pytest.raises(TemplateDoesNotExist) as exc_info:
+        engines["rusty"].engine.select_template(template_list)
+
+    assert str(exc_info.value) == expected_error
+
+
+def test_select_template_invalid():
+    with pytest.raises(UnicodeError):
+        engines["rusty"].engine.select_template(["invalid.txt"])
