@@ -29,8 +29,8 @@ def assert_render(template_engine):
     return assert_render_template
 
 
-@pytest.fixture
-def assert_parse_error():
+@pytest.fixture(params=["rusty", "django"])
+def assert_parse_error(request):
     """
     A convenient method to test `TemplateSyntaxError` for both engines.
 
@@ -45,12 +45,9 @@ def assert_parse_error():
     """
 
     def _assert_parse_error(template, django_message, rusty_message):
+        message = django_message if request.param == "django" else rusty_message
         with pytest.raises(TemplateSyntaxError) as exc_info:
-            engines["django"].from_string(template)
-        assert str(exc_info.value) == django_message
-
-        with pytest.raises(TemplateSyntaxError) as exc_info:
-            engines["rusty"].from_string(template)
-        assert str(exc_info.value) == rusty_message
+            engines[request.param].from_string(template)
+        assert str(exc_info.value) == message
 
     return _assert_parse_error
