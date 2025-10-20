@@ -85,3 +85,18 @@ jobs:
       with:
         files: coverage.xml,codecov.json
         fail_ci_if_error: true
+
+  django-test-suite:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v5
+
+    - name: Set up Python
+      uses: actions/setup-python@v6
+
+    - name: Install uv
+      uses: astral-sh/setup-uv@v7
+
+    - name: Run Django test suite
+      run: uv run scripts/run_django_test_suite.py
