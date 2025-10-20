@@ -1,7 +1,6 @@
 import pytest
 from django.template import engines
 from django.template.base import VariableDoesNotExist
-from django.template.exceptions import TemplateSyntaxError
 
 
 def test_simple_block_tag_repeat(assert_render):
@@ -20,23 +19,10 @@ def test_with_block(assert_render):
     assert_render(template=template, context=context, expected="lily")
 
 
-def test_simple_block_tag_missing_context():
+def test_simple_block_tag_missing_context(assert_parse_error):
     template = "{% load missing_context_block from invalid_tags %}{% missing_context_block %}{% end_missing_context_block %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'missing_context_block' is decorated with takes_context=True so it must have a first argument of 'context' and a second argument of 'content'"
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == """\
+    django_message = "'missing_context_block' is decorated with takes_context=True so it must have a first argument of 'context' and a second argument of 'content'"
+    rusty_message = """\
   × 'missing_context_block' is decorated with takes_context=True so it must
   │ have a first argument of 'context' and a second argument of 'content'
    ╭────
@@ -45,26 +31,15 @@ def test_simple_block_tag_missing_context():
    ·                   ╰── loaded here
    ╰────
 """
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
 
-def test_simple_block_tag_missing_content():
+def test_simple_block_tag_missing_content(assert_parse_error):
     template = "{% load missing_content_block from invalid_tags %}{% missing_content_block %}{% end_missing_content_block %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'missing_content_block' must have a first argument of 'content'"
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == """\
+    django_message = "'missing_content_block' must have a first argument of 'content'"
+    rusty_message = """\
   × 'missing_content_block' must have a first argument of 'content'
    ╭────
  1 │ {% load missing_content_block from invalid_tags %}{% missing_content_block %}{% end_missing_content_block %}
@@ -72,26 +47,15 @@ def test_simple_block_tag_missing_content():
    ·                   ╰── loaded here
    ╰────
 """
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
 
-def test_simple_block_tag_missing_content_takes_context():
+def test_simple_block_tag_missing_content_takes_context(assert_parse_error):
     template = "{% load missing_content_block_with_context from invalid_tags %}{% missing_content_block_with_context %}{% end_missing_content_block_with_context %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "'missing_content_block_with_context' is decorated with takes_context=True so it must have a first argument of 'context' and a second argument of 'content'"
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == """\
+    django_message = "'missing_content_block_with_context' is decorated with takes_context=True so it must have a first argument of 'context' and a second argument of 'content'"
+    rusty_message = """\
   × 'missing_content_block_with_context' is decorated with takes_context=True
   │ so it must have a first argument of 'context' and a second argument of
   │ 'content'
@@ -101,26 +65,15 @@ def test_simple_block_tag_missing_content_takes_context():
    ·                          ╰── loaded here
    ╰────
 """
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
 
-def test_simple_block_tag_missing_end_tag():
+def test_simple_block_tag_missing_end_tag(assert_parse_error):
     template = "{% load repeat from custom_tags %}{% repeat 3 %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Unclosed tag on line 1: 'repeat'. Looking for one of: endrepeat."
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == """\
+    django_message = "Unclosed tag on line 1: 'repeat'. Looking for one of: endrepeat."
+    rusty_message = """\
   × Unclosed 'repeat' tag. Looking for one of: endrepeat
    ╭────
  1 │ {% load repeat from custom_tags %}{% repeat 3 %}
@@ -128,26 +81,15 @@ def test_simple_block_tag_missing_end_tag():
    ·                                          ╰── started here
    ╰────
 """
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
 
-def test_simple_block_tag_end_tag_only():
+def test_simple_block_tag_end_tag_only(assert_parse_error):
     template = "{% load repeat from custom_tags %}{% endrepeat %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == "Invalid block tag on line 1: 'endrepeat'. Did you forget to register or load this tag?"
-    )
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == """\
+    django_message = "Invalid block tag on line 1: 'endrepeat'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag endrepeat
    ╭────
  1 │ {% load repeat from custom_tags %}{% endrepeat %}
@@ -155,6 +97,8 @@ def test_simple_block_tag_end_tag_only():
    ·                                          ╰── unexpected tag
    ╰────
 """
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
 
@@ -216,20 +160,10 @@ def test_simple_block_tag_invalid_argument():
     )
 
 
-def test_simple_block_tag_argument_syntax_error():
+def test_simple_block_tag_argument_syntax_error(assert_parse_error):
     template = "{% load repeat from custom_tags %}{% repeat a= %}{% endrepeat %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Could not parse the remainder: '=' from 'a='"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    assert (
-        str(exc_info.value)
-        == """\
+    django_message = "Could not parse the remainder: '=' from 'a='"
+    rusty_message = """\
   × Incomplete keyword argument
    ╭────
  1 │ {% load repeat from custom_tags %}{% repeat a= %}{% endrepeat %}
@@ -237,6 +171,8 @@ def test_simple_block_tag_argument_syntax_error():
    ·                                              ╰── here
    ╰────
 """
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
     )
 
 

@@ -1,8 +1,3 @@
-import pytest
-from django.template import engines
-from django.template.exceptions import TemplateSyntaxError
-
-
 def test_render_variable(assert_render):
     template = "{{ foo }}"
     assert_render(template=template, context={"foo": 3}, expected="3")
@@ -33,18 +28,10 @@ def test_render_attribute_int(assert_render):
     assert_render(template=template, context={"foo": {1: 3}}, expected="3")
 
 
-def test_render_variable_hyphen():
+def test_render_variable_hyphen(assert_parse_error):
     template = "{{ foo-1 }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Could not parse the remainder: '-1' from 'foo-1'"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '-1' from 'foo-1'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {{ foo-1 }}
@@ -52,21 +39,15 @@ def test_render_variable_hyphen():
    ·      ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_render_attribute_negative_int():
+def test_render_attribute_negative_int(assert_parse_error):
     template = "{{ foo.-1 }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Could not parse the remainder: '-1' from 'foo.-1'"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '-1' from 'foo.-1'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {{ foo.-1 }}
@@ -74,21 +55,15 @@ def test_render_attribute_negative_int():
    ·         ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_render_invalid_variable():
+def test_render_invalid_variable(assert_parse_error):
     template = "{{ & }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "Could not parse the remainder: '&' from '&'"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Could not parse the remainder: '&' from '&'"
+    rusty_message = """\
   × Expected a valid variable name
    ╭────
  1 │ {{ & }}
@@ -96,7 +71,9 @@ def test_render_invalid_variable():
    ·    ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_render_variable_callable(assert_render):

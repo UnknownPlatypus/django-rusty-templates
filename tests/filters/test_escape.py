@@ -1,8 +1,3 @@
-import pytest
-from django.template import engines
-from django.template.exceptions import TemplateSyntaxError
-
-
 def test_escape(assert_render):
     template = "{{ html|escape }}"
     html = "<p>Hello World!</p>"
@@ -10,18 +5,10 @@ def test_escape(assert_render):
     assert_render(template=template, context={"html": html}, expected=escaped)
 
 
-def test_escape_with_argument():
+def test_escape_with_argument(assert_parse_error):
     template = "{{ html|escape:invalid }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "escape requires 1 arguments, 2 provided"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "escape requires 1 arguments, 2 provided"
+    rusty_message = """\
   × escape filter does not take an argument
    ╭────
  1 │ {{ html|escape:invalid }}
@@ -29,7 +16,9 @@ def test_escape_with_argument():
    ·                   ╰── unexpected argument
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_escape_missing_value(assert_render):

@@ -1,7 +1,3 @@
-import pytest
-from django.template import engines, TemplateSyntaxError
-
-
 def test_upper_string(assert_render):
     template = "{{ var|upper }}"
     var = "foo"
@@ -21,18 +17,10 @@ def test_upper_integer(assert_render):
     assert_render(template=template, context={"var": var}, expected=uppered)
 
 
-def test_upper_with_argument():
+def test_upper_with_argument(assert_parse_error):
     template = "{{ var|upper:arg }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "upper requires 1 arguments, 2 provided"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "upper requires 1 arguments, 2 provided"
+    rusty_message = """\
   × upper filter does not take an argument
    ╭────
  1 │ {{ var|upper:arg }}
@@ -40,7 +28,9 @@ def test_upper_with_argument():
    ·               ╰── unexpected argument
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_upper_unicode(assert_render):

@@ -1,26 +1,13 @@
-import pytest
-from django.template import engines
-from django.template.exceptions import TemplateSyntaxError
-
-
 def test_autoescape_off(assert_render):
     html = "<p>Hello World!</p>"
     template = "{% autoescape off %}{{ html }}{% endautoescape %}"
     assert_render(template=template, context={"html": html}, expected=html)
 
 
-def test_missing_argument():
+def test_missing_argument(assert_parse_error):
     template = "{% autoescape %}{{ html }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "'autoescape' tag requires exactly one argument."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "'autoescape' tag requires exactly one argument."
+    rusty_message = """\
   × 'autoescape' tag missing an 'on' or 'off' argument.
    ╭────
  1 │ {% autoescape %}{{ html }}
@@ -28,21 +15,15 @@ def test_missing_argument():
    ·              ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_invalid_argument():
+def test_invalid_argument(assert_parse_error):
     template = "{% autoescape foo %}{{ html }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "'autoescape' argument should be 'on' or 'off'"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "'autoescape' argument should be 'on' or 'off'"
+    rusty_message = """\
   × 'autoescape' argument should be 'on' or 'off'.
    ╭────
  1 │ {% autoescape foo %}{{ html }}
@@ -50,21 +31,15 @@ def test_invalid_argument():
    ·                ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_extra_argument():
+def test_extra_argument(assert_parse_error):
     template = "{% autoescape on off %}{{ html }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    assert str(exc_info.value) == "'autoescape' tag requires exactly one argument."
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "'autoescape' tag requires exactly one argument."
+    rusty_message = """\
   × 'autoescape' tag requires exactly one argument.
    ╭────
  1 │ {% autoescape on off %}{{ html }}
@@ -72,24 +47,17 @@ def test_extra_argument():
    ·                  ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_missing_endautoescape():
+def test_missing_endautoescape(assert_parse_error):
     template = "{% autoescape off %}{{ html }}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = (
+    django_message = (
         "Unclosed tag on line 1: 'autoescape'. Looking for one of: endautoescape."
     )
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    rusty_message = """\
   × Unclosed 'autoescape' tag. Looking for one of: endautoescape
    ╭────
  1 │ {% autoescape off %}{{ html }}
@@ -97,22 +65,15 @@ def test_missing_endautoescape():
    ·           ╰── started here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
-def test_wrong_end_tag():
+def test_wrong_end_tag(assert_parse_error):
     template = "{% autoescape off %}{{ html }}{% endverbatim %}{% endautoescape %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "Invalid block tag on line 1: 'endverbatim', expected 'endautoescape'. Did you forget to register or load this tag?"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Invalid block tag on line 1: 'endverbatim', expected 'endautoescape'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag endverbatim, expected endautoescape
    ╭────
  1 │ {% autoescape off %}{{ html }}{% endverbatim %}{% endautoescape %}
@@ -121,7 +82,9 @@ def test_wrong_end_tag():
    ·           ╰── start tag
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
 
 
 def test_endautoescape_argument(assert_render):
@@ -154,19 +117,10 @@ def test_autoescape_url(assert_render):
     assert_render(template=template, context={}, expected="/")
 
 
-def test_unexpected_end_tag():
+def test_unexpected_end_tag(assert_parse_error):
     template = "{% endautoescape %}"
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["django"].from_string(template)
-
-    expected = "Invalid block tag on line 1: 'endautoescape'. Did you forget to register or load this tag?"
-    assert str(exc_info.value) == expected
-
-    with pytest.raises(TemplateSyntaxError) as exc_info:
-        engines["rusty"].from_string(template)
-
-    expected = """\
+    django_message = "Invalid block tag on line 1: 'endautoescape'. Did you forget to register or load this tag?"
+    rusty_message = """\
   × Unexpected tag endautoescape
    ╭────
  1 │ {% endautoescape %}
@@ -174,4 +128,6 @@ def test_unexpected_end_tag():
    ·          ╰── unexpected tag
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_parse_error(
+        template=template, django_message=django_message, rusty_message=rusty_message
+    )
