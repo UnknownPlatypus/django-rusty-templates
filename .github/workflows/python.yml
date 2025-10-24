@@ -125,10 +125,13 @@ jobs:
         diff --unified main_test_output branch_test_output >> diff_result || true
         if [ "$(cat diff_result | wc -l)" -gt 0 ]; then
           {
-            echo "ℹ️ **changes detected** running Django test suite. (+$(cat diff_result | grep "^+" | wc -l) -$(cat diff_result | grep "^-" | wc -l))"
-            printf '```diff\n'
+            echo "<details><summary>"
+            echo "ℹ️ <b>changes detected</b> running Django test suite. (+$(cat diff_result | grep "^+" | wc -l) -$(cat diff_result | grep "^-" | wc -l))"
+            echo "</summary>"
+            printf '\n```diff\n'
             cat diff_result
             printf '```\n'
+            echo "</details>"
           } >> test-diff-result
         else
           echo "✅ no changes detected running Django test suite." >> test-diff-result
