@@ -119,8 +119,8 @@ jobs:
     - name: Compare test suites & generate comment
       id: generate-comment
       run: |
-        echo '<!-- generated-comment ecosystem -->' >> test_diff_result
-        printf "### \`pr\` vs \`main\` Django test suite diff\n" >> test_diff_result
+        echo '<!-- generated-comment ecosystem -->' >> test-diff-result
+        printf "### \`pr\` vs \`main\` Django test suite diff\n" >> test-diff-result
 
         diff --unified main_test_output branch_test_output >> diff_result || true
         if [ "$(cat diff_result | wc -l)" -gt 0 ]; then
@@ -129,26 +129,24 @@ jobs:
             printf '```diff\n'
             cat diff_result
             printf '```\n'
-          } >> test_diff_result
+          } >> test-diff-result
         else
-          echo "✅ no changes detected running Django test suite." >> test_diff_result
+          echo "✅ no changes detected running Django test suite." >> test-diff-result
         fi
-        cat test_diff_result
+        cat test-diff-result
 
-    - name: Find existing comment
-      uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0
-      if: steps.generate-comment.outcome == 'success'
-      id: find-comment
+    - name: Upload test diff result
+      uses: actions/upload-artifact@v4
       with:
-        issue-number: ${{ github.event.pull_request.number }}
-        comment-author: "github-actions[bot]"
-        body-includes: "<!-- generated-comment ecosystem -->"
+        name: test-diff-result
+        path: test-diff-result
 
-    - name: Create or update comment
-      if: steps.find-comment.outcome == 'success'
-      uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
+    - name: Store pr-number
+      run: |
+        echo ${{ github.event.number }} > pr-number
+
+    - name: Upload pr-number
+      uses: actions/upload-artifact@v4
       with:
-        comment-id: ${{ steps.find-comment.outputs.comment-id }}
-        issue-number: ${{ github.event.pull_request.number }}
-        body-path: test_diff_result
-        edit-mode: replace
+        name: pr-number
+        path: pr-number
