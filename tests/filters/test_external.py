@@ -46,11 +46,12 @@ def test_resolve_filter_arg_error(assert_render_error):
    ·                    ╰── 3
    ╰────
 """
-    assert_render_error(
-        template="""\
+    template = """\
 {% load multiply from custom_filters %}
 {{ num|multiply:foo.bar.1b.baz }}
-""",
+"""
+    assert_render_error(
+        template=template,
         context={"num": 2, "foo": {"bar": 3}},
         exception=VariableDoesNotExist,
         django_message=django_message,
