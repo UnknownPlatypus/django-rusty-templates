@@ -211,7 +211,7 @@ def test_render_for_loop_invalid_parentloop_variable(assert_render):
     assert_render(template=template, context={"y": y}, expected=expected)
 
 
-def test_render_for_loop_parentloop():
+def test_render_for_loop_parentloop(template_engine):
     template = """
     {% for x in xs %}
         {{ forloop.counter }}: {{ x }}
@@ -220,8 +220,7 @@ def test_render_for_loop_parentloop():
         {% endfor %}
     {% endfor %}
     """
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
+    template_obj = template_engine.from_string(template)
 
     xs = ["x1", "x2", "x3"]
     ys = ["y1", "y2"]
@@ -243,12 +242,7 @@ def test_render_for_loop_parentloop():
                 lines.append(line)
         return "\n".join(lines)
 
-    assert (
-        strip_whitespace_lines(django_template.render({"xs": xs, "ys": ys})) == expected
-    )
-    assert (
-        strip_whitespace_lines(rust_template.render({"xs": xs, "ys": ys})) == expected
-    )
+    assert strip_whitespace_lines(template_obj.render({"xs": xs, "ys": ys})) == expected
 
 
 def test_render_for_loop_empty(assert_render):
@@ -495,22 +489,9 @@ def test_unexpected_expression_after_reversed(assert_parse_error):
     )
 
 
-def test_render_for_loop_unpack_tuple_mismatch():
-    template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    l = [(1, 2, 3), ("foo", "bar")]
-
-    with pytest.raises(ValueError) as exc_info:
-        django_template.render({"l": l})
-
-    assert str(exc_info.value) == "Need 3 values to unpack in for loop; got 2. "
-
-    with pytest.raises(ValueError) as exc_info:
-        rust_template.render({"l": l})
-
-    expected = """\
+def test_render_for_loop_unpack_tuple_mismatch(assert_render_error):
+    django_message = "Need 3 values to unpack in for loop; got 2. "
+    rusty_message = """\
   × Need 3 values to unpack; got 2.
    ╭─[1:8]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -520,25 +501,18 @@ def test_render_for_loop_unpack_tuple_mismatch():
  2 │ {% endfor %}
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [(1, 2, 3), ("foo", "bar")]},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_render_for_loop_unpack_tuple_invalid():
-    template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    l = [1]
-
-    with pytest.raises(ValueError) as exc_info:
-        django_template.render({"l": l})
-
-    assert str(exc_info.value) == "Need 3 values to unpack in for loop; got 1. "
-
-    with pytest.raises(ValueError) as exc_info:
-        rust_template.render({"l": l})
-
-    expected = """\
+def test_render_for_loop_unpack_tuple_invalid(assert_render_error):
+    django_message = "Need 3 values to unpack in for loop; got 1. "
+    rusty_message = """\
   × Need 3 values to unpack; got 1.
    ╭─[1:8]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -548,25 +522,18 @@ def test_render_for_loop_unpack_tuple_invalid():
  2 │ {% endfor %}
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [1]},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_render_for_loop_unpack_tuple_iteration_error():
-    template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    l = [BrokenIterator()]
-
-    with pytest.raises(ZeroDivisionError) as exc_info:
-        django_template.render({"l": l})
-
-    assert str(exc_info.value) == "division by zero"
-
-    with pytest.raises(ZeroDivisionError) as exc_info:
-        rust_template.render({"l": l})
-
-    expected = """\
+def test_render_for_loop_unpack_tuple_iteration_error(assert_render_error):
+    django_message = "division by zero"
+    rusty_message = """\
   × division by zero
    ╭─[1:19]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -575,25 +542,18 @@ def test_render_for_loop_unpack_tuple_iteration_error():
  2 │ {% endfor %}
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [BrokenIterator()]},
+        exception=ZeroDivisionError,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_render_for_loop_unpack_tuple_broken_iterator():
-    template = "{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    l = [BrokenIterator2()]
-
-    with pytest.raises(ZeroDivisionError) as exc_info:
-        django_template.render({"l": l})
-
-    assert str(exc_info.value) == "division by zero"
-
-    with pytest.raises(ZeroDivisionError) as exc_info:
-        rust_template.render({"l": l})
-
-    expected = """\
+def test_render_for_loop_unpack_tuple_broken_iterator(assert_render_error):
+    django_message = "division by zero"
+    rusty_message = """\
   × division by zero
    ╭─[1:19]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -602,25 +562,18 @@ def test_render_for_loop_unpack_tuple_broken_iterator():
  2 │ {% endfor %}
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [BrokenIterator2()]},
+        exception=ZeroDivisionError,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_render_for_loop_unpack_string():
-    template = "{% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    l = [(1, 2, 3), ("foo", "bar")]
-
-    with pytest.raises(ValueError) as exc_info:
-        django_template.render({"l": l})
-
-    assert str(exc_info.value) == "Need 2 values to unpack in for loop; got 1. "
-
-    with pytest.raises(ValueError) as exc_info:
-        rust_template.render({"l": l})
-
-    expected = """\
+def test_render_for_loop_unpack_string(assert_render_error):
+    django_message = "Need 2 values to unpack in for loop; got 1. "
+    rusty_message = """\
   × Need 2 values to unpack; got 1.
    ╭────
  1 │ {% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}
@@ -629,7 +582,13 @@ def test_render_for_loop_unpack_string():
    ·          ╰── unpacked here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}",
+        context={"l": [(1, 2, 3), ("foo", "bar")]},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
 def test_render_for_loop_invalid_variable(assert_parse_error):
@@ -712,20 +671,9 @@ def test_render_missing_endfor_tag_after_empty(assert_parse_error):
     )
 
 
-def test_render_for_loop_not_iterable():
-    template = "{% for x in a %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(TypeError) as exc_info:
-        django_template.render({"a": 1})
-
-    assert str(exc_info.value) == "'int' object is not iterable"
-
-    with pytest.raises(TypeError) as exc_info:
-        rust_template.render({"a": 1})
-
-    expected = """\
+def test_render_for_loop_not_iterable(assert_render_error):
+    django_message = "'int' object is not iterable"
+    rusty_message = """\
   × 'int' object is not iterable
    ╭────
  1 │ {% for x in a %}{{ x }}{% endfor %}
@@ -733,23 +681,18 @@ def test_render_for_loop_not_iterable():
    ·             ╰── here
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x in a %}{{ x }}{% endfor %}",
+        context={"a": 1},
+        exception=TypeError,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_render_for_loop_iteration_error():
-    template = "{% for x in a %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(ZeroDivisionError) as exc_info:
-        django_template.render({"a": BrokenIterator()})
-
-    assert str(exc_info.value) == "division by zero"
-
-    with pytest.raises(ZeroDivisionError) as exc_info:
-        rust_template.render({"a": BrokenIterator()})
-
-    expected = """\
+def test_render_for_loop_iteration_error(assert_render_error):
+    django_message = "division by zero"
+    rusty_message = """\
   × division by zero
    ╭────
  1 │ {% for x in a %}{{ x }}{% endfor %}
@@ -757,24 +700,18 @@ def test_render_for_loop_iteration_error():
    ·             ╰── while iterating this
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x in a %}{{ x }}{% endfor %}",
+        context={"a": BrokenIterator()},
+        exception=ZeroDivisionError,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_render_for_loop_body_error():
-    template = "{% for x in a %}{% for y in 'b' %}{{ x|add:z }}{% endfor %}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({"a": [1]})
-
-    error = "Failed lookup for key [z] in [{'True': True, 'False': False, 'None': None}, {'a': [1]}]"
-    assert str(exc_info.value) == error
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({"a": [1]})
-
-    expected = """\
+def test_render_for_loop_body_error(assert_render_error):
+    django_message = "Failed lookup for key [z] in [{'True': True, 'False': False, 'None': None}, {'a': [1]}]"
+    rusty_message = """\
   × Failed lookup for key [z] in {"False": False, "None": None, "True": True,
   │ "a": [1], "x": 1, "y": 'b'}
    ╭────
@@ -783,24 +720,18 @@ def test_render_for_loop_body_error():
    ·                                            ╰── key
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x in a %}{% for y in 'b' %}{{ x|add:z }}{% endfor %}{% endfor %}",
+        context={"a": [1]},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_render_for_loop_missing():
-    template = "{% for x in a|default:b %}{{ x }}{% endfor %}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({})
-
-    error = "Failed lookup for key [b] in [{'True': True, 'False': False, 'None': None}, {}]"
-    assert str(exc_info.value) == error
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({})
-
-    expected = """\
+def test_render_for_loop_missing(assert_render_error):
+    django_message = "Failed lookup for key [b] in [{'True': True, 'False': False, 'None': None}, {}]"
+    rusty_message = """\
   × Failed lookup for key [b] in {"False": False, "None": None, "True": True}
    ╭────
  1 │ {% for x in a|default:b %}{{ x }}{% endfor %}
@@ -808,24 +739,18 @@ def test_render_for_loop_missing():
    ·                       ╰── key
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x in a|default:b %}{{ x }}{% endfor %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
 
 
-def test_missing_argument_after_for_loop():
-    template = "{% for x in a %}{{ x }}{% endfor %}{{ y|default:x }}"
-    django_template = engines["django"].from_string(template)
-    rust_template = engines["rusty"].from_string(template)
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        django_template.render({"a": "b"})
-
-    error = "Failed lookup for key [x] in [{'True': True, 'False': False, 'None': None}, {'a': 'b'}]"
-    assert str(exc_info.value) == error
-
-    with pytest.raises(VariableDoesNotExist) as exc_info:
-        rust_template.render({"a": "b"})
-
-    expected = """\
+def test_missing_argument_after_for_loop(assert_render_error):
+    django_message = "Failed lookup for key [x] in [{'True': True, 'False': False, 'None': None}, {'a': 'b'}]"
+    rusty_message = """\
   × Failed lookup for key [x] in {"False": False, "None": None, "True": True,
   │ "a": 'b'}
    ╭────
@@ -834,4 +759,10 @@ def test_missing_argument_after_for_loop():
    ·                                                 ╰── key
    ╰────
 """
-    assert str(exc_info.value) == expected
+    assert_render_error(
+        template="{% for x in a %}{{ x }}{% endfor %}{{ y|default:x }}",
+        context={"a": "b"},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
+    )
