@@ -101,29 +101,28 @@ def test_simple_block_tag_end_tag_only(assert_parse_error):
 
 
 def test_simple_block_tag_missing_argument(assert_render_error):
-    assert_render_error(
-        template="{% load repeat from custom_tags %}{% repeat five %}{% endrepeat %}",
-        context={},
-        exception=TypeError,
-        django_message="can't multiply sequence by non-int of type 'str'",
-        rusty_message="""\
+    django_message = "can't multiply sequence by non-int of type 'str'"
+    rusty_message = """\
   × can't multiply sequence by non-int of type 'str'
    ╭────
  1 │ {% load repeat from custom_tags %}{% repeat five %}{% endrepeat %}
    ·                                   ────────┬────────
    ·                                           ╰── here
    ╰────
-""",
+"""
+
+    assert_render_error(
+        template="{% load repeat from custom_tags %}{% repeat five %}{% endrepeat %}",
+        context={},
+        exception=TypeError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_simple_block_tag_invalid_argument(assert_render_error):
-    assert_render_error(
-        template="{% load repeat from custom_tags %}{% repeat five|default:five %}{% endrepeat %}",
-        context={},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [five] in [{'True': True, 'False': False, 'None': None}, {}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [five] in [{'True': True, 'False': False, 'None': None}, {}]"
+    rusty_message = """\
   × Failed lookup for key [five] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -131,7 +130,13 @@ def test_simple_block_tag_invalid_argument(assert_render_error):
    ·                                                          ──┬─
    ·                                                            ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% load repeat from custom_tags %}{% repeat five|default:five %}{% endrepeat %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
@@ -152,12 +157,8 @@ def test_simple_block_tag_argument_syntax_error(assert_parse_error):
 
 
 def test_simple_block_tag_content_render_error(assert_render_error):
-    assert_render_error(
-        template="{% load repeat from custom_tags %}{% repeat 2 %}{{ foo|default:bar }}{% endrepeat %}",
-        context={},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]"
+    rusty_message = """\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -165,5 +166,11 @@ def test_simple_block_tag_content_render_error(assert_render_error):
    ·                                                                ─┬─
    ·                                                                 ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% load repeat from custom_tags %}{% repeat 2 %}{{ foo|default:bar }}{% endrepeat %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )

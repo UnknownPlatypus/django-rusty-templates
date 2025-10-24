@@ -50,19 +50,21 @@ def test_add_no_argument(assert_parse_error):
 
 
 def test_argument_not_integer(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:bar }}",
-        context={"foo": "test", "bar": "not an integer"},
-        exception=ValueError,
-        django_message="invalid literal for int() with base 10: 'not an integer'",
-        rusty_message="""\
+    django_message = "invalid literal for int() with base 10: 'not an integer'"
+    rusty_message = """\
   × Couldn't convert argument (not an integer) to integer
    ╭────
  1 │ {{ foo|center:bar }}
    ·               ─┬─
    ·                ╰── argument
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:bar }}",
+        context={"foo": "test", "bar": "not an integer"},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
@@ -115,240 +117,268 @@ def test_center_by_bool(assert_render, foo, expected):
 
 
 def test_center_argument_is_negative_float_as_string(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:bar }}",
-        context={"foo": "test", "bar": "-5.5"},
-        exception=ValueError,
-        django_message="invalid literal for int() with base 10: '-5.5'",
-        rusty_message="""\
+    django_message = "invalid literal for int() with base 10: '-5.5'"
+    rusty_message = """\
   × Couldn't convert argument (-5.5) to integer
    ╭────
  1 │ {{ foo|center:bar }}
    ·               ─┬─
    ·                ╰── argument
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:bar }}",
+        context={"foo": "test", "bar": "-5.5"},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_int_bigger_than_isize_max(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:9223372036854775808 }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer 9223372036854775808 is too large
    ╭────
  1 │ {{ foo|center:9223372036854775808 }}
    ·               ─────────┬─────────
    ·                        ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:9223372036854775808 }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_int_smaller_than_isize_min(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:-9223372036854775809 }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer -9223372036854775809 is too large
    ╭────
  1 │ {{ foo|center:-9223372036854775809 }}
    ·               ──────────┬─────────
    ·                         ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:-9223372036854775809 }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_int_bigger_than_isize_max_string(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:'9223372036854775808' }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer 9223372036854775808 is too large
    ╭────
  1 │ {{ foo|center:'9223372036854775808' }}
    ·               ──────────┬──────────
    ·                         ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:'9223372036854775808' }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_int_smaller_than_isize_min_string(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:'-9223372036854775809' }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer -9223372036854775809 is too large
    ╭────
  1 │ {{ foo|center:'-9223372036854775809' }}
    ·               ───────────┬──────────
    ·                          ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:'-9223372036854775809' }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_int_bigger_than_isize_max_python(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:width }}",
-        context={"foo": "test", "width": 9223372036854775808},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer 9223372036854775808 is too large
    ╭────
  1 │ {{ foo|center:width }}
    ·               ──┬──
    ·                 ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:width }}",
+        context={"foo": "test", "width": 9223372036854775808},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_int_smaller_than_isize_min_python(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:width }}",
-        context={"foo": "test", "width": -9223372036854775809},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer -9223372036854775809 is too large
    ╭────
  1 │ {{ foo|center:width }}
    ·               ──┬──
    ·                 ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:width }}",
+        context={"foo": "test", "width": -9223372036854775809},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_string(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:'foo' }}",
-        context={"foo": "test"},
-        exception=ValueError,
-        django_message="invalid literal for int() with base 10: 'foo'",
-        rusty_message="""\
+    django_message = "invalid literal for int() with base 10: 'foo'"
+    rusty_message = """\
   × Couldn't convert argument ('foo') to integer
    ╭────
  1 │ {{ foo|center:'foo' }}
    ·               ──┬──
    ·                 ╰── argument
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:'foo' }}",
+        context={"foo": "test"},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_float_bigger_than_isize_max(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:9223372036854775808.0 }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer 9223372036854775808 is too large
    ╭────
  1 │ {{ foo|center:9223372036854775808.0 }}
    ·               ──────────┬──────────
    ·                         ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:9223372036854775808.0 }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_float_smaller_than_isize_min(assert_render_error):
     # Note this float literal is equivalent to -9223372036854777856.0
     # because of limitations of float accuracy
-    assert_render_error(
-        template="{{ foo|center:-9223372036854776833.0 }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="Python int too large to convert to C ssize_t",
-        rusty_message="""\
+    django_message = "Python int too large to convert to C ssize_t"
+    rusty_message = """\
   × Integer -9223372036854777856 is too large
    ╭────
  1 │ {{ foo|center:-9223372036854776833.0 }}
    ·               ───────────┬──────────
    ·                          ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:-9223372036854776833.0 }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_float_inf(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:1e310 }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="cannot convert float infinity to integer",
-        rusty_message="""\
+    django_message = "cannot convert float infinity to integer"
+    rusty_message = """\
   × Couldn't convert float (inf) to integer
    ╭────
  1 │ {{ foo|center:1e310 }}
    ·               ──┬──
    ·                 ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:1e310 }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_float_negative_inf(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:-1e310 }}",
-        context={"foo": "test"},
-        exception=OverflowError,
-        django_message="cannot convert float infinity to integer",
-        rusty_message="""\
+    django_message = "cannot convert float infinity to integer"
+    rusty_message = """\
   × Couldn't convert float (-inf) to integer
    ╭────
  1 │ {{ foo|center:-1e310 }}
    ·               ───┬──
    ·                  ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:-1e310 }}",
+        context={"foo": "test"},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_float_inf_python(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:width }}",
-        context={"foo": "test", "width": float("inf")},
-        exception=OverflowError,
-        django_message="cannot convert float infinity to integer",
-        rusty_message="""\
+    django_message = "cannot convert float infinity to integer"
+    rusty_message = """\
   × Couldn't convert float (inf) to integer
    ╭────
  1 │ {{ foo|center:width }}
    ·               ──┬──
    ·                 ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:width }}",
+        context={"foo": "test", "width": float("inf")},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_center_argument_float_negative_inf_python(assert_render_error):
-    assert_render_error(
-        template="{{ foo|center:width }}",
-        context={"foo": "test", "width": float("-inf")},
-        exception=OverflowError,
-        django_message="cannot convert float infinity to integer",
-        rusty_message="""\
+    django_message = "cannot convert float infinity to integer"
+    rusty_message = """\
   × Couldn't convert float (-inf) to integer
    ╭────
  1 │ {{ foo|center:width }}
    ·               ──┬──
    ·                 ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|center:width }}",
+        context={"foo": "test", "width": float("-inf")},
+        exception=OverflowError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )

@@ -490,12 +490,8 @@ def test_unexpected_expression_after_reversed(assert_parse_error):
 
 
 def test_render_for_loop_unpack_tuple_mismatch(assert_render_error):
-    assert_render_error(
-        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
-        context={"l": [(1, 2, 3), ("foo", "bar")]},
-        exception=ValueError,
-        django_message="Need 3 values to unpack in for loop; got 2. ",
-        rusty_message="""\
+    django_message = "Need 3 values to unpack in for loop; got 2. "
+    rusty_message = """\
   × Need 3 values to unpack; got 2.
    ╭─[1:8]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -504,17 +500,19 @@ def test_render_for_loop_unpack_tuple_mismatch(assert_render_error):
    ·           ╰── unpacked here
  2 │ {% endfor %}
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [(1, 2, 3), ("foo", "bar")]},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_render_for_loop_unpack_tuple_invalid(assert_render_error):
-    assert_render_error(
-        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
-        context={"l": [1]},
-        exception=ValueError,
-        django_message="Need 3 values to unpack in for loop; got 1. ",
-        rusty_message="""\
+    django_message = "Need 3 values to unpack in for loop; got 1. "
+    rusty_message = """\
   × Need 3 values to unpack; got 1.
    ╭─[1:8]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -523,17 +521,19 @@ def test_render_for_loop_unpack_tuple_invalid(assert_render_error):
    ·           ╰── unpacked here
  2 │ {% endfor %}
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [1]},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_render_for_loop_unpack_tuple_iteration_error(assert_render_error):
-    assert_render_error(
-        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
-        context={"l": [BrokenIterator()]},
-        exception=ZeroDivisionError,
-        django_message="division by zero",
-        rusty_message="""\
+    django_message = "division by zero"
+    rusty_message = """\
   × division by zero
    ╭─[1:19]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -541,17 +541,19 @@ def test_render_for_loop_unpack_tuple_iteration_error(assert_render_error):
    ·                   ╰── while unpacking this
  2 │ {% endfor %}
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [BrokenIterator()]},
+        exception=ZeroDivisionError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_render_for_loop_unpack_tuple_broken_iterator(assert_render_error):
-    assert_render_error(
-        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
-        context={"l": [BrokenIterator2()]},
-        exception=ZeroDivisionError,
-        django_message="division by zero",
-        rusty_message="""\
+    django_message = "division by zero"
+    rusty_message = """\
   × division by zero
    ╭─[1:19]
  1 │ {% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}
@@ -559,17 +561,19 @@ def test_render_for_loop_unpack_tuple_broken_iterator(assert_render_error):
    ·                   ╰── while iterating this
  2 │ {% endfor %}
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x, y, z in l %}{{ x }}-{{ y }}-{{ z }}\n{% endfor %}",
+        context={"l": [BrokenIterator2()]},
+        exception=ZeroDivisionError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_render_for_loop_unpack_string(assert_render_error):
-    assert_render_error(
-        template="{% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}",
-        context={"l": [(1, 2, 3), ("foo", "bar")]},
-        exception=ValueError,
-        django_message="Need 2 values to unpack in for loop; got 1. ",
-        rusty_message="""\
+    django_message = "Need 2 values to unpack in for loop; got 1. "
+    rusty_message = """\
   × Need 2 values to unpack; got 1.
    ╭────
  1 │ {% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}
@@ -577,7 +581,13 @@ def test_render_for_loop_unpack_string(assert_render_error):
    ·          │       ╰── from here
    ·          ╰── unpacked here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x, y in 'foo' %}{{ x }}{{ y }}{% endfor %}",
+        context={"l": [(1, 2, 3), ("foo", "bar")]},
+        exception=ValueError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
@@ -662,46 +672,46 @@ def test_render_missing_endfor_tag_after_empty(assert_parse_error):
 
 
 def test_render_for_loop_not_iterable(assert_render_error):
-    assert_render_error(
-        template="{% for x in a %}{{ x }}{% endfor %}",
-        context={"a": 1},
-        exception=TypeError,
-        django_message="'int' object is not iterable",
-        rusty_message="""\
+    django_message = "'int' object is not iterable"
+    rusty_message = """\
   × 'int' object is not iterable
    ╭────
  1 │ {% for x in a %}{{ x }}{% endfor %}
    ·             ┬
    ·             ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x in a %}{{ x }}{% endfor %}",
+        context={"a": 1},
+        exception=TypeError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_render_for_loop_iteration_error(assert_render_error):
-    assert_render_error(
-        template="{% for x in a %}{{ x }}{% endfor %}",
-        context={"a": BrokenIterator()},
-        exception=ZeroDivisionError,
-        django_message="division by zero",
-        rusty_message="""\
+    django_message = "division by zero"
+    rusty_message = """\
   × division by zero
    ╭────
  1 │ {% for x in a %}{{ x }}{% endfor %}
    ·             ┬
    ·             ╰── while iterating this
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x in a %}{{ x }}{% endfor %}",
+        context={"a": BrokenIterator()},
+        exception=ZeroDivisionError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_render_for_loop_body_error(assert_render_error):
-    assert_render_error(
-        template="{% for x in a %}{% for y in 'b' %}{{ x|add:z }}{% endfor %}{% endfor %}",
-        context={"a": [1]},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [z] in [{'True': True, 'False': False, 'None': None}, {'a': [1]}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [z] in [{'True': True, 'False': False, 'None': None}, {'a': [1]}]"
+    rusty_message = """\
   × Failed lookup for key [z] in {"False": False, "None": None, "True": True,
   │ "a": [1], "x": 1, "y": 'b'}
    ╭────
@@ -709,34 +719,38 @@ def test_render_for_loop_body_error(assert_render_error):
    ·                                            ┬
    ·                                            ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x in a %}{% for y in 'b' %}{{ x|add:z }}{% endfor %}{% endfor %}",
+        context={"a": [1]},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_render_for_loop_missing(assert_render_error):
-    assert_render_error(
-        template="{% for x in a|default:b %}{{ x }}{% endfor %}",
-        context={},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [b] in [{'True': True, 'False': False, 'None': None}, {}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [b] in [{'True': True, 'False': False, 'None': None}, {}]"
+    rusty_message = """\
   × Failed lookup for key [b] in {"False": False, "None": None, "True": True}
    ╭────
  1 │ {% for x in a|default:b %}{{ x }}{% endfor %}
    ·                       ┬
    ·                       ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x in a|default:b %}{{ x }}{% endfor %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_missing_argument_after_for_loop(assert_render_error):
-    assert_render_error(
-        template="{% for x in a %}{{ x }}{% endfor %}{{ y|default:x }}",
-        context={"a": "b"},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [x] in [{'True': True, 'False': False, 'None': None}, {'a': 'b'}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [x] in [{'True': True, 'False': False, 'None': None}, {'a': 'b'}]"
+    rusty_message = """\
   × Failed lookup for key [x] in {"False": False, "None": None, "True": True,
   │ "a": 'b'}
    ╭────
@@ -744,5 +758,11 @@ def test_missing_argument_after_for_loop(assert_render_error):
    ·                                                 ┬
    ·                                                 ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% for x in a %}{{ x }}{% endfor %}{{ y|default:x }}",
+        context={"a": "b"},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )

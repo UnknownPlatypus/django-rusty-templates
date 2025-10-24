@@ -21,19 +21,22 @@ def test_simple_tag_double_missing_variable(assert_render):
 
 
 def test_simple_tag_multiply_missing_variables(assert_render_error):
-    assert_render_error(
-        template="{% load multiply from custom_tags %}{% multiply foo bar eggs %}",
-        context={},
-        exception=TypeError,
-        django_message="can't multiply sequence by non-int of type 'str'",
-        rusty_message="""\
+    django_message = "can't multiply sequence by non-int of type 'str'"
+    rusty_message = """\
   × can't multiply sequence by non-int of type 'str'
    ╭────
  1 │ {% load multiply from custom_tags %}{% multiply foo bar eggs %}
    ·                                     ─────────────┬─────────────
    ·                                                  ╰── here
    ╰────
-""",
+"""
+
+    assert_render_error(
+        template="{% load multiply from custom_tags %}{% multiply foo bar eggs %}",
+        context={},
+        exception=TypeError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
@@ -145,19 +148,22 @@ def test_simple_tag_takes_context_getitem_missing(assert_render_error):
     from zoneinfo import ZoneInfo
 
     source_time = datetime(2025, 8, 31, 9, 14, tzinfo=ZoneInfo("Europe/London"))
-    assert_render_error(
-        template="{% load local_time from custom_tags %}{% local_time dt %}",
-        context={"dt": source_time},
-        exception=KeyError,
-        django_message="'timezone'",
-        rusty_message="""\
+    django_message = "'timezone'"
+    rusty_message = """\
   × 'timezone'
    ╭────
  1 │ {% load local_time from custom_tags %}{% local_time dt %}
    ·                                       ─────────┬─────────
    ·                                                ╰── here
    ╰────
-""",
+"""
+
+    assert_render_error(
+        template="{% load local_time from custom_tags %}{% local_time dt %}",
+        context={"dt": source_time},
+        exception=KeyError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
@@ -414,29 +420,27 @@ def test_simple_tag_invalid_filter_in_keyword_argument(assert_parse_error):
 
 
 def test_simple_tag_render_error(assert_render_error):
-    assert_render_error(
-        template="{% load custom_tags %}{% combine operation='divide' %}",
-        context={},
-        exception=RuntimeError,
-        django_message="Unknown operation",
-        rusty_message="""\
+    django_message = "Unknown operation"
+    rusty_message = """\
   × Unknown operation
    ╭────
  1 │ {% load custom_tags %}{% combine operation='divide' %}
    ·                       ────────────────┬───────────────
    ·                                       ╰── here
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% load custom_tags %}{% combine operation='divide' %}",
+        context={},
+        exception=RuntimeError,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_simple_tag_argument_error(assert_render_error):
-    assert_render_error(
-        template="{% load double from custom_tags %}{% double foo|default:bar %}",
-        context={},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]"
+    rusty_message = """\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -444,17 +448,19 @@ def test_simple_tag_argument_error(assert_render_error):
    ·                                                         ─┬─
    ·                                                          ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% load double from custom_tags %}{% double foo|default:bar %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
 def test_simple_tag_keyword_argument_error(assert_render_error):
-    assert_render_error(
-        template="{% load double from custom_tags %}{% double value=foo|default:bar %}",
-        context={},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {}]"
+    rusty_message = """\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True}
    ╭────
@@ -462,7 +468,13 @@ def test_simple_tag_keyword_argument_error(assert_render_error):
    ·                                                               ─┬─
    ·                                                                ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{% load double from custom_tags %}{% double value=foo|default:bar %}",
+        context={},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 

@@ -35,15 +35,8 @@ def test_load_and_render_multiple_filter_libraries(assert_render):
 
 
 def test_resolve_filter_arg_error(assert_render_error):
-    assert_render_error(
-        template="""\
-{% load multiply from custom_filters %}
-{{ num|multiply:foo.bar.1b.baz }}
-""",
-        context={"num": 2, "foo": {"bar": 3}},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [1b] in 3",
-        rusty_message="""\
+    django_message = "Failed lookup for key [1b] in 3"
+    rusty_message = """\
   × Failed lookup for key [1b] in 3
    ╭─[2:17]
  1 │ {% load multiply from custom_filters %}
@@ -52,7 +45,16 @@ def test_resolve_filter_arg_error(assert_render_error):
    ·                    │     ╰── key
    ·                    ╰── 3
    ╰────
+"""
+    assert_render_error(
+        template="""\
+{% load multiply from custom_filters %}
+{{ num|multiply:foo.bar.1b.baz }}
 """,
+        context={"num": 2, "foo": {"bar": 3}},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 

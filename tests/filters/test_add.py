@@ -12,12 +12,8 @@ def test_add_no_variable(assert_render):
 
 
 def test_add_no_argument(assert_render_error):
-    assert_render_error(
-        template="{{ foo|add:bar }}",
-        context={"foo": 1},
-        exception=VariableDoesNotExist,
-        django_message="Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {'foo': 1}]",
-        rusty_message="""\
+    django_message = "Failed lookup for key [bar] in [{'True': True, 'False': False, 'None': None}, {'foo': 1}]"
+    rusty_message = """\
   × Failed lookup for key [bar] in {"False": False, "None": None, "True":
   │ True, "foo": 1}
    ╭────
@@ -25,7 +21,13 @@ def test_add_no_argument(assert_render_error):
    ·            ─┬─
    ·             ╰── key
    ╰────
-""",
+"""
+    assert_render_error(
+        template="{{ foo|add:bar }}",
+        context={"foo": 1},
+        exception=VariableDoesNotExist,
+        django_message=django_message,
+        rusty_message=rusty_message,
     )
 
 
