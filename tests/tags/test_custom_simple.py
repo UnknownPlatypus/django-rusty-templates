@@ -144,9 +144,6 @@ def test_simple_tag_takes_context_setitem_in_loop(assert_render):
 
 
 def test_simple_tag_takes_context_getitem_missing(assert_render_error):
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-
     source_time = datetime(2025, 8, 31, 9, 14, tzinfo=ZoneInfo("Europe/London"))
     django_message = "'timezone'"
     rusty_message = """\
