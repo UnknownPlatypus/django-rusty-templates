@@ -120,13 +120,13 @@ jobs:
       id: generate-comment
       run: |
         echo '<!-- generated-comment ecosystem -->' >> test-diff-result
-        printf "### \`pr\` vs \`main\` Django test suite diff\n" >> test-diff-result
+        echo "### Django test suite conformance" >> test-diff-result
 
         diff --unified main_test_output branch_test_output >> diff_result || true
         if [ "$(cat diff_result | wc -l)" -gt 0 ]; then
           {
             echo "<details><summary>"
-            echo "ℹ️ <b>changes detected</b> running Django test suite. (+$(cat diff_result | grep "^+" | wc -l) -$(cat diff_result | grep "^-" | wc -l))"
+            echo "ℹ️ Test pass rate changed from <code>$(cat diff_result | grep "^-" | grep -oP '\d+\.\d+%')</code> to <code>$(cat diff_result | grep "^+" | grep -oP '\d+\.\d+%')</code>."
             echo "</summary>"
             printf '\n```diff\n'
             cat diff_result

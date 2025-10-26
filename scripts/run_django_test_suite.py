@@ -2,10 +2,10 @@
 
 import argparse
 import os
-import pathlib
 import re
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
@@ -48,18 +48,30 @@ def patch_django_test_suite():
         log("Patches already applied or not applicable.")
 
 
-def parse_test_output(output: str) -> str:
+def _format_summary(summary: Counter[str]) -> str:
+    return " / ".join([f"{count} {test}" for test, count in sorted(summary.items())])
+
+
+def _format_passing_test_pct(summary: Counter[str]) -> str:
+    return f"Django test suite passing: {summary.get('OK', 0) / summary.total() * 100:.2f}%"
+
+
+def parse_test_output(output: str) -> tuple[Counter[str], str]:
     """Keep individual test outcome lines and normalize them."""
     lines = []
+    summary = Counter()
     for line in output.splitlines():
         line = line.strip()
         if line.startswith(_SKIPPED_TESTS):
             continue
         if line.endswith(("ERROR", "FAIL", "ok")):
             line = re.sub(r"<lambda> at 0x.*>", "<lambda> at ..>", line)
+            summary[line.split("... ", maxsplit=1)[1].upper()] += 1
             lines.append(line.strip())
 
-    return "\n".join(sorted(lines))
+    return summary, "\n".join(
+        [_format_passing_test_pct(summary), _format_summary(summary), *sorted(lines)]
+    ) + "\n"
 
 
 def main():
@@ -68,7 +80,7 @@ def main():
     )
     parser.add_argument(
         "--parsed-output",
-        type=pathlib.Path,
+        type=Path,
         help="The file to write parsed output to",
     )
     args = parser.parse_args()
@@ -114,11 +126,12 @@ def main():
     )
     print(result.stderr, end="", file=sys.stderr)
 
+    summary, formatted_test_output = parse_test_output(result.stderr)
+    log(_format_passing_test_pct(summary))
+    log(_format_summary(summary))
+
     if args.parsed_output:
-        parsed = parse_test_output(result.stderr)
-        with open(args.parsed_output, "w") as f:
-            f.write(parsed)
-            f.write("\n")
+        Path(args.parsed_output).write_text(formatted_test_output)
         log(f"Parsed output written to {args.parsed_output}")
 
     log("Done !")
