@@ -101,9 +101,8 @@ jobs:
 
     - name: Checkout main
       uses: actions/checkout@v5
-      # TODO: switch to main later but for now the script does not exist on main
-#      with:
-#        ref: main
+      with:
+        ref: main
 
     - name: Run Django test suite (main)
       run: uv run scripts/run_django_test_suite.py --parsed-output main_test_output
