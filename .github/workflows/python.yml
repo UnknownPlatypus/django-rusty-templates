@@ -136,6 +136,7 @@ jobs:
         else
           echo "✅ no changes detected running Django test suite." >> test-diff-result
         fi
+        cat test-diff-result > "$GITHUB_STEP_SUMMARY"
         cat test-diff-result
 
     - name: Upload test diff result
