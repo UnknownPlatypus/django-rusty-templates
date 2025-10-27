@@ -33,7 +33,7 @@ def log(header: str):
 def patch_django_test_suite():
     # Check if patch is already applied
     result = subprocess.run(
-        ["git", "apply", "--check", "--quiet", str(PATCH_FILE)],
+        ["git", "apply", "--check", str(PATCH_FILE)],
         cwd=DJANGO_REPO_CACHE,
         capture_output=True,
     )

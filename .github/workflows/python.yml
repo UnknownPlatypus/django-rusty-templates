@@ -134,7 +134,12 @@ jobs:
             echo "</details>"
           } >> test-diff-result
         else
-          echo "✅ no changes detected running Django test suite." >> test-diff-result
+          {
+            echo "✅ no changes detected running Django test suite."
+            printf '\n```diff\n'
+            head -n2 branch_test_output
+            printf '```\n'
+          } >> test-diff-result
         fi
         cat test-diff-result > "$GITHUB_STEP_SUMMARY"
         cat test-diff-result
