@@ -23,7 +23,7 @@ use super::{Evaluate, FileName, Render, RenderResult, Resolve, ResolveFailures, 
 use crate::error::{AnnotatePyErr, PyRenderError, RenderError, TupleUnpackError};
 use crate::parse::{
     Block, CsrfToken, Cycle, CycleValue, Extends, FirstOf, For, GetBlocks, IfCondition, Include,
-    IncludeTemplateName, Lorem, NamedCycle, Now, SilentNamedCycle, SimpleBlockTag, SimpleCycle,
+    IncludeTemplateName, Lorem, NamedCycle, Now, QueryString, SilentNamedCycle, SimpleBlockTag, SimpleCycle,
     SimpleTag, Tag, TagElement, TokenTree, Url,
 };
 use crate::path::construct_relative_path;
@@ -846,6 +846,7 @@ impl Render for Tag {
             Self::Now(now) => now.render(py, template, template_name, context)?,
             Self::FirstOf(firstof) => firstof.render(py, template, template_name, context)?,
             Self::TemplateTag(template_tag) => Cow::Borrowed(template_tag.output()),
+            Self::QueryString(qs) => qs.render(py, template, context)?,
         })
     }
 }
@@ -1538,6 +1539,97 @@ fn build_kwargs<'py>(
         py_kwargs.set_item(key, value)?;
     }
     Ok(py_kwargs)
+}
+
+static QUERY_DICT: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+
+impl Render for QueryString {
+    fn render<'t>(
+        &self,
+        py: Python<'_>,
+        template: TemplateString<'t>,
+        context: &mut Context,
+    ) -> RenderResult<'t> {
+        let query_dict_class = QUERY_DICT.import(py, "django.http", "QueryDict")?;
+
+        // Get the base query dict: either the explicit argument or request.GET
+        let base = match &self.query_dict {
+            Some(element) => {
+                match element.resolve(
+                    py,
+                    template,
+                    context,
+                    ResolveFailures::IgnoreVariableDoesNotExist,
+                )? {
+                    Some(content) => content.to_py(py),
+                    None => query_dict_class.call0()?,
+                }
+            }
+            None => match context.request.as_ref() {
+                Some(request) => request.getattr(py, "GET")?.into_bound(py),
+                None => query_dict_class.call0()?,
+            },
+        };
+
+        // Copy the query dict so we can mutate it
+        let params = base.call_method0("copy")?;
+
+        // Apply kwargs
+        for (key, value) in &self.kwargs {
+            let resolved = value.resolve(
+                py,
+                template,
+                context,
+                ResolveFailures::IgnoreVariableDoesNotExist,
+            )?;
+            match resolved {
+                Some(Content::Py(obj)) if obj.is_none() => {
+                    // value is None -> delete the key if present
+                    if params.contains(key)? {
+                        params.call_method1("__delitem__", (key,))?;
+                    }
+                }
+                Some(content) => {
+                    let py_value = content.to_py(py);
+                    // Check if value is iterable (but not a string)
+                    let is_string = py_value.is_instance_of::<PyString>();
+                    if !is_string {
+                        if let Ok(iter) = py_value.try_iter() {
+                            let items: Vec<_> = iter.collect::<PyResult<Vec<_>>>()?;
+                            params.call_method1("setlist", (key, PyList::new(py, &items)?))?;
+                            continue;
+                        }
+                    }
+                    params.set_item(key, py_value)?;
+                }
+                None => {
+                    // Variable does not exist, treat as empty string
+                    params.set_item(key, PyString::intern(py, ""))?;
+                }
+            }
+        }
+
+        // Build the result: return "" if params are empty and the original
+        // query_dict was falsy (empty or not provided with no request.GET).
+        let is_empty = params.len()? == 0;
+        if is_empty && !base.is_truthy()? {
+            let content = Cow::Borrowed("");
+            return Ok(store_target_var(
+                py,
+                context,
+                content,
+                self.target_var.as_ref(),
+            ));
+        }
+        let query_string: String = params.call_method0("urlencode")?.extract()?;
+        let content = Cow::Owned(format!("?{query_string}"));
+        Ok(store_target_var(
+            py,
+            context,
+            content,
+            self.target_var.as_ref(),
+        ))
+    }
 }
 
 fn store_target_var<'t>(
