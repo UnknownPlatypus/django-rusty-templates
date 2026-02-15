@@ -378,6 +378,14 @@ pub struct Url {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct QueryString {
+    pub query_dict: Option<TagElement>,
+    pub kwargs: Vec<(String, TagElement)>,
+    pub target_var: Option<String>,
+    pub at: At,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum IfCondition {
     Variable(TagElement),
     And(Box<(Self, Self)>),
@@ -738,6 +746,7 @@ pub enum Tag {
     Now(Now),
     FirstOf(FirstOf),
     TemplateTag(TemplateTag),
+    QueryString(QueryString),
 }
 
 #[derive(PartialEq, Eq)]
@@ -1015,6 +1024,11 @@ pub enum ParseError {
     },
     #[error("Unexpected positional argument")]
     TooManyPositionalArguments {
+        #[label("here")]
+        at: SourceSpan,
+    },
+    #[error("'querystring' tag accepts at most one positional argument")]
+    QueryStringTooManyPositional {
         #[label("here")]
         at: SourceSpan,
     },
@@ -1588,6 +1602,7 @@ impl<'t, 'py> Parser<'t, 'py> {
             "templatetag" => Either::Left(TokenTree::Tag(Tag::TemplateTag(
                 lex_templatetag(self.template, tag.parts).map_err(ParseError::from)?,
             ))),
+            "querystring" => Either::Left(self.parse_querystring(at, tag.parts)?),
             tag_name => match self.external_tags.get(tag_name) {
                 Some(TagContext::Simple(context)) => {
                     Either::Left(self.parse_simple_tag(context, at, tag.parts)?)
@@ -1959,6 +1974,52 @@ impl<'t, 'py> Parser<'t, 'py> {
             asvar,
         };
         Ok(TokenTree::Tag(Tag::Url(url)))
+    }
+
+    fn parse_querystring(&self, at: At, parts: TagParts) -> Result<TokenTree, ParseError> {
+        let mut tokens: Vec<_> =
+            TagElementKwargLexer::new(self.template, parts).collect::<Result<Vec<_>, _>>()?;
+
+        tokens
+            .iter()
+            .for_each(|token| println!("{:?} -> {}", token, self.template.content(token.at)));
+        let tokens_count = tokens.len();
+
+        let target_var =
+            if tokens_count >= 2 && self.template.content(tokens[tokens_count - 2].at) == "as" {
+                let last = tokens.pop().expect("tokens should be length 2 or more");
+                tokens.pop();
+                Some(self.template.content(last.at).to_string())
+            } else {
+                None
+            };
+
+        let mut query_dict = None;
+        let mut kwargs = vec![];
+        for token in tokens {
+            let element = token.parse(self)?;
+            match token.kwarg {
+                None => {
+                    if query_dict.is_some() || !kwargs.is_empty() {
+                        return Err(ParseError::QueryStringTooManyPositional {
+                            at: token.at.into(),
+                        });
+                    }
+                    query_dict = Some(element);
+                }
+                Some(kwarg_at) => {
+                    let kwarg = self.template.content(kwarg_at).to_string();
+                    kwargs.push((kwarg, element));
+                }
+            }
+        }
+        let qs = QueryString {
+            query_dict,
+            kwargs,
+            target_var,
+            at,
+        };
+        Ok(TokenTree::Tag(Tag::QueryString(qs)))
     }
 
     fn parse_include(&self, at: At, parts: TagParts) -> Result<TokenTree, ParseError> {
