@@ -1131,20 +1131,24 @@ impl Render for QueryString {
         template: TemplateString<'t>,
         context: &mut Context,
     ) -> RenderResult<'t> {
-        let query_dict = match &self.query_dict {
-            Some(element) => match element.resolve(
-                py,
-                template,
-                context,
-                ResolveFailures::IgnoreVariableDoesNotExist,
-            )? {
-                Some(content) => content.to_py(py),
-                None => QUERY_DICT.import(py, "django.http", "QueryDict")?.call0()?,
-            },
-            None => match context.request.as_ref() {
-                Some(request) => request.getattr(py, "GET")?.into_bound(py),
-                None => QUERY_DICT.import(py, "django.http", "QueryDict")?.call0()?,
-            },
+        let resolved = match &self.query_dict {
+            Some(element) => element
+                .resolve(
+                    py,
+                    template,
+                    context,
+                    ResolveFailures::IgnoreVariableDoesNotExist,
+                )?
+                .map(|content| content.to_py(py)),
+            None => context
+                .request
+                .as_ref()
+                .map(|request| request.getattr(py, "GET").map(|get| get.into_bound(py)))
+                .transpose()?,
+        };
+        let query_dict = match resolved {
+            Some(qd) => qd,
+            None => QUERY_DICT.import(py, "django.http", "QueryDict")?.call0()?,
         };
 
         let params = query_dict.call_method0("copy")?;
