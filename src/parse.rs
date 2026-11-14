@@ -1253,11 +1253,6 @@ pub enum ParseError {
         #[label("here")]
         at: SourceSpan,
     },
-    #[error("'querystring' tag accepts at most one positional argument")]
-    QueryStringTooManyPositional {
-        #[label("here")]
-        at: SourceSpan,
-    },
     #[error("Unexpected keyword argument")]
     UnexpectedKeywordArgument {
         #[label("here")]
@@ -2466,29 +2461,24 @@ impl<'t, 'py> Parser<'t, 'py> {
     }
 
     fn parse_querystring(&self, at: At, parts: TagParts) -> Result<TokenTree, ParseError> {
-        let mut tokens: Vec<_> =
-            TagElementKwargLexer::new(self.template, parts).collect::<Result<Vec<_>, _>>()?;
-        let target_var = extract_as_variable(&mut tokens, &self.template)?;
-
-        let mut query_dict = None;
-        let mut kwargs = vec![];
-        for token in tokens {
-            let element = token.parse(self)?;
-            match token.kwarg {
-                None => {
-                    if query_dict.is_some() || !kwargs.is_empty() {
-                        return Err(ParseError::QueryStringTooManyPositional {
-                            at: token.at.into(),
-                        });
-                    }
-                    query_dict = Some(element);
-                }
-                Some(kwarg_at) => {
-                    let kwarg = self.template.content(kwarg_at).to_string();
-                    kwargs.push((kwarg, element));
-                }
-            }
-        }
+        // Django implements `querystring(context, query_dict=None, **kwargs)` as a simple tag,
+        // so we validate arguments against that signature. `func` is never called.
+        let signature = SimpleTagContext {
+            func: self.py.None().into_bound(self.py),
+            function_name: "querystring".to_string(),
+            takes_context: true,
+            params: vec!["query_dict".to_string()],
+            defaults_count: 1,
+            varargs: false,
+            kwonly: Vec::new(),
+            kwonly_defaults: HashSet::new(),
+            varkw: true,
+        };
+        let (mut args, mut kwargs, target_var) = self.parse_custom_tag_parts(parts, &signature)?;
+        let query_dict = args.pop().or_else(|| {
+            let index = kwargs.iter().position(|(name, _)| name == "query_dict")?;
+            Some(kwargs.remove(index).1)
+        });
         let qs = QueryString {
             query_dict,
             kwargs,

@@ -23,8 +23,8 @@ use super::{Evaluate, FileName, Render, RenderResult, Resolve, ResolveFailures, 
 use crate::error::{AnnotatePyErr, PyRenderError, RenderError, TupleUnpackError};
 use crate::parse::{
     Block, CsrfToken, Cycle, CycleValue, Extends, FirstOf, For, GetBlocks, IfCondition, Include,
-    IncludeTemplateName, Lorem, NamedCycle, Now, QueryString, SilentNamedCycle, SimpleBlockTag, SimpleCycle,
-    SimpleTag, Tag, TagElement, TokenTree, Url,
+    IncludeTemplateName, Lorem, NamedCycle, Now, QueryString, SilentNamedCycle, SimpleBlockTag,
+    SimpleCycle, SimpleTag, Tag, TagElement, TokenTree, Url,
 };
 use crate::path::construct_relative_path;
 use crate::template::django_rusty_templates::{
@@ -846,7 +846,7 @@ impl Render for Tag {
             Self::Now(now) => now.render(py, template, template_name, context)?,
             Self::FirstOf(firstof) => firstof.render(py, template, template_name, context)?,
             Self::TemplateTag(template_tag) => Cow::Borrowed(template_tag.output()),
-            Self::QueryString(qs) => qs.render(py, template, context)?,
+            Self::QueryString(qs) => qs.render(py, template, template_name, context)?,
         })
     }
 }
@@ -1541,75 +1541,76 @@ fn build_kwargs<'py>(
     Ok(py_kwargs)
 }
 
-static QUERY_DICT: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+static ITERABLE: PyOnceLock<Py<PyAny>> = PyOnceLock::new();
+
+/// Port of `django.template.defaulttags.querystring`.
+fn querystring<'py>(
+    py: Python<'py>,
+    request: Option<&Py<PyAny>>,
+    query_dict: Bound<'py, PyAny>,
+    kwargs: Vec<(&String, Bound<'py, PyAny>)>,
+) -> PyResult<String> {
+    let query_dict = if query_dict.is_none() {
+        match request {
+            Some(request) => request.bind(py).getattr("GET")?,
+            None => {
+                return Err(PyAttributeError::new_err(
+                    "'Context' object has no attribute 'request'",
+                ));
+            }
+        }
+    } else {
+        query_dict
+    };
+    let iterable = ITERABLE.import(py, "collections.abc", "Iterable")?;
+    let params = query_dict.call_method0("copy")?;
+    for (key, value) in kwargs {
+        if value.is_none() {
+            if params.contains(key)? {
+                params.del_item(key)?;
+            }
+        } else if value.is_instance(iterable)? && !value.is_instance_of::<PyString>() {
+            params.call_method1("setlist", (key, value))?;
+        } else {
+            params.set_item(key, value)?;
+        }
+    }
+    if !params.is_truthy()? && !query_dict.is_truthy()? {
+        return Ok(String::new());
+    }
+    let query_string = params.call_method0("urlencode")?;
+    Ok(format!("?{query_string}"))
+}
 
 impl Render for QueryString {
     fn render<'t>(
         &self,
         py: Python<'_>,
         template: TemplateString<'t>,
+        template_name: &'t FileName,
         context: &mut Context,
     ) -> RenderResult<'t> {
-        let resolved = match &self.query_dict {
-            Some(element) => element
-                .resolve(
-                    py,
-                    template,
-                    context,
-                    ResolveFailures::IgnoreVariableDoesNotExist,
-                )?
-                .map(|content| content.to_py(py)),
-            None => context
-                .request
-                .as_ref()
-                .map(|request| request.getattr(py, "GET").map(|get| get.into_bound(py)))
-                .transpose()?,
+        let query_dict = match &self.query_dict {
+            Some(query_dict) => build_arg(py, template, template_name, context, query_dict)?,
+            None => py.None().into_bound(py),
         };
-        let query_dict = match resolved {
-            Some(qd) => qd,
-            None => QUERY_DICT.import(py, "django.http", "QueryDict")?.call0()?,
-        };
-
-        let params = query_dict.call_method0("copy")?;
-        for (key, value) in &self.kwargs {
-            match value.resolve(
-                py,
-                template,
-                context,
-                ResolveFailures::IgnoreVariableDoesNotExist,
-            )? {
-                Some(Content::Py(obj)) if obj.is_none() => {
-                    if params.contains(key)? {
-                        params.call_method1("__delitem__", (key,))?;
-                    }
-                }
-                Some(content) => {
-                    let py_value = content.to_py(py);
-                    if !py_value.is_instance_of::<PyString>()
-                        && let Ok(iter) = py_value.try_iter()
-                    {
-                        let items: Vec<_> = iter.collect::<PyResult<Vec<_>>>()?;
-                        params.call_method1("setlist", (key, PyList::new(py, &items)?))?;
-                        continue;
-                    }
-                    params.set_item(key, py_value)?;
-                }
-                None => {
-                    params.set_item(key, PyString::intern(py, ""))?;
-                }
-            }
-        }
-
-        let content = if params.len()? == 0 && !query_dict.is_truthy()? {
-            Cow::Borrowed("")
+        let kwargs = self
+            .kwargs
+            .iter()
+            .map(|(key, value)| Ok((key, build_arg(py, template, template_name, context, value)?)))
+            .collect::<Result<Vec<_>, PyRenderError>>()?;
+        let content = querystring(py, context.request.as_ref(), query_dict, kwargs)
+            .map_err(|error| error.annotate(py, self.at, "here", template))?;
+        // Like any simple tag, the output is only escaped when rendered directly.
+        let content = if context.autoescape && self.target_var.is_none() {
+            html_escape::encode_quoted_attribute(&content).into_owned()
         } else {
-            let query_string: String = params.call_method0("urlencode")?.extract()?;
-            Cow::Owned(format!("?{query_string}"))
+            content
         };
         Ok(store_target_var(
             py,
             context,
-            content,
+            Cow::Owned(content),
             self.target_var.as_ref(),
         ))
     }
