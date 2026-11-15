@@ -30,7 +30,8 @@ dev = [
     "pytest-cov",
     "pytest-codspeed",
     "ruff",
-    "pre-commit",
+    # filelock fixes need Python 3.11+, and pre-commit runs on pre-commit.ci anyway.
+    "pre-commit; python_version >= '3.11'",
     "inline-snapshot",
     "time-machine",
 ]
@@ -54,3 +55,6 @@ Nd = "Nd" # This is a valid identifier for `hypothesis.strategies.characters.cat
 
 [tool.inline-snapshot]
 format-command="ruff format --stdin-filename {filename}"
+
+[tool.uv]
+exclude-newer = "5 days"

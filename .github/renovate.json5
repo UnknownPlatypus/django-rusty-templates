@@ -1,0 +1,35 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:best-practices",
+    "helpers:pinGitHubActionDigestsToSemver",
+  ],
+  minimumReleaseAge: "5 days",
+  osvVulnerabilityAlerts: true,
+  dependencyDashboardOSVVulnerabilitySummary: "unresolved",
+  vulnerabilityAlerts: {
+    labels: ["security"],
+  },
+  packageRules: [
+    {
+      // The MSRV follows the toolchain minor, bump both in one PR.
+      groupName: "Rust toolchain and MSRV",
+      matchDepNames: ["rust", "msrv"],
+    },
+    {
+      matchDepNames: ["msrv"],
+      matchUpdateTypes: ["patch"],
+      enabled: false,
+    },
+  ],
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: ["/^Cargo\\.toml$/"],
+      matchStrings: ['rust-version = "(?<currentValue>[\\d.]+)"'],
+      depNameTemplate: "msrv",
+      packageNameTemplate: "rust-lang/rust",
+      datasourceTemplate: "github-releases",
+    },
+  ],
+}
