@@ -1,11 +1,7 @@
+use memchr::{memchr, memchr2_iter};
+
 use crate::types::{At, TemplateString};
 use crate::{DelimitedToken, END_TAG_LEN, START_TAG_LEN};
-
-enum EndTag {
-    Variable,
-    Tag,
-    Comment,
-}
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum TokenType {
@@ -75,6 +71,30 @@ pub struct Lexer<'t> {
     rest: &'t str,
     byte: usize,
     verbatim: Option<&'t str>,
+    // The token found while looking for the end of the text before it.
+    pending: Option<Token>,
+    // Where the last failed search for each closer stopped: the end, or a newline if one ends it.
+    // An opener of that kind before it would rescan a subset of those bytes and fail too.
+    unclosed_variable_before: usize,
+    unclosed_tag_before: usize,
+    unclosed_comment_before: usize,
+}
+
+/// Searches `content`, the bytes following an opener, for `closer` followed by `}`.
+///
+/// Returns the length of `content` up to the end of the closer,
+/// or the offset where the search stopped when there is none.
+fn find_closer(content: &[u8], closer: u8, newline_ends_search: bool) -> Result<usize, usize> {
+    for index in memchr2_iter(b'}', b'\n', content) {
+        if content[index] == b'\n' {
+            if newline_ends_search {
+                return Err(index);
+            }
+        } else if index > 0 && content[index - 1] == closer {
+            return Ok(index + 1);
+        }
+    }
+    Err(content.len())
 }
 
 impl<'t> Lexer<'t> {
@@ -84,23 +104,60 @@ impl<'t> Lexer<'t> {
             rest: template.0,
             byte: 0,
             verbatim: None,
+            pending: None,
+            unclosed_variable_before: 0,
+            unclosed_tag_before: 0,
+            unclosed_comment_before: 0,
         }
     }
 
-    fn lex_text(&mut self, skip: usize) -> Token {
-        let rest = &self.rest[skip..];
-        let next_tag = rest.find("{%");
-        let next_variable = rest.find("{{");
-        let next_comment = rest.find("{#");
-        let next = [next_tag, next_variable, next_comment]
-            .iter()
-            .filter_map(|n| *n)
-            .min();
-        let len = next.map_or(self.rest.len(), |n| skip + n);
-        self.rest = &self.rest[len..];
-        let at = (self.byte, len);
-        self.byte += len;
-        Token::text(at)
+    /// Finds the first variable, tag or comment at or after `self.byte`.
+    fn find_delimited(&mut self) -> Option<Token> {
+        let template = self.template.0.as_bytes();
+        // https://code.djangoproject.com/ticket/35899 turns this off for `{% %}`.
+        let newline_ends_search = true;
+        let mut from = self.byte;
+        while let Some(start) = memchr(b'{', &template[from..]).map(|n| from + n) {
+            from = start + 1;
+            let (closer, unclosed_before, new_token): (_, _, fn(At) -> Token) =
+                match template.get(from) {
+                    Some(b'{') => (b'}', &mut self.unclosed_variable_before, Token::variable),
+                    Some(b'%') => (b'%', &mut self.unclosed_tag_before, Token::tag),
+                    Some(b'#') => (b'#', &mut self.unclosed_comment_before, Token::comment),
+                    _ => continue,
+                };
+            if start < *unclosed_before {
+                continue;
+            }
+            let content = start + START_TAG_LEN;
+            match find_closer(&template[content..], closer, newline_ends_search) {
+                Ok(len) => return Some(new_token((start, START_TAG_LEN + len))),
+                Err(stopped) => *unclosed_before = content + stopped,
+            }
+        }
+        None
+    }
+
+    fn lex_text_or_delimited(&mut self) -> Token {
+        let Some(token) = self.find_delimited() else {
+            return self.lex_text_to_end();
+        };
+        let (start, len) = token.at;
+        let text_len = start - self.byte;
+        let text = Token::text((self.byte, text_len));
+        self.rest = &self.rest[text_len + len..];
+        self.byte = start + len;
+        if token.token_type == TokenType::Tag {
+            let verbatim = token.content(self.template).trim();
+            if verbatim == "verbatim" || verbatim.starts_with("verbatim ") {
+                self.verbatim = Some(verbatim);
+            }
+        }
+        if text_len == 0 {
+            return token;
+        }
+        self.pending = Some(token);
+        text
     }
 
     fn lex_text_to_end(&mut self) -> Token {
@@ -109,33 +166,6 @@ impl<'t> Lexer<'t> {
         self.byte += len;
         self.rest = "";
         Token::text(at)
-    }
-
-    fn lex_tag(&mut self, end_tag: EndTag) -> Token {
-        let end_str = match end_tag {
-            EndTag::Variable => "}}",
-            EndTag::Tag => "%}",
-            EndTag::Comment => "#}",
-        };
-        // This can be removed if https://code.djangoproject.com/ticket/35899 lands
-        let line = self
-            .rest
-            .split_once('\n')
-            .map_or(self.rest, |(line, _)| line);
-        let Some(n) = line[START_TAG_LEN..].find(end_str) else {
-            // Not closed on this line: treat the `{` as text and retry from the next character.
-            return self.lex_text(1);
-        };
-        let len = START_TAG_LEN + n + end_str.len();
-        self.rest = &self.rest[len..];
-
-        let at = (self.byte, len);
-        self.byte += len;
-        match end_tag {
-            EndTag::Variable => Token::variable(at),
-            EndTag::Tag => Token::tag(at),
-            EndTag::Comment => Token::comment(at),
-        }
     }
 
     fn lex_verbatim(&mut self, verbatim: &'t str) -> Token {
@@ -180,29 +210,14 @@ impl Iterator for Lexer<'_> {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
+        if let Some(token) = self.pending.take() {
+            return Some(token);
+        }
         if self.rest.is_empty() {
             return None;
         }
         Some(match self.verbatim {
-            None => match self.rest.get(..START_TAG_LEN) {
-                Some("{{") => self.lex_tag(EndTag::Variable),
-                Some("{%") => {
-                    let tag = self.lex_tag(EndTag::Tag);
-                    if let Token {
-                        token_type: TokenType::Tag,
-                        ..
-                    } = tag
-                    {
-                        let verbatim = tag.content(self.template).trim();
-                        if verbatim == "verbatim" || verbatim.starts_with("verbatim ") {
-                            self.verbatim = Some(verbatim);
-                        }
-                    }
-                    tag
-                }
-                Some("{#") => self.lex_tag(EndTag::Comment),
-                _ => self.lex_text(0),
-            },
+            None => self.lex_text_or_delimited(),
             Some(verbatim) => self.lex_verbatim(verbatim),
         })
     }
@@ -297,6 +312,55 @@ mod tests {
     }
 
     #[test]
+    fn test_lex_unclosed_opener_is_text() {
+        let cases = [
+            ("x{%", vec![Token::text((0, 3))]),
+            ("{{#", vec![Token::text((0, 3))]),
+            ("{%}", vec![Token::text((0, 3))]),
+            ("{{ a\n}}", vec![Token::text((0, 7))]),
+            ("{% a\r\n b %}", vec![Token::text((0, 11))]),
+            ("{{% a %}", vec![Token::text((0, 1)), Token::tag((1, 7))]),
+            (
+                "{{ a {{ b {% c %}\n{{ d }}",
+                vec![
+                    Token::text((0, 10)),
+                    Token::tag((10, 7)),
+                    Token::text((17, 1)),
+                    Token::variable((18, 7)),
+                ],
+            ),
+        ];
+        for (template, expected) in cases {
+            let tokens: Vec<_> = Lexer::new(template.into()).collect();
+            assert_eq!(tokens, expected, "{template:?}");
+        }
+    }
+
+    #[test]
+    fn test_lex_first_closer_after_opener() {
+        let cases = [
+            ("{%%}", vec![Token::tag((0, 4))], vec![""]),
+            (
+                "{{}}}",
+                vec![Token::variable((0, 4)), Token::text((4, 1))],
+                vec!["", "}"],
+            ),
+            ("{{{ a }}", vec![Token::variable((0, 8))], vec!["{ a "]),
+        ];
+        for (template, expected, expected_contents) in cases {
+            let tokens: Vec<_> = Lexer::new(template.into()).collect();
+            assert_eq!(tokens, expected, "{template:?}");
+            assert_eq!(contents(template, tokens), expected_contents);
+        }
+    }
+
+    #[test]
+    fn test_find_closer_newline() {
+        assert_eq!(find_closer(b" a\n%}", b'%', true), Err(2));
+        assert_eq!(find_closer(b" a\n%}", b'%', false), Ok(5));
+    }
+
+    #[test]
     fn test_django_example() {
         let template = "text\n{% if test %}{{ varvalue }}{% endif %}{#comment {{not a var}} {%not a block%} #}end text";
         let lexer = Lexer::new(template.into());
@@ -341,6 +405,26 @@ mod tests {
         assert_eq!(
             contents(template, tokens),
             vec![" verbatim ", "{{bare   }}", " endverbatim "]
+        );
+    }
+
+    #[test]
+    fn test_verbatim_after_text() {
+        let template = "x{% verbatim %}{{ a }}{% endverbatim %}";
+        let lexer = Lexer::new(template.into());
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::text((0, 1)),
+                Token::tag((1, 14)),
+                Token::text((15, 7)),
+                Token::tag((22, 17)),
+            ]
+        );
+        assert_eq!(
+            contents(template, tokens),
+            vec!["x", " verbatim ", "{{ a }}", " endverbatim "]
         );
     }
 
@@ -531,9 +615,13 @@ mod tests {
         proptest!(ProptestConfig::with_cases(4096), |(template in template_strategy)| {
             let template = template.as_str();
             let mut end = 0;
+            let mut after_text = false;
             for token in Lexer::new(template.into()) {
                 let (start, len) = token.at;
                 prop_assert_eq!(start, end, "{:?} does not follow the previous token", token);
+                let is_text = token.token_type == TokenType::Text;
+                prop_assert!(!(after_text && is_text), "{:?} follows another text token", token);
+                after_text = is_text;
                 prop_assert!(len > 0, "{:?} is empty", token);
                 end = start + len;
                 prop_assert!(template.is_char_boundary(end), "{:?} ends inside a character", token);
