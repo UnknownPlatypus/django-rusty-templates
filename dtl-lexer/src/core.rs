@@ -480,4 +480,77 @@ mod tests {
         assert_eq!(Token::variable((34, 5)).trimmed_at(), (36, 1));
         assert_eq!(Token::comment((34, 5)).trimmed_at(), (36, 1));
     }
+
+    #[test]
+    fn test_lex_token_invariants() {
+        use proptest::prelude::*;
+
+        // Uniformly random strings almost never contain a closed tag, fragments do.
+        let fragment = prop::sample::select(vec![
+            "{%",
+            "%}",
+            "{{",
+            "}}",
+            "{#",
+            "#}",
+            "{",
+            "}",
+            "%",
+            "#",
+            " ",
+            "\t",
+            "\n",
+            "\r",
+            "\x0b",
+            "\x0c",
+            "\u{85}",
+            "\u{a0}",
+            "\u{2028}",
+            "\u{1c}",
+            "\u{1f}",
+            "verbatim",
+            "endverbatim",
+            "comment",
+            "endcomment",
+            "x",
+            "a b",
+            "é",
+            "\"",
+            "'",
+            "{% verbatim %}",
+            "{% endverbatim %}",
+            "{% verbatim x %}",
+            "{% endverbatim x %}",
+            "{{ v }}",
+            "{# c #}",
+            "{% t %}",
+        ]);
+        let template_strategy =
+            prop::collection::vec(fragment, 0..=40).prop_map(|fragments| fragments.concat());
+        // The default 256 cases miss the non-ASCII panic fixed in #588 every other run.
+        proptest!(ProptestConfig::with_cases(4096), |(template in template_strategy)| {
+            let template = template.as_str();
+            let mut end = 0;
+            for token in Lexer::new(template.into()) {
+                let (start, len) = token.at;
+                prop_assert_eq!(start, end, "{:?} does not follow the previous token", token);
+                prop_assert!(len > 0, "{:?} is empty", token);
+                end = start + len;
+                prop_assert!(template.is_char_boundary(end), "{:?} ends inside a character", token);
+
+                let (open, close) = match token.token_type {
+                    TokenType::Text => ("", ""),
+                    TokenType::Variable => ("{{", "}}"),
+                    TokenType::Tag => ("{%", "%}"),
+                    TokenType::Comment => ("{#", "#}"),
+                };
+                let inner = template[start..end]
+                    .strip_prefix(open)
+                    .and_then(|rest| rest.strip_suffix(close));
+                let content = token.content(template.into());
+                prop_assert_eq!(inner, Some(content), "{:?} lacks its delimiters", token);
+            }
+            prop_assert_eq!(end, template.len(), "the tokens stop before the end");
+        });
+    }
 }
