@@ -465,6 +465,7 @@ dependencies = [
 name = "dtl-lexer"
 version = "0.1.0"
 dependencies = [
+ "memchr",
  "miette",
  "num-bigint",
  "proptest",

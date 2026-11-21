@@ -1,6 +1,9 @@
+use memchr::memchr2_iter;
+
 use crate::types::{At, TemplateString};
 use crate::{DelimitedToken, END_TAG_LEN, START_TAG_LEN};
 
+#[derive(Clone, Copy)]
 enum EndTag {
     Variable,
     Tag,
@@ -75,6 +78,9 @@ pub struct Lexer<'t> {
     rest: &'t str,
     byte: usize,
     verbatim: Option<&'t str>,
+    // Indexed by `EndTag`: start tags of that kind before this byte have no end tag on their line.
+    // Searching again from each of them would make lexing quadratic.
+    unclosed_before: [usize; 3],
 }
 
 impl<'t> Lexer<'t> {
@@ -84,23 +90,54 @@ impl<'t> Lexer<'t> {
             rest: template.0,
             byte: 0,
             verbatim: None,
+            unclosed_before: [0; 3],
         }
     }
 
-    fn lex_text(&mut self, skip: usize) -> Token {
-        let rest = &self.rest[skip..];
-        let next_tag = rest.find("{%");
-        let next_variable = rest.find("{{");
-        let next_comment = rest.find("{#");
-        let next = [next_tag, next_variable, next_comment]
-            .iter()
-            .filter_map(|n| *n)
-            .min();
-        let len = next.map_or(self.rest.len(), |n| skip + n);
-        self.rest = &self.rest[len..];
-        let at = (self.byte, len);
-        self.byte += len;
-        Token::text(at)
+    /// The variable, tag or comment starting at `rest[start..]`, if it is closed on its line.
+    fn tag_at(&mut self, start: usize) -> Option<Token> {
+        let (end_tag, end_byte) = match self.rest.get(start..start + START_TAG_LEN)? {
+            "{{" => (EndTag::Variable, b'}'),
+            "{%" => (EndTag::Tag, b'%'),
+            "{#" => (EndTag::Comment, b'#'),
+            _ => return None,
+        };
+        let unclosed_before = &mut self.unclosed_before[end_tag as usize];
+        let byte = self.byte + start;
+        if byte < *unclosed_before {
+            return None;
+        }
+        let content = &self.rest.as_bytes()[start + START_TAG_LEN..];
+        // The newline can be ignored if https://code.djangoproject.com/ticket/35899 lands
+        let stop = memchr2_iter(b'}', b'\n', content)
+            .find(|&n| content[n] == b'\n' || (n > 0 && content[n - 1] == end_byte));
+        let Some(n) = stop.filter(|&n| content[n] == b'}') else {
+            // Start tags before the newline or the end of the template are unclosed too.
+            *unclosed_before = byte + START_TAG_LEN + stop.unwrap_or(content.len());
+            return None;
+        };
+        let at = (byte, START_TAG_LEN + n + 1);
+        Some(match end_tag {
+            EndTag::Variable => Token::variable(at),
+            EndTag::Tag => Token::tag(at),
+            EndTag::Comment => Token::comment(at),
+        })
+    }
+
+    fn lex_text_or_tag(&mut self) -> Token {
+        let rest = self.rest;
+        let tag = rest
+            .match_indices('{')
+            .find_map(|(start, _)| self.tag_at(start));
+        let token = match tag {
+            Some(tag) if tag.at.0 == self.byte => tag,
+            // Text runs up to the first closed tag, which the next call finds again.
+            Some(tag) => Token::text((self.byte, tag.at.0 - self.byte)),
+            None => Token::text((self.byte, rest.len())),
+        };
+        self.rest = &rest[token.at.1..];
+        self.byte += token.at.1;
+        token
     }
 
     fn lex_text_to_end(&mut self) -> Token {
@@ -109,33 +146,6 @@ impl<'t> Lexer<'t> {
         self.byte += len;
         self.rest = "";
         Token::text(at)
-    }
-
-    fn lex_tag(&mut self, end_tag: EndTag) -> Token {
-        let end_str = match end_tag {
-            EndTag::Variable => "}}",
-            EndTag::Tag => "%}",
-            EndTag::Comment => "#}",
-        };
-        // This can be removed if https://code.djangoproject.com/ticket/35899 lands
-        let line = self
-            .rest
-            .split_once('\n')
-            .map_or(self.rest, |(line, _)| line);
-        let Some(n) = line[START_TAG_LEN..].find(end_str) else {
-            // Not closed on this line: treat the `{` as text and retry from the next character.
-            return self.lex_text(1);
-        };
-        let len = START_TAG_LEN + n + end_str.len();
-        self.rest = &self.rest[len..];
-
-        let at = (self.byte, len);
-        self.byte += len;
-        match end_tag {
-            EndTag::Variable => Token::variable(at),
-            EndTag::Tag => Token::tag(at),
-            EndTag::Comment => Token::comment(at),
-        }
     }
 
     fn lex_verbatim(&mut self, verbatim: &'t str) -> Token {
@@ -184,25 +194,16 @@ impl Iterator for Lexer<'_> {
             return None;
         }
         Some(match self.verbatim {
-            None => match self.rest.get(..START_TAG_LEN) {
-                Some("{{") => self.lex_tag(EndTag::Variable),
-                Some("{%") => {
-                    let tag = self.lex_tag(EndTag::Tag);
-                    if let Token {
-                        token_type: TokenType::Tag,
-                        ..
-                    } = tag
-                    {
-                        let verbatim = tag.content(self.template).trim();
-                        if verbatim == "verbatim" || verbatim.starts_with("verbatim ") {
-                            self.verbatim = Some(verbatim);
-                        }
+            None => {
+                let token = self.lex_text_or_tag();
+                if token.token_type == TokenType::Tag {
+                    let verbatim = token.content(self.template).trim();
+                    if verbatim == "verbatim" || verbatim.starts_with("verbatim ") {
+                        self.verbatim = Some(verbatim);
                     }
-                    tag
                 }
-                Some("{#") => self.lex_tag(EndTag::Comment),
-                _ => self.lex_text(0),
-            },
+                token
+            }
             Some(verbatim) => self.lex_verbatim(verbatim),
         })
     }
@@ -548,6 +549,14 @@ mod proptests {
                 end += len;
             }
             prop_assert_eq!(end, template.len());
+        }
+
+        #[test]
+        fn no_text_token_follows_another_text_token(template in arb_template()) {
+            for pair in lex(&template).windows(2) {
+                let both_text = pair.iter().all(|token| token.token_type == TokenType::Text);
+                prop_assert!(!both_text);
+            }
         }
 
         #[test]
