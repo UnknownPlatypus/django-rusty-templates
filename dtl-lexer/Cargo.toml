@@ -6,6 +6,7 @@ rust-version.workspace = true
 license = "BSD-3-Clause"
 
 [dependencies]
+memchr = "2.8.2"
 miette.workspace = true
 num-bigint.workspace = true
 thiserror.workspace = true
