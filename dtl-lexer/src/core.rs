@@ -112,12 +112,11 @@ impl<'t> Lexer<'t> {
         }
     }
 
-    /// Finds the first variable, tag or comment at or after `self.byte`.
-    fn find_delimited(&mut self) -> Option<Token> {
+    /// Finds the first variable, tag or comment at or after `from`.
+    fn find_delimited(&mut self, mut from: usize) -> Option<Token> {
         let template = self.template.0.as_bytes();
         // https://code.djangoproject.com/ticket/35899 turns this off for `{% %}`.
         let newline_ends_search = true;
-        let mut from = self.byte;
         while let Some(start) = memchr(b'{', &template[from..]).map(|n| from + n) {
             from = start + 1;
             let (closer, unclosed_before, new_token): (_, _, fn(At) -> Token) =
@@ -140,20 +139,26 @@ impl<'t> Lexer<'t> {
     }
 
     fn lex_text_or_delimited(&mut self) -> Token {
-        let Some(token) = self.find_delimited() else {
+        let Some(token) = self.find_delimited(self.byte) else {
             return self.lex_text_to_end();
         };
-        let (start, len) = token.at;
-        let text_len = start - self.byte;
-        let text = Token::text((self.byte, text_len));
-        self.rest = &self.rest[text_len + len..];
-        self.byte = start + len;
         if token.token_type == TokenType::Tag {
             let verbatim = trim(token.content(self.template));
             if verbatim == "verbatim" || verbatim.starts_with("verbatim ") {
                 self.verbatim = Some(verbatim);
             }
         }
+        self.lex_text_before(token)
+    }
+
+    /// Returns the text before `token` and keeps `token` for the next call,
+    /// or returns `token` itself when no text precedes it.
+    fn lex_text_before(&mut self, token: Token) -> Token {
+        let (start, len) = token.at;
+        let text_len = start - self.byte;
+        let text = Token::text((self.byte, text_len));
+        self.rest = &self.rest[text_len + len..];
+        self.byte = start + len;
         if text_len == 0 {
             return token;
         }
@@ -171,38 +176,18 @@ impl<'t> Lexer<'t> {
 
     fn lex_verbatim(&mut self, verbatim: &'t str) -> Token {
         self.verbatim = None;
-
-        let mut index = 0;
-        loop {
-            let Some(start) = self.rest[index..].find("{%").map(|n| index + n) else {
-                return self.lex_text_to_end();
-            };
-            let inner_start = start + START_TAG_LEN;
-            let Some(end) = self.rest[inner_start..].find("%}").map(|n| inner_start + n) else {
-                return self.lex_text_to_end();
-            };
-            let inner = &self.rest[inner_start..end];
-            if inner.contains('\n') {
-                index = inner_start;
-                continue;
+        let mut from = self.byte;
+        // Like Django, every variable, tag or comment in the body consumes its bytes,
+        // so one of them can hide the end tag.
+        while let Some(token) = self.find_delimited(from) {
+            if token.token_type == TokenType::Tag
+                && trim(token.content(self.template)).strip_prefix("end") == Some(verbatim)
+            {
+                return self.lex_text_before(token);
             }
-            if trim(inner).strip_prefix("end") != Some(verbatim) {
-                index = end + END_TAG_LEN;
-                continue;
-            }
-            if start == 0 {
-                // Return the endverbatim tag since we have no text
-                let tag_len = end + END_TAG_LEN;
-                let at = (self.byte, tag_len);
-                self.byte += tag_len;
-                self.rest = &self.rest[tag_len..];
-                return Token::tag(at);
-            }
-            self.rest = &self.rest[start..];
-            let at = (self.byte, start);
-            self.byte += start;
-            return Token::text(at);
+            from = token.at.0 + token.at.1;
         }
+        self.lex_text_to_end()
     }
 }
 
@@ -318,6 +303,7 @@ mod tests {
             ("{{#", vec![Token::text((0, 3))]),
             ("{%}", vec![Token::text((0, 3))]),
             ("{{ a\n}}", vec![Token::text((0, 7))]),
+            ("{# a\n#}", vec![Token::text((0, 7))]),
             ("{% a\r\n b %}", vec![Token::text((0, 11))]),
             ("{{% a %}", vec![Token::text((0, 1)), Token::tag((1, 7))]),
             (
@@ -570,6 +556,30 @@ mod tests {
             contents(template, tokens),
             vec![" verbatim ", "Don't end verbatim"]
         );
+    }
+
+    #[test]
+    fn test_django_5_2_rules() {
+        use TokenType::{Tag, Text, Variable};
+
+        // Django 6.2 lexes every one of these differently, see ticket 35899.
+        let cases: [(&str, &[TokenType]); 5] = [
+            (
+                "{% comment %}{{ a }}{% endcomment %}",
+                &[Tag, Variable, Tag],
+            ),
+            ("{% verbatim %}{# {% endverbatim %} #}", &[Tag, Text]),
+            ("{% verbatim %}a{%\nendverbatim\n%}", &[Tag, Text]),
+            ("{% verbatim x %}a{% endverbatimx %}", &[Tag, Text]),
+            (
+                "{% verbatim\tx %}{{ a }}{% endverbatim x %}",
+                &[Tag, Variable, Tag],
+            ),
+        ];
+        for (template, expected) in cases {
+            let kinds: Vec<_> = Lexer::new(template.into()).map(|t| t.token_type).collect();
+            assert_eq!(kinds, expected, "{template:?}");
+        }
     }
 
     #[test]

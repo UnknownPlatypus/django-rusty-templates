@@ -3647,4 +3647,86 @@ mod tests {
             );
         });
     }
+
+    #[test]
+    fn test_lexer_matches_django_lexer() {
+        use dtl_lexer::python_compat::trim;
+        use proptest::prelude::*;
+
+        Python::initialize();
+        // Uniformly random strings almost never contain a closed tag, fragments do.
+        let fragment = prop::sample::select(vec![
+            "{%",
+            "%}",
+            "{{",
+            "}}",
+            "{#",
+            "#}",
+            "{",
+            "}",
+            "%",
+            "#",
+            " ",
+            "\t",
+            "\n",
+            "\r",
+            "\x0b",
+            "\x0c",
+            "\u{85}",
+            "\u{a0}",
+            "\u{2028}",
+            "\u{1c}",
+            "\u{1f}",
+            "verbatim",
+            "endverbatim",
+            "comment",
+            "endcomment",
+            "x",
+            "a b",
+            "é",
+            "\"",
+            "'",
+            "{% verbatim %}",
+            "{% endverbatim %}",
+            "{% verbatim x %}",
+            "{% endverbatim x %}",
+            "{{ v }}",
+            "{# c #}",
+            "{% t %}",
+        ]);
+        let template_strategy =
+            prop::collection::vec(fragment, 0..=40).prop_map(|fragments| fragments.concat());
+        proptest!(ProptestConfig::with_cases(4096), |(template in template_strategy)| {
+            let template_string = TemplateString(&template);
+            let tokens: Vec<_> = Lexer::new(template_string)
+                .map(|token| {
+                    let content = token.content(template_string);
+                    let (kind, content) = match token.token_type {
+                        TokenType::Text => ("TEXT", content),
+                        TokenType::Variable => ("VAR", trim(content)),
+                        TokenType::Tag => ("BLOCK", trim(content)),
+                        TokenType::Comment => ("COMMENT", trim(content)),
+                    };
+                    (kind.to_string(), content.to_string())
+                })
+                .collect();
+            Python::attach(|py| {
+                let lexer = py.import("django.template.base").unwrap().getattr("Lexer").unwrap();
+                let django_tokens = lexer.call1((&template,)).unwrap().call_method0("tokenize").unwrap();
+                let mut expected: Vec<(String, String)> = Vec::new();
+                for token in django_tokens.try_iter().unwrap() {
+                    let token = token.unwrap();
+                    let kind: String = token.getattr("token_type").unwrap().getattr("name").unwrap().extract().unwrap();
+                    let contents: String = token.getattr("contents").unwrap().extract().unwrap();
+                    // Django splits the body of a verbatim block into one text token per match.
+                    match expected.last_mut() {
+                        Some((last, text)) if last == "TEXT" && kind == "TEXT" => text.push_str(&contents),
+                        _ => expected.push((kind, contents)),
+                    }
+                }
+                prop_assert_eq!(tokens, expected);
+                Ok(())
+            })?;
+        });
+    }
 }
