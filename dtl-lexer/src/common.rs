@@ -3,6 +3,7 @@ use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
 use crate::cursor::Cursor;
+use crate::python_compat::is_whitespace;
 use crate::types::At;
 use crate::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 
@@ -109,6 +110,19 @@ impl Cursor<'_> {
         let content = trim_variable(self.rest());
         check_variable_attrs(content, self.pos())?;
         Ok(self.bump_bytes(content.len()))
+    }
+
+    /// Skips the whitespace after a token.
+    ///
+    /// Errors without consuming anything when anything else directly follows the token.
+    pub(crate) fn lex_remainder(&mut self) -> Result<(), LexerError> {
+        match self.clone().eat_while(|c| !is_whitespace(c)) {
+            (_, 0) => {
+                self.eat_whitespace();
+                Ok(())
+            }
+            at => Err(LexerError::InvalidRemainder { at: at.into() }),
+        }
     }
 }
 

@@ -1,8 +1,5 @@
-use crate::common::{
-    LexerError, lex_numeric, lex_text, lex_translated, lex_variable, text_content_at,
-    translated_text_content_at,
-};
-use crate::python_compat::{NextChar, trim_start};
+use crate::common::{LexerError, text_content_at, translated_text_content_at};
+use crate::cursor::Cursor;
 use crate::tag::TagParts;
 use crate::types::{At, TemplateString};
 
@@ -32,97 +29,29 @@ impl TagElementToken {
 }
 
 pub struct TagElementLexer<'t> {
-    rest: &'t str,
-    byte: usize,
+    cursor: Cursor<'t>,
 }
 
 impl<'t> TagElementLexer<'t> {
     pub fn new(template: TemplateString<'t>, parts: TagParts) -> Self {
         Self {
-            rest: template.content(parts.at),
-            byte: parts.at.0,
+            cursor: Cursor::new(template.content(parts.at), parts.at.0),
         }
     }
 
-    fn lex_numeric(&mut self) -> TagElementToken {
-        let (at, byte, rest) = lex_numeric(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        TagElementToken {
-            at,
-            token_type: TagElementTokenType::Numeric,
-        }
-    }
-
-    fn lex_text(
-        &mut self,
-        chars: &mut std::str::Chars,
-        end: char,
-    ) -> Result<TagElementToken, LexerError> {
-        match lex_text(self.byte, self.rest, chars, end) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(TagElementToken {
-                    token_type: TagElementTokenType::Text,
-                    at,
-                })
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e)
-            }
-        }
-    }
-
-    fn lex_translated(
-        &mut self,
-        chars: &mut std::str::Chars,
-    ) -> Result<TagElementToken, LexerError> {
-        match lex_translated(self.byte, self.rest, chars) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(TagElementToken {
-                    token_type: TagElementTokenType::TranslatedText,
-                    at,
-                })
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e)
-            }
-        }
-    }
-
-    fn lex_variable_or_filter(&mut self) -> TagElementToken {
-        let (at, byte, rest) = lex_variable(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        TagElementToken {
-            token_type: TagElementTokenType::Variable,
-            at,
-        }
-    }
-
-    fn lex_remainder(
-        &mut self,
-        token: Result<TagElementToken, LexerError>,
-    ) -> Result<TagElementToken, LexerError> {
-        let remainder = self.rest.next_whitespace();
-        match remainder {
-            0 => {
-                let rest = trim_start(self.rest);
-                self.byte += self.rest.len() - rest.len();
-                self.rest = rest;
-                token
-            }
-            n => {
-                self.rest = "";
-                let at = (self.byte, n).into();
-                Err(LexerError::InvalidRemainder { at })
-            }
-        }
+    fn lex_element(&mut self) -> Result<TagElementToken, LexerError> {
+        let cursor = &mut self.cursor;
+        let (token_type, at) = match cursor.first() {
+            Some('_') if cursor.second() == Some('(') => (
+                TagElementTokenType::TranslatedText,
+                cursor.lex_translated()?,
+            ),
+            Some('"' | '\'') => (TagElementTokenType::Text, cursor.lex_text()?),
+            Some('0'..='9' | '-') => (TagElementTokenType::Numeric, cursor.lex_numeric()),
+            _ => (TagElementTokenType::Variable, cursor.lex_variable()),
+        };
+        cursor.lex_remainder()?;
+        Ok(TagElementToken { at, token_type })
     }
 }
 
@@ -130,21 +59,14 @@ impl Iterator for TagElementLexer<'_> {
     type Item = Result<TagElementToken, LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let mut chars = self.rest.chars();
-        let token = match chars.next()? {
-            '_' => {
-                if chars.next() == Some('(') {
-                    self.lex_translated(&mut chars)
-                } else {
-                    Ok(self.lex_variable_or_filter())
-                }
-            }
-            '"' => self.lex_text(&mut chars, '"'),
-            '\'' => self.lex_text(&mut chars, '\''),
-            '0'..='9' | '-' => Ok(self.lex_numeric()),
-            _ => Ok(self.lex_variable_or_filter()),
-        };
-        Some(self.lex_remainder(token))
+        if self.cursor.is_empty() {
+            return None;
+        }
+        let token = self.lex_element();
+        if token.is_err() {
+            self.cursor.skip_to_end();
+        }
+        Some(token)
     }
 }
 
