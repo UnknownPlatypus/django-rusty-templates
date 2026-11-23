@@ -2,11 +2,9 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
-use crate::common::{
-    LexerError, get_all_at, lex_numeric, lex_text, lex_translated, lex_variable, text_content_at,
-    translated_text_content_at,
-};
-use crate::python_compat::{NextChar, is_whitespace, trim_start};
+use crate::common::{LexerError, get_all_at, text_content_at, translated_text_content_at};
+use crate::cursor::Cursor;
+use crate::python_compat::is_whitespace;
 use crate::tag::TagParts;
 use crate::tag::common::TagElementTokenType;
 use crate::types::{At, TemplateString};
@@ -57,116 +55,49 @@ pub enum TagElementKwargLexerError {
 }
 
 pub struct TagElementKwargLexer<'t> {
-    rest: &'t str,
-    byte: usize,
+    cursor: Cursor<'t>,
 }
 
 impl<'t> TagElementKwargLexer<'t> {
     pub fn new(template: TemplateString<'t>, parts: TagParts) -> Self {
         Self {
-            rest: template.content(parts.at),
-            byte: parts.at.0,
-        }
-    }
-
-    fn lex_numeric(&mut self, kwarg: Option<At>) -> TagElementKwargToken {
-        let (at, byte, rest) = lex_numeric(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        TagElementKwargToken {
-            at,
-            token_type: TagElementTokenType::Numeric,
-            kwarg,
-        }
-    }
-
-    fn lex_text(
-        &mut self,
-        chars: &mut std::str::Chars,
-        end: char,
-        kwarg: Option<At>,
-    ) -> Result<TagElementKwargToken, TagElementKwargLexerError> {
-        match lex_text(self.byte, self.rest, chars, end) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(TagElementKwargToken {
-                    token_type: TagElementTokenType::Text,
-                    at,
-                    kwarg,
-                })
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e.into())
-            }
-        }
-    }
-
-    fn lex_translated(
-        &mut self,
-        chars: &mut std::str::Chars,
-        kwarg: Option<At>,
-    ) -> Result<TagElementKwargToken, TagElementKwargLexerError> {
-        match lex_translated(self.byte, self.rest, chars) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(TagElementKwargToken {
-                    token_type: TagElementTokenType::TranslatedText,
-                    at,
-                    kwarg,
-                })
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e.into())
-            }
+            cursor: Cursor::new(template.content(parts.at), parts.at.0),
         }
     }
 
     fn lex_kwarg(&mut self) -> Option<At> {
-        let index = self.rest.find('=')?;
-        match self.rest.find(|c: char| !c.is_xid_continue()) {
-            Some(n) if n < index => return None,
-            _ => {}
+        let mut cursor = self.cursor.clone();
+        let at = cursor.eat_while(UnicodeXID::is_xid_continue);
+        if cursor.bump() != Some('=') {
+            return None;
         }
-        let at = (self.byte, index);
-        self.rest = &self.rest[index + 1..];
-        self.byte += index + 1;
+        self.cursor = cursor;
         Some(at)
     }
 
-    fn lex_variable_or_filter(&mut self, kwarg: Option<At>) -> TagElementKwargToken {
-        let (at, byte, rest) = lex_variable(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        TagElementKwargToken {
-            token_type: TagElementTokenType::Variable,
+    fn lex_element(&mut self) -> Result<TagElementKwargToken, TagElementKwargLexerError> {
+        let kwarg = self.lex_kwarg();
+        let cursor = &mut self.cursor;
+        let (token_type, at) = match cursor.first() {
+            Some('_') if cursor.second() == Some('(') => (
+                TagElementTokenType::TranslatedText,
+                cursor.lex_translated()?,
+            ),
+            Some('"' | '\'') => (TagElementTokenType::Text, cursor.lex_text()?),
+            Some('0'..='9' | '-') => (TagElementTokenType::Numeric, cursor.lex_numeric()),
+            Some(c) if !is_whitespace(c) => (TagElementTokenType::Variable, cursor.lex_variable()),
+            _ => {
+                let at = kwarg.expect("kwarg is Some or we'd already have exited");
+                let at = (at.0, at.1 + 1).into();
+                return Err(TagElementKwargLexerError::IncompleteKeywordArgument { at });
+            }
+        };
+        cursor.lex_remainder()?;
+        Ok(TagElementKwargToken {
             at,
+            token_type,
             kwarg,
-        }
-    }
-
-    fn lex_remainder(
-        &mut self,
-        token: Result<TagElementKwargToken, TagElementKwargLexerError>,
-    ) -> Result<TagElementKwargToken, TagElementKwargLexerError> {
-        let remainder = self.rest.next_whitespace();
-        match remainder {
-            0 => {
-                let rest = trim_start(self.rest);
-                self.byte += self.rest.len() - rest.len();
-                self.rest = rest;
-                token
-            }
-            n => {
-                self.rest = "";
-                let at = (self.byte, n).into();
-                let err = LexerError::InvalidRemainder { at };
-                Err(err.into())
-            }
-        }
+        })
     }
 }
 
@@ -174,38 +105,14 @@ impl Iterator for TagElementKwargLexer<'_> {
     type Item = Result<TagElementKwargToken, TagElementKwargLexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.rest.is_empty() {
+        if self.cursor.is_empty() {
             return None;
         }
-
-        let kwarg = self.lex_kwarg();
-
-        let mut chars = self.rest.chars();
-        let next = match chars.next() {
-            Some(next) if !is_whitespace(next) => next,
-            _ => {
-                self.rest = "";
-                let at = kwarg.expect("kwarg is Some or we'd already have exited");
-                let at = (at.0, at.1 + 1).into();
-                return Some(Err(TagElementKwargLexerError::IncompleteKeywordArgument {
-                    at,
-                }));
-            }
-        };
-        let token = match next {
-            '_' => {
-                if chars.next() == Some('(') {
-                    self.lex_translated(&mut chars, kwarg)
-                } else {
-                    Ok(self.lex_variable_or_filter(kwarg))
-                }
-            }
-            '"' => self.lex_text(&mut chars, '"', kwarg),
-            '\'' => self.lex_text(&mut chars, '\'', kwarg),
-            '0'..='9' | '-' => Ok(self.lex_numeric(kwarg)),
-            _ => Ok(self.lex_variable_or_filter(kwarg)),
-        };
-        Some(self.lex_remainder(token))
+        let token = self.lex_element();
+        if token.is_err() {
+            self.cursor.skip_to_end();
+        }
+        Some(token)
     }
 }
 
