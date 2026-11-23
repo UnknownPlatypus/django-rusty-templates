@@ -1,7 +1,8 @@
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
-use crate::python_compat::NextChar;
+use crate::cursor::Cursor;
+use crate::python_compat::is_whitespace;
 use crate::tag::TagParts;
 use crate::types::{At, TemplateString};
 
@@ -39,20 +40,17 @@ pub fn lex_block(
     parts: TagParts,
     block_type: BlockType,
 ) -> Result<Option<BlockToken>, BlockLexerError> {
-    let rest = template.content(parts.at);
-    if rest.is_empty() {
+    let mut cursor = Cursor::new(template.content(parts.at), parts.at.0);
+    if cursor.is_empty() {
         return Ok(None);
     }
 
-    let len = rest.next_whitespace();
-    let rest = &rest[len..];
-    let next = rest.next_non_whitespace();
-    let rest = &rest[next..];
-    if rest.is_empty() {
-        let at = (parts.at.0, len);
+    let at = cursor.eat_while(|c| !is_whitespace(c));
+    cursor.eat_whitespace();
+    if cursor.is_empty() {
         Ok(Some(BlockToken { at }))
     } else {
-        let at = (parts.at.0 + len + next, rest.len());
+        let at = cursor.skip_to_end();
         Err(BlockLexerError::UnexpectedArguments {
             at: at.into(),
             name: block_type.name(),

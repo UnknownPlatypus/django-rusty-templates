@@ -1,4 +1,5 @@
-use crate::python_compat::NextChar;
+use crate::cursor::Cursor;
+use crate::python_compat::is_whitespace;
 use crate::tag::TagParts;
 use crate::types::{At, TemplateString};
 
@@ -8,15 +9,13 @@ pub struct LoadToken {
 }
 
 pub struct LoadLexer<'t> {
-    rest: &'t str,
-    byte: usize,
+    cursor: Cursor<'t>,
 }
 
 impl<'t> LoadLexer<'t> {
     pub fn new(template: TemplateString<'t>, parts: TagParts) -> Self {
         Self {
-            rest: template.content(parts.at),
-            byte: parts.at.0,
+            cursor: Cursor::new(template.content(parts.at), parts.at.0),
         }
     }
 }
@@ -25,18 +24,11 @@ impl Iterator for LoadLexer<'_> {
     type Item = LoadToken;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.rest.is_empty() {
+        if self.cursor.is_empty() {
             return None;
         }
-
-        let start = self.byte;
-        let len = self.rest.next_whitespace();
-        let rest = &self.rest[len..];
-        let next = rest.next_non_whitespace();
-        self.rest = &rest[next..];
-        self.byte = self.byte + len + next;
-
-        let at = (start, len);
+        let at = self.cursor.eat_while(|c| !is_whitespace(c));
+        self.cursor.eat_whitespace();
         Some(LoadToken { at })
     }
 }
