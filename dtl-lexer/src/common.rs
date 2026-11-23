@@ -161,15 +161,6 @@ pub(crate) fn lex_numeric(byte: usize, rest: &str) -> (At, usize, &str) {
     (at, cursor.pos(), cursor.rest())
 }
 
-pub(crate) fn lex_variable_argument(
-    byte: usize,
-    rest: &str,
-) -> Result<(At, usize, &str), LexerError> {
-    let mut cursor = Cursor::new(rest, byte);
-    let at = cursor.lex_variable_argument()?;
-    Ok((at, cursor.pos(), cursor.rest()))
-}
-
 pub fn trim_variable(variable: &str) -> &str {
     match variable.find(|c: char| !c.is_xid_continue() && c != '.' && c != '-') {
         Some(end) => &variable[..end],

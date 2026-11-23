@@ -3,11 +3,9 @@ use num_bigint::BigInt;
 use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
-use crate::common::{
-    LexerError, check_variable_attrs, lex_numeric, lex_text, lex_translated, lex_variable_argument,
-    trim_variable,
-};
-use crate::python_compat::{NextChar, is_whitespace, trim, trim_end, trim_start};
+use crate::common::{LexerError, check_variable_attrs, trim_variable};
+use crate::cursor::Cursor;
+use crate::python_compat::{is_whitespace, trim, trim_end, trim_start};
 use crate::types::{At, TemplateString};
 use crate::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN, TemplateContent};
 
@@ -135,194 +133,96 @@ pub fn lex_variable_or_filter(
 
 #[derive(Debug)]
 pub struct FilterLexer<'t> {
-    rest: &'t str,
-    byte: usize,
+    cursor: Cursor<'t>,
 }
 
 impl<'t> FilterLexer<'t> {
     fn new(variable: &'t str, start: usize) -> Result<Self, LexerError> {
-        let pipe = variable.find('|');
-        let remainder = &variable[..pipe.unwrap_or(variable.len())];
-        if let Some(n) = remainder.find(|c| !is_whitespace(c)) {
-            let at = (start + n, trim(remainder).len());
-            return Err(LexerError::InvalidRemainder { at: at.into() });
-        }
-        let Some(offset) = pipe else {
-            return Ok(Self {
-                rest: "",
-                byte: start + variable.len(),
-            });
-        };
-        let offset = offset + 1;
-        let variable = &variable[offset..];
-        let rest = trim_start(variable);
-        if rest.is_empty() {
-            Err(LexerError::InvalidRemainder {
-                at: (start, 1).into(),
-            })
-        } else {
-            Ok(Self {
-                rest: trim_end(rest),
-                byte: start + offset + variable.len() - rest.len(),
-            })
-        }
-    }
-
-    fn lex_text(
-        &mut self,
-        chars: &mut std::str::Chars,
-        end: char,
-    ) -> Result<Argument, VariableLexerError> {
-        match lex_text(self.byte, self.rest, chars, end) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(Argument::Text(at))
+        let mut cursor = Cursor::new(trim_end(variable), start);
+        cursor.eat_whitespace();
+        match cursor.first() {
+            None => {}
+            Some('|') => {
+                cursor.bump();
+                cursor.eat_whitespace();
+                if cursor.is_empty() {
+                    let at = (start, 1);
+                    return Err(LexerError::InvalidRemainder { at: at.into() });
+                }
             }
-            Err(e) => {
-                self.rest = "";
-                Err(e.into())
+            Some(_) => {
+                let rest = cursor.rest();
+                let remainder = &rest[..rest.find('|').unwrap_or(rest.len())];
+                let at = (cursor.pos(), trim_end(remainder).len());
+                return Err(LexerError::InvalidRemainder { at: at.into() });
             }
         }
-    }
-
-    fn lex_translated(
-        &mut self,
-        chars: &mut std::str::Chars,
-    ) -> Result<Argument, VariableLexerError> {
-        match lex_translated(self.byte, self.rest, chars) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(Argument::TranslatedText(at))
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e.into())
-            }
-        }
-    }
-
-    fn lex_numeric(&mut self) -> Argument {
-        let (at, byte, rest) = lex_numeric(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        Argument::Numeric(at)
-    }
-
-    fn lex_variable_argument(&mut self) -> Result<Argument, VariableLexerError> {
-        match lex_variable_argument(self.byte, self.rest) {
-            Ok((at, byte, rest)) => {
-                self.byte = byte;
-                self.rest = rest;
-                Ok(Argument::Variable(at))
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e.into())
-            }
-        }
+        Ok(Self { cursor })
     }
 
     fn lex_filter(&mut self) -> Result<FilterToken, VariableLexerError> {
-        let filter = trim_start(self.rest);
-        let start = self.rest.len() - filter.len();
-        self.byte += start;
-        self.rest = &self.rest[start..];
-
-        let end = filter
-            .find(|c: char| !c.is_xid_continue())
-            .unwrap_or(filter.len());
-        let filter = &filter[..end];
-
-        match filter.chars().next() {
-            Some(c) if c.is_xid_start() => {
-                let at = (self.byte, end);
-                self.byte += end;
-                self.rest = &self.rest[end..];
-                let (remainder, _start_next) = self.remainder_to_filter_or_argument();
-                match remainder {
-                    "" => {
-                        let argument = self.lex_argument()?;
-                        Ok(FilterToken { at, argument })
-                    }
-                    _ => {
-                        let at = (self.byte, trim(remainder).len());
-                        self.rest = "";
-                        Err(LexerError::InvalidRemainder { at: at.into() }.into())
-                    }
-                }
-            }
-            _ => {
-                let next = self.rest.find('|').unwrap_or(self.rest.len());
-                let at = (self.byte, next);
-                self.rest = "";
-                Err(VariableLexerError::InvalidFilterName { at: at.into() })
-            }
+        self.cursor.eat_whitespace();
+        if !self.cursor.first().is_some_and(UnicodeXID::is_xid_start) {
+            let rest = self.cursor.rest();
+            let at = (self.cursor.pos(), rest.find('|').unwrap_or(rest.len()));
+            return Err(VariableLexerError::InvalidFilterName { at: at.into() });
         }
+        let at = self.cursor.eat_while(UnicodeXID::is_xid_continue);
+        let (remainder, _start_next) = self.remainder_to_filter_or_argument();
+        if !remainder.is_empty() {
+            let at = (self.cursor.pos(), trim(remainder).len());
+            return Err(LexerError::InvalidRemainder { at: at.into() }.into());
+        }
+        let argument = self.lex_argument()?;
+        Ok(FilterToken { at, argument })
     }
 
     fn lex_argument(&mut self) -> Result<Option<Argument>, VariableLexerError> {
-        let Some(a) = self.rest.find(':') else {
+        let cursor = &mut self.cursor;
+        // The caller checked that nothing separates the filter name from a `:` or `|`.
+        if cursor.first() != Some(':') {
             return Ok(None);
-        };
-        let next = match self.rest.find('|') {
-            Some(f) if f < a => return Ok(None),
-            _ => a + 1,
-        };
-        let arg_at = (self.byte + a, 1);
-        self.rest = &self.rest[next..];
-        self.byte += next;
-
-        let mut chars = self.rest.chars();
-        let Some(next_char) = chars.next() else {
-            return Err(VariableLexerError::MissingArgument { at: arg_at.into() });
-        };
-        Ok(Some(match next_char {
-            '_' => {
-                if chars.next() == Some('(') {
-                    self.lex_translated(&mut chars)?
-                } else {
-                    let end = self.rest.next_whitespace();
-                    let at = (self.byte, end);
-                    self.byte += self.rest.len();
-                    self.rest = "";
-                    return Err(VariableLexerError::LeadingUnderscore { at: at.into() });
-                }
+        }
+        let colon_at = cursor.bump_bytes(1);
+        Ok(Some(match cursor.first() {
+            None => {
+                return Err(VariableLexerError::MissingArgument {
+                    at: colon_at.into(),
+                });
             }
-            '\'' => self.lex_text(&mut chars, '\'')?,
-            '"' => self.lex_text(&mut chars, '"')?,
-            '0'..='9' | '-' => self.lex_numeric(),
-            _ => self.lex_variable_argument()?,
+            Some('_') if cursor.second() == Some('(') => {
+                Argument::TranslatedText(cursor.lex_translated()?)
+            }
+            Some('_') => {
+                let at = cursor.eat_while(|c| !is_whitespace(c));
+                return Err(VariableLexerError::LeadingUnderscore { at: at.into() });
+            }
+            Some('\'' | '"') => Argument::Text(cursor.lex_text()?),
+            Some('0'..='9' | '-') => Argument::Numeric(cursor.lex_numeric()),
+            Some(_) => Argument::Variable(cursor.lex_variable_argument()?),
         }))
     }
 
-    fn lex_remainder(
-        &mut self,
-        token: FilterToken,
-        remainder: &'t str,
-        start_next: usize,
-    ) -> Result<FilterToken, VariableLexerError> {
+    fn lex_remainder(&mut self, token: FilterToken) -> Result<FilterToken, VariableLexerError> {
+        let (remainder, start_next) = self.remainder_to_filter_or_argument();
         match remainder.find(|c| !is_whitespace(c)) {
             None => {
-                self.rest = &self.rest[start_next..];
-                self.byte += start_next;
+                self.cursor.bump_bytes(start_next);
                 Ok(token)
             }
             Some(n) => {
-                let at = (self.byte + n, trim(remainder).len());
-                self.rest = "";
+                let at = (self.cursor.pos() + n, trim(remainder).len());
                 Err(LexerError::InvalidRemainder { at: at.into() }.into())
             }
         }
     }
 
+    /// The source before the next `|` or `:`, and the offset after that separator.
     fn remainder_to_filter_or_argument(&self) -> (&'t str, usize) {
-        match (self.rest.find('|'), self.rest.find(':')) {
-            (None, None) => (self.rest, self.rest.len()),
-            (None, Some(a)) => (&self.rest[..a], a + 1),
-            (Some(f), Some(a)) if a < f => (&self.rest[..a], a + 1),
-            (Some(f), _) => (&self.rest[..f], f + 1),
+        let rest = self.cursor.rest();
+        match rest.find(['|', ':']) {
+            None => (rest, rest.len()),
+            Some(n) => (&rest[..n], n + 1),
         }
     }
 }
@@ -331,15 +231,16 @@ impl Iterator for FilterLexer<'_> {
     type Item = Result<FilterToken, VariableLexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.rest.is_empty() {
+        if self.cursor.is_empty() {
             return None;
         }
-        let token = match self.lex_filter() {
-            Err(e) => return Some(Err(e)),
-            Ok(token) => token,
-        };
-        let (remainder, start_next) = self.remainder_to_filter_or_argument();
-        Some(self.lex_remainder(token, remainder, start_next))
+        let token = self
+            .lex_filter()
+            .and_then(|token| self.lex_remainder(token));
+        if token.is_err() {
+            self.cursor.skip_to_end();
+        }
+        Some(token)
     }
 }
 
