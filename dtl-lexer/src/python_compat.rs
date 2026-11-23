@@ -18,21 +18,6 @@ pub fn trim_end(s: &str) -> &str {
     s.trim_end_matches(is_whitespace)
 }
 
-pub trait NextChar {
-    fn next_whitespace(&self) -> usize;
-    fn next_non_whitespace(&self) -> usize;
-}
-
-impl NextChar for str {
-    fn next_whitespace(&self) -> usize {
-        self.find(is_whitespace).unwrap_or(self.len())
-    }
-
-    fn next_non_whitespace(&self) -> usize {
-        self.find(|c| !is_whitespace(c)).unwrap_or(self.len())
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

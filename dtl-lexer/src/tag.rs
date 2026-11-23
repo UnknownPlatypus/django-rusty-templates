@@ -10,7 +10,8 @@ pub mod lorem;
 pub mod now;
 pub mod templatetag;
 
-use crate::python_compat::{NextChar, trim_end, trim_start};
+use crate::cursor::Cursor;
+use crate::python_compat::{is_whitespace, trim_end};
 use crate::types::{At, TemplateString};
 use crate::{END_TAG_LEN, START_TAG_LEN, TemplateContent};
 use miette::{Diagnostic, SourceSpan};
@@ -64,8 +65,9 @@ impl<'t> TemplateContent<'t> for Tag {
 ///
 /// Returns a `TagLexerError` when the tag is empty or has an invalid name.
 pub fn lex_tag(tag: &str, start: usize) -> Result<Tag, TagLexerError> {
-    let rest = trim_start(tag);
-    if rest.is_empty() {
+    let mut cursor = Cursor::new(trim_end(tag), start);
+    cursor.eat_whitespace();
+    if cursor.is_empty() {
         return Err(TagLexerError::EmptyTag {
             at: (
                 start - START_TAG_LEN,
@@ -75,26 +77,15 @@ pub fn lex_tag(tag: &str, start: usize) -> Result<Tag, TagLexerError> {
         });
     }
 
-    let start = start + tag.len() - rest.len();
-    let tag = trim_end(rest);
-    let Some(tag_len) = tag.find(|c: char| !c.is_xid_continue()) else {
-        let at = (start, tag.len());
-        let parts = TagParts {
-            at: (start + tag.len(), 0),
-        };
-        return Ok(Tag { at, parts });
-    };
-    let index = tag.next_whitespace();
-    if index > tag_len {
-        let at = (start, index);
+    let at = cursor.eat_while(UnicodeXID::is_xid_continue);
+    let (_, invalid_len) = cursor.eat_while(|c| !is_whitespace(c));
+    if invalid_len > 0 {
+        let at = (at.0, at.1 + invalid_len);
         return Err(TagLexerError::InvalidTagName { at: at.into() });
     }
-    let at = (start, tag_len);
-    let rest = &tag[tag_len..];
-    let trimmed = trim_start(rest);
-    let start = start + tag_len + rest.len() - trimmed.len();
+    cursor.eat_whitespace();
     let parts = TagParts {
-        at: (start, trimmed.len()),
+        at: cursor.skip_to_end(),
     };
     Ok(Tag { at, parts })
 }

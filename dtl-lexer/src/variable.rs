@@ -5,7 +5,7 @@ use unicode_xid::UnicodeXID;
 
 use crate::common::{LexerError, check_variable_attrs, trim_variable};
 use crate::cursor::Cursor;
-use crate::python_compat::{is_whitespace, trim, trim_end, trim_start};
+use crate::python_compat::{is_whitespace, trim, trim_end};
 use crate::types::{At, TemplateString};
 use crate::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN, TemplateContent};
 
@@ -96,21 +96,18 @@ pub fn lex_variable_or_filter(
     variable: &str,
     start: usize,
 ) -> Result<Option<(VariableToken, At, FilterLexer<'_>)>, VariableLexerError> {
-    let rest = trim_start(variable);
-    if rest.is_empty() {
+    let mut cursor = Cursor::new(variable, start);
+    cursor.eat_whitespace();
+    if cursor.is_empty() {
         return Ok(None);
     }
 
-    let start = start + variable.len() - rest.len();
-    let content = trim_variable(rest);
-
+    let content = trim_variable(cursor.rest());
     if content.is_empty() {
-        let at = (start, trim(rest).len());
+        let at = (cursor.pos(), trim_end(cursor.rest()).len());
         return Err(VariableLexerError::InvalidVariableName { at: at.into() });
     }
-
-    let end = content.len();
-    let at = (start, end);
+    let at = cursor.bump_bytes(content.len());
 
     let token_type;
     if let Ok(num) = content.parse::<BigInt>() {
@@ -120,15 +117,12 @@ pub fn lex_variable_or_filter(
     {
         token_type = VariableToken::Float(num);
     } else {
-        check_variable_attrs(content, start)?;
+        check_variable_attrs(content, at.0)?;
         token_type = VariableToken::Variable;
     }
 
-    Ok(Some((
-        token_type,
-        at,
-        FilterLexer::new(&rest[end..], start + end)?,
-    )))
+    let filters = FilterLexer::new(cursor.rest(), cursor.pos())?;
+    Ok(Some((token_type, at, filters)))
 }
 
 #[derive(Debug)]
