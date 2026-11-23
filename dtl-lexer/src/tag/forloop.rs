@@ -2,11 +2,9 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 
 use crate::TemplateContent;
-use crate::common::{
-    LexerError, lex_numeric, lex_text, lex_translated, lex_variable, text_content_at,
-    translated_text_content_at,
-};
-use crate::python_compat::{NextChar, trim_start};
+use crate::common::{LexerError, text_content_at, translated_text_content_at};
+use crate::cursor::Cursor;
+use crate::python_compat::is_whitespace;
 use crate::tag::TagParts;
 use crate::types::{At, TemplateString};
 
@@ -94,8 +92,8 @@ enum State {
 }
 
 pub struct ForLexer<'t> {
-    rest: &'t str,
-    byte: usize,
+    template: TemplateString<'t>,
+    cursor: Cursor<'t>,
     state: State,
     previous_at: Option<At>,
 }
@@ -103,162 +101,81 @@ pub struct ForLexer<'t> {
 impl<'t> ForLexer<'t> {
     pub fn new(template: TemplateString<'t>, parts: TagParts) -> Self {
         Self {
-            rest: template.content(parts.at),
-            byte: parts.at.0,
+            template,
+            cursor: Cursor::new(template.content(parts.at), parts.at.0),
             state: State::VariableName,
             previous_at: None,
         }
     }
 
     pub fn lex_expression(&mut self) -> Result<ForVariableToken, ForLexerError> {
-        if self.rest.is_empty() {
-            return Err(ForLexerError::MissingExpression {
-                at: self.previous_at.expect("previous_at is set").into(),
-            });
-        }
-        let mut chars = self.rest.chars();
-        let token = match chars.next().expect("self.rest is not empty") {
-            '_' => {
-                if chars.next() == Some('(') {
-                    self.lex_translated(&mut chars)?
-                } else {
-                    self.lex_variable()
-                }
+        let mut cursor = self.cursor.clone();
+        let (token_type, at) = match cursor.first() {
+            None => {
+                return Err(ForLexerError::MissingExpression {
+                    at: self.previous_at.expect("previous_at is set").into(),
+                });
             }
-            '"' => self.lex_text(&mut chars, '"')?,
-            '\'' => self.lex_text(&mut chars, '\'')?,
-            '0'..='9' | '-' => self.lex_numeric(),
-            _ => self.lex_variable(),
+            Some('_') if cursor.second() == Some('(') => {
+                (ForTokenType::TranslatedText, cursor.lex_translated()?)
+            }
+            Some('"' | '\'') => (ForTokenType::Text, cursor.lex_text()?),
+            Some('0'..='9' | '-') => (ForTokenType::Numeric, cursor.lex_numeric()),
+            Some(_) => (ForTokenType::Variable, cursor.lex_variable()),
         };
-        self.lex_remainder()?;
-        Ok(token)
-    }
-
-    fn lex_variable(&mut self) -> ForVariableToken {
-        let (at, byte, rest) = lex_variable(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        ForVariableToken {
-            token_type: ForTokenType::Variable,
-            at,
-        }
-    }
-
-    fn lex_numeric(&mut self) -> ForVariableToken {
-        let (at, byte, rest) = lex_numeric(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        ForVariableToken {
-            at,
-            token_type: ForTokenType::Numeric,
-        }
-    }
-
-    fn lex_text(
-        &mut self,
-        chars: &mut std::str::Chars,
-        end: char,
-    ) -> Result<ForVariableToken, ForLexerError> {
-        let (at, byte, rest) = lex_text(self.byte, self.rest, chars, end)?;
-        self.rest = rest;
-        self.byte = byte;
-        Ok(ForVariableToken {
-            token_type: ForTokenType::Text,
-            at,
-        })
-    }
-
-    fn lex_translated(
-        &mut self,
-        chars: &mut std::str::Chars,
-    ) -> Result<ForVariableToken, ForLexerError> {
-        let (at, byte, rest) = lex_translated(self.byte, self.rest, chars)?;
-        self.rest = rest;
-        self.byte = byte;
-        Ok(ForVariableToken {
-            token_type: ForTokenType::TranslatedText,
-            at,
-        })
-    }
-
-    fn lex_remainder(&mut self) -> Result<(), ForLexerError> {
-        let remainder = self.rest.next_whitespace();
-        match remainder {
-            0 => {
-                let rest = trim_start(self.rest);
-                self.byte += self.rest.len() - rest.len();
-                self.rest = rest;
-                Ok(())
-            }
-            n => Err(LexerError::InvalidRemainder {
-                at: (self.byte, n).into(),
-            }
-            .into()),
-        }
+        self.cursor = cursor;
+        self.cursor.lex_remainder()?;
+        Ok(ForVariableToken { at, token_type })
     }
 
     pub fn lex_in(&mut self) -> Result<(), ForLexerInError> {
-        if self.rest.is_empty() {
+        if self.cursor.is_empty() {
             return Err(ForLexerInError::MissingIn {
                 at: self.previous_at.expect("previous_at is set").into(),
             });
         }
-        let index = self.rest.next_whitespace();
-        let at = (self.byte, index);
-        match &self.rest[..index] {
-            "in" => {
-                let next_index = self.rest[index..].next_non_whitespace();
-                self.byte += index + next_index;
-                self.rest = &self.rest[index + next_index..];
-                self.previous_at = Some(at);
-                Ok(())
-            }
-            _ => Err(ForLexerInError::MissingComma { at: at.into() }),
+        let mut cursor = self.cursor.clone();
+        let at = cursor.eat_while(|c| !is_whitespace(c));
+        if self.template.content(at) != "in" {
+            return Err(ForLexerInError::MissingComma { at: at.into() });
         }
+        cursor.eat_whitespace();
+        self.cursor = cursor;
+        self.previous_at = Some(at);
+        Ok(())
     }
 
     pub fn lex_reversed(&mut self) -> Result<bool, ForLexerError> {
-        if self.rest.is_empty() {
+        let mut cursor = self.cursor.clone();
+        if cursor.is_empty() {
             return Ok(false);
         }
-        let index = self.rest.next_whitespace();
-        let at = match &self.rest[..index] {
-            "reversed" => {
-                let next_index = self.rest[index..].next_non_whitespace();
-                match self.rest[index + next_index..].len() {
-                    0 => return Ok(true),
-                    len => (self.byte + index + next_index, len),
-                }
+        let mut at = cursor.eat_while(|c| !is_whitespace(c));
+        if self.template.content(at) == "reversed" {
+            cursor.eat_whitespace();
+            if cursor.is_empty() {
+                return Ok(true);
             }
-            _ => (self.byte, index),
-        };
+            at = cursor.skip_to_end();
+        }
         Err(ForLexerError::UnexpectedExpression { at: at.into() })
     }
 
-    fn check_invalid_variable_name(&self, index: usize, at: At) -> Result<(), ForLexerError> {
-        let name = &self.rest[..index];
-
-        let (_, _, remainder) = lex_variable(0, name);
-        if !remainder.is_empty() {
+    fn check_invalid_variable_name(name: &str, at: At) -> Result<(), ForLexerError> {
+        let mut cursor = Cursor::new(name, at.0);
+        cursor.lex_variable();
+        if !cursor.is_empty() || name == "." || name.contains(['"', '\'', '|']) {
             return Err(ForLexerError::InvalidName {
                 name: name.to_string(),
                 at: at.into(),
             });
         }
-
-        if name == '.'.to_string() || name.contains(['"', '\'', '|']) {
-            return Err(ForLexerError::InvalidName {
-                name: name.to_string(),
-                at: at.into(),
-            });
-        }
-
         Ok(())
     }
 
     pub fn lex_variable_name(&mut self) -> Option<Result<ForVariableNameToken, ForLexerError>> {
         match self.state {
-            State::VariableName if !self.rest.is_empty() => {}
+            State::VariableName if !self.cursor.is_empty() => {}
             State::VariableName => {
                 self.state = State::Done;
                 return None;
@@ -266,38 +183,26 @@ impl<'t> ForLexer<'t> {
             State::Done => return None,
         }
 
-        let index = self.rest.next_whitespace();
-        let (index, next_index) = match self.rest.find(',') {
-            Some(0) => {
-                let at = (self.byte, 1);
-                return Some(Err(ForLexerError::UnexpectedComma { at: at.into() }));
-            }
-            Some(comma_index) if comma_index < index => {
-                let next_index = self.rest[comma_index + 1..].next_non_whitespace();
-                (comma_index, comma_index + 1 + next_index)
-            }
-            _ => {
-                let after_whitespace = index + self.rest[index..].next_non_whitespace();
-                if self.rest[after_whitespace..].starts_with(',') {
-                    let next_index = self.rest[after_whitespace + 1..].next_non_whitespace();
-                    (index, after_whitespace + 1 + next_index)
-                } else {
-                    self.state = State::Done;
-                    (index, after_whitespace)
-                }
-            }
-        };
-        let at = (self.byte, index);
+        if self.cursor.first() == Some(',') {
+            let at = (self.cursor.pos(), 1);
+            return Some(Err(ForLexerError::UnexpectedComma { at: at.into() }));
+        }
+        let at = self.cursor.eat_while(|c| c != ',' && !is_whitespace(c));
         self.previous_at = Some(at);
 
-        if let Err(err) = self.check_invalid_variable_name(index, at) {
-            self.rest = "";
+        if let Err(err) = Self::check_invalid_variable_name(self.template.content(at), at) {
+            self.cursor.skip_to_end();
             self.state = State::Done;
             return Some(Err(err));
         }
 
-        self.byte += next_index;
-        self.rest = &self.rest[next_index..];
+        self.cursor.eat_whitespace();
+        if self.cursor.first() == Some(',') {
+            self.cursor.bump();
+            self.cursor.eat_whitespace();
+        } else {
+            self.state = State::Done;
+        }
         Some(Ok(ForVariableNameToken { at }))
     }
 }
