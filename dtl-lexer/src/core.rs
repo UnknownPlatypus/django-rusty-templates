@@ -1,5 +1,6 @@
 use memchr::{memchr, memchr2_iter};
 
+use crate::python_compat::trim;
 use crate::types::{At, TemplateString};
 use crate::{DelimitedToken, END_TAG_LEN, START_TAG_LEN};
 
@@ -148,7 +149,7 @@ impl<'t> Lexer<'t> {
         self.rest = &self.rest[text_len + len..];
         self.byte = start + len;
         if token.token_type == TokenType::Tag {
-            let verbatim = token.content(self.template).trim();
+            let verbatim = trim(token.content(self.template));
             if verbatim == "verbatim" || verbatim.starts_with("verbatim ") {
                 self.verbatim = Some(verbatim);
             }
@@ -169,7 +170,6 @@ impl<'t> Lexer<'t> {
     }
 
     fn lex_verbatim(&mut self, verbatim: &'t str) -> Token {
-        let verbatim = verbatim.trim();
         self.verbatim = None;
 
         let mut index = 0;
@@ -186,7 +186,7 @@ impl<'t> Lexer<'t> {
                 index = inner_start;
                 continue;
             }
-            if inner.trim().strip_prefix("end") != Some(verbatim) {
+            if trim(inner).strip_prefix("end") != Some(verbatim) {
                 index = end + END_TAG_LEN;
                 continue;
             }
@@ -542,6 +542,22 @@ mod tests {
         let tokens: Vec<_> = lexer.collect();
         assert_eq!(tokens, vec![Token::tag((0, 14)), Token::text((14, 9))]);
         assert_eq!(contents(template, tokens), vec![" verbatim ", "Don't {% "]);
+    }
+
+    #[test]
+    fn test_verbatim_python_whitespace() {
+        // U+001C to U+001F are whitespace to Python's `str.strip`, but not to Rust's `trim`.
+        let template = "{%\x1cverbatim\x1f%}{{ a }}{%\x1cendverbatim\x1f%}";
+        let lexer = Lexer::new(template.into());
+        let tokens: Vec<_> = lexer.collect();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::tag((0, 14)),
+                Token::text((14, 7)),
+                Token::tag((21, 17)),
+            ]
+        );
     }
 
     #[test]
