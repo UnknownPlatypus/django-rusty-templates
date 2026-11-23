@@ -2,6 +2,7 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use unicode_xid::UnicodeXID;
 
+use crate::cursor::Cursor;
 use crate::types::At;
 use crate::{END_TRANSLATE_LEN, QUOTE_LEN, START_TRANSLATE_LEN};
 
@@ -34,105 +35,125 @@ pub enum LexerError {
     },
 }
 
-pub fn lex_variable(byte: usize, rest: &str) -> (At, usize, &str) {
-    let mut in_text = None;
-    let mut end = 0;
-    for c in rest.chars() {
-        match c {
-            '"' => match in_text {
-                None => in_text = Some('"'),
-                Some('"') => in_text = None,
-                _ => {}
-            },
-            '\'' => match in_text {
-                None => in_text = Some('\''),
-                Some('\'') => in_text = None,
-                _ => {}
-            },
-            _ if in_text.is_some() => {}
-            c if !c.is_xid_continue() && c != '.' && c != '|' && c != ':' && c != '-' => break,
-            _ => {}
-        }
-        end += c.len_utf8();
+impl Cursor<'_> {
+    /// Lexes a variable with its filters.
+    /// Stops at the first character outside a string literal that can be part of neither.
+    pub(crate) fn lex_variable(&mut self) -> At {
+        let mut in_text = None;
+        self.eat_while(|c| {
+            match c {
+                '"' | '\'' => match in_text {
+                    None => in_text = Some(c),
+                    Some(quote) if quote == c => in_text = None,
+                    Some(_) => {}
+                },
+                _ if in_text.is_some() => {}
+                _ => return c.is_xid_continue() || matches!(c, '.' | '|' | ':' | '-'),
+            }
+            true
+        })
     }
-    let at = (byte, end);
-    let rest = &rest[end..];
-    let byte = byte + end;
-    (at, byte, rest)
+
+    /// Lexes a string literal, starting at its opening quote.
+    pub(crate) fn lex_text(&mut self) -> Result<At, LexerError> {
+        let start = self.pos();
+        let quote = self.bump();
+        loop {
+            match self.bump() {
+                None => {
+                    let at = self.at_from(start);
+                    return Err(LexerError::IncompleteString { at: at.into() });
+                }
+                Some('\\') => {
+                    self.bump();
+                }
+                next if next == quote => return Ok(self.at_from(start)),
+                Some(_) => {}
+            }
+        }
+    }
+
+    /// Lexes a translated string literal, starting at its `_(`.
+    pub(crate) fn lex_translated(&mut self) -> Result<At, LexerError> {
+        let start = self.pos();
+        self.bump_bytes(START_TRANSLATE_LEN);
+        match self.first() {
+            Some('\'' | '"') => {
+                self.lex_text()?;
+            }
+            _ => {
+                self.skip_to_end();
+                let at = self.at_from(start);
+                return Err(LexerError::MissingTranslatedString { at: at.into() });
+            }
+        }
+        if self.first() == Some(')') {
+            self.bump_bytes(END_TRANSLATE_LEN);
+            Ok(self.at_from(start))
+        } else {
+            let at = self.at_from(start);
+            Err(LexerError::IncompleteTranslatedString { at: at.into() })
+        }
+    }
+
+    /// Lexes a number, starting at its first digit or sign.
+    pub(crate) fn lex_numeric(&mut self) -> At {
+        let start = self.pos();
+        self.bump();
+        // Match django bug: a `-` after the first character ends the number.
+        self.eat_while(|c| c.is_ascii_digit() || c == '.' || c == 'e');
+        self.at_from(start)
+    }
+
+    pub(crate) fn lex_variable_argument(&mut self) -> Result<At, LexerError> {
+        let content = trim_variable(self.rest());
+        check_variable_attrs(content, self.pos())?;
+        Ok(self.bump_bytes(content.len()))
+    }
 }
 
-pub fn lex_text<'t>(
+// Shims for the lexers not yet ported to `Cursor`.
+
+pub(crate) fn lex_variable(byte: usize, rest: &str) -> (At, usize, &str) {
+    let mut cursor = Cursor::new(rest, byte);
+    let at = cursor.lex_variable();
+    (at, cursor.pos(), cursor.rest())
+}
+
+pub(crate) fn lex_text<'t>(
     byte: usize,
     rest: &'t str,
-    chars: &mut std::str::Chars,
-    end: char,
+    _chars: &mut std::str::Chars,
+    _end: char,
 ) -> Result<(At, usize, &'t str), LexerError> {
-    let mut count = 1;
-    loop {
-        let Some(next) = chars.next() else {
-            let at = (byte, count);
-            return Err(LexerError::IncompleteString { at: at.into() });
-        };
-        count += next.len_utf8();
-        if next == '\\' {
-            let Some(next) = chars.next() else {
-                let at = (byte, count);
-                return Err(LexerError::IncompleteString { at: at.into() });
-            };
-            count += next.len_utf8();
-        } else if next == end {
-            let at = (byte, count);
-            let rest = &rest[count..];
-            let byte = byte + count;
-            return Ok((at, byte, rest));
-        }
-    }
+    let mut cursor = Cursor::new(rest, byte);
+    let at = cursor.lex_text()?;
+    Ok((at, cursor.pos(), cursor.rest()))
 }
 
-pub fn lex_translated<'t>(
+pub(crate) fn lex_translated<'t>(
     byte: usize,
     rest: &'t str,
-    chars: &mut std::str::Chars,
+    _chars: &mut std::str::Chars,
 ) -> Result<(At, usize, &'t str), LexerError> {
-    let start = byte;
-    let byte = byte + START_TRANSLATE_LEN;
-    let rest = &rest[START_TRANSLATE_LEN..];
-    let (_at, byte, rest) = match chars.next() {
-        None => {
-            let at = (start, START_TRANSLATE_LEN);
-            return Err(LexerError::MissingTranslatedString { at: at.into() });
-        }
-        Some('\'') => lex_text(byte, rest, chars, '\'')?,
-        Some('"') => lex_text(byte, rest, chars, '"')?,
-        _ => {
-            let at = (start, rest.len() + START_TRANSLATE_LEN);
-            return Err(LexerError::MissingTranslatedString { at: at.into() });
-        }
-    };
-    if chars.next() == Some(')') {
-        let byte = byte + END_TRANSLATE_LEN;
-        let rest = &rest[END_TRANSLATE_LEN..];
-        let at = (start, byte - start);
-        Ok((at, byte, rest))
-    } else {
-        let at = (start, byte - start);
-        Err(LexerError::IncompleteTranslatedString { at: at.into() })
-    }
+    let mut cursor = Cursor::new(rest, byte);
+    let at = cursor.lex_translated()?;
+    Ok((at, cursor.pos(), cursor.rest()))
 }
 
-pub fn lex_numeric(byte: usize, rest: &str) -> (At, usize, &str) {
-    let end = rest
-        .find(|c: char| !(c.is_ascii_digit() || c == '-' || c == '.' || c == 'e'))
-        .unwrap_or(rest.len());
-    let content = &rest[..end];
-    // Match django bug
-    let end = match content[1..].find('-') {
-        Some(n) => n + 1,
-        None => end,
-    };
-    // End match django bug
-    let at = (byte, end);
-    (at, byte + end, &rest[end..])
+pub(crate) fn lex_numeric(byte: usize, rest: &str) -> (At, usize, &str) {
+    let mut cursor = Cursor::new(rest, byte);
+    let at = cursor.lex_numeric();
+    (at, cursor.pos(), cursor.rest())
+}
+
+pub(crate) fn lex_variable_argument(
+    byte: usize,
+    rest: &str,
+) -> Result<(At, usize, &str), LexerError> {
+    let mut cursor = Cursor::new(rest, byte);
+    let at = cursor.lex_variable_argument()?;
+    Ok((at, cursor.pos(), cursor.rest()))
 }
 
 pub fn trim_variable(variable: &str) -> &str {
@@ -170,14 +191,6 @@ pub fn check_variable_attrs(variable: &str, start: usize) -> Result<(), LexerErr
     Ok(())
 }
 
-pub fn lex_variable_argument(byte: usize, rest: &str) -> Result<(At, usize, &str), LexerError> {
-    let content = trim_variable(rest);
-    check_variable_attrs(content, byte)?;
-    let end = content.len();
-    let at = (byte, end);
-    Ok((at, byte + end, &rest[end..]))
-}
-
 pub fn text_content_at(at: At) -> At {
     let (start, len) = at;
     let start = start + QUOTE_LEN;
@@ -209,21 +222,21 @@ mod tests {
     #[test]
     fn test_lex_text_non_ascii() {
         let template = "'N\u{ec655}'";
-        let mut chars = template.chars();
-        chars.next();
-        let (at, byte, rest) = lex_text(1, template, &mut chars, '\'').unwrap();
+        let mut cursor = Cursor::new(template, 1);
+        let at = cursor.lex_text().unwrap();
         assert_eq!(at, (1, 7));
-        assert_eq!(byte, 8);
-        assert_eq!(rest, "");
+        assert_eq!(cursor.pos(), 8);
+        assert_eq!(cursor.rest(), "");
     }
 
     #[test]
     fn test_lex_argument_non_ascii() {
         let template = "ZJ5G4YXZJUH6|default:\"#`´କ¯\"";
-        let (at, byte, rest) = lex_variable(0, template);
+        let mut cursor = Cursor::new(template, 0);
+        let at = cursor.lex_variable();
         assert_eq!(at, (0, 32));
-        assert_eq!(byte, 32);
-        assert_eq!(rest, "");
+        assert_eq!(cursor.pos(), 32);
+        assert_eq!(cursor.rest(), "");
     }
 
     #[test]
