@@ -209,11 +209,67 @@ impl Iterator for Lexer<'_> {
 }
 #[cfg(test)]
 mod tests {
+    use expect_test::{Expect, expect};
+
     use super::*;
 
     fn contents<'t>(template: impl Into<TemplateString<'t>>, tokens: Vec<Token>) -> Vec<&'t str> {
         let template = template.into();
         tokens.iter().map(|t| t.content(template)).collect()
+    }
+
+    /// Compares the tokens of `src` with `expect`, one per line as `Kind start..end "content"`.
+    /// The range covers the whole token, the content leaves out its delimiters.
+    ///
+    /// Run the tests with `UPDATE_EXPECT=1` to rewrite the expectations in place.
+    fn check(src: &str, expect: Expect) {
+        let template = TemplateString(src);
+        let mut actual = String::new();
+        for token in Lexer::new(template) {
+            let (start, len) = token.at;
+            let end = start + len;
+            let content = token.content(template);
+            actual.push_str(&format!(
+                "{:?} {start}..{end} {content:?}\n",
+                token.token_type
+            ));
+        }
+        expect.assert_eq(&actual);
+    }
+
+    // comment-syntax08 in Django's template_tests/syntax_tests/test_comment.py
+    #[test]
+    fn test_django_comment_ignores_other_closers() {
+        check(
+            "foo{# %} #}bar",
+            expect![[r#"
+            Text 0..3 "foo"
+            Comment 3..11 " %} "
+            Text 11..14 "bar"
+        "#]],
+        );
+    }
+
+    // basic-syntax23 in Django's template_tests/syntax_tests/test_basic.py
+    #[test]
+    fn test_django_variable_ignores_other_closers() {
+        check(
+            "{{ moo #} {{ cow }}",
+            expect![[r#"
+            Variable 0..19 " moo #} {{ cow "
+        "#]],
+        );
+    }
+
+    // basic-syntax24
+    #[test]
+    fn test_django_variable_on_two_lines_is_text() {
+        check(
+            "{{ moo\n }}",
+            expect![[r#"
+            Text 0..10 "{{ moo\n }}"
+        "#]],
+        );
     }
 
     #[test]
