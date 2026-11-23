@@ -126,41 +126,6 @@ impl Cursor<'_> {
     }
 }
 
-// Shims for the lexers not yet ported to `Cursor`.
-
-pub(crate) fn lex_variable(byte: usize, rest: &str) -> (At, usize, &str) {
-    let mut cursor = Cursor::new(rest, byte);
-    let at = cursor.lex_variable();
-    (at, cursor.pos(), cursor.rest())
-}
-
-pub(crate) fn lex_text<'t>(
-    byte: usize,
-    rest: &'t str,
-    _chars: &mut std::str::Chars,
-    _end: char,
-) -> Result<(At, usize, &'t str), LexerError> {
-    let mut cursor = Cursor::new(rest, byte);
-    let at = cursor.lex_text()?;
-    Ok((at, cursor.pos(), cursor.rest()))
-}
-
-pub(crate) fn lex_translated<'t>(
-    byte: usize,
-    rest: &'t str,
-    _chars: &mut std::str::Chars,
-) -> Result<(At, usize, &'t str), LexerError> {
-    let mut cursor = Cursor::new(rest, byte);
-    let at = cursor.lex_translated()?;
-    Ok((at, cursor.pos(), cursor.rest()))
-}
-
-pub(crate) fn lex_numeric(byte: usize, rest: &str) -> (At, usize, &str) {
-    let mut cursor = Cursor::new(rest, byte);
-    let at = cursor.lex_numeric();
-    (at, cursor.pos(), cursor.rest())
-}
-
 pub fn trim_variable(variable: &str) -> &str {
     match variable.find(|c: char| !c.is_xid_continue() && c != '.' && c != '-') {
         Some(end) => &variable[..end],

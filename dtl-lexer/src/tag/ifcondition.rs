@@ -1,9 +1,7 @@
 use crate::TemplateContent;
-use crate::common::{
-    LexerError, lex_numeric, lex_text, lex_translated, lex_variable, text_content_at,
-    translated_text_content_at,
-};
-use crate::python_compat::{NextChar, trim_start};
+use crate::common::{LexerError, text_content_at, translated_text_content_at};
+use crate::cursor::Cursor;
+use crate::python_compat::is_whitespace;
 use crate::tag::TagParts;
 use crate::types::{At, TemplateString};
 
@@ -63,112 +61,45 @@ impl<'t> TemplateContent<'t> for IfConditionToken {
 }
 
 pub struct IfConditionLexer<'t> {
-    rest: &'t str,
-    byte: usize,
+    template: TemplateString<'t>,
+    cursor: Cursor<'t>,
 }
 
 impl<'t> IfConditionLexer<'t> {
     pub fn new(template: TemplateString<'t>, parts: TagParts) -> Self {
         Self {
-            rest: template.content(parts.at),
-            byte: parts.at.0,
+            template,
+            cursor: Cursor::new(template.content(parts.at), parts.at.0),
         }
     }
 
     fn lex_condition(&mut self) -> Result<IfConditionToken, LexerError> {
-        let mut chars = self.rest.chars();
-        let token = match chars.next().expect("self.rest is not empty") {
-            '_' => {
-                if chars.next() == Some('(') {
-                    self.lex_translated(&mut chars)?
-                } else {
-                    self.lex_variable()
-                }
+        let cursor = &mut self.cursor;
+        let (atom, at) = match cursor.first() {
+            Some('_') if cursor.second() == Some('(') => {
+                (IfConditionAtom::TranslatedText, cursor.lex_translated()?)
             }
-            '"' => self.lex_text(&mut chars, '"')?,
-            '\'' => self.lex_text(&mut chars, '\'')?,
-            '0'..='9' | '-' => self.lex_numeric(),
-            _ => self.lex_variable(),
+            Some('"' | '\'') => (IfConditionAtom::Text, cursor.lex_text()?),
+            Some('0'..='9' | '-') => (IfConditionAtom::Numeric, cursor.lex_numeric()),
+            _ => (IfConditionAtom::Variable, cursor.lex_variable()),
         };
-        self.lex_remainder()?;
-        Ok(token)
-    }
-
-    fn lex_variable(&mut self) -> IfConditionToken {
-        let (at, byte, rest) = lex_variable(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        IfConditionToken {
-            token_type: IfConditionTokenType::Atom(IfConditionAtom::Variable),
+        cursor.lex_remainder()?;
+        Ok(IfConditionToken {
             at,
-        }
+            token_type: IfConditionTokenType::Atom(atom),
+        })
     }
 
-    fn lex_numeric(&mut self) -> IfConditionToken {
-        let (at, byte, rest) = lex_numeric(self.byte, self.rest);
-        self.rest = rest;
-        self.byte = byte;
-        IfConditionToken {
-            at,
-            token_type: IfConditionTokenType::Atom(IfConditionAtom::Numeric),
+    /// Consumes the whitespace and the word after `cursor` when that word is `keyword`.
+    fn eat_keyword(&self, cursor: &mut Cursor<'t>, keyword: &str) -> bool {
+        let mut next = cursor.clone();
+        next.eat_whitespace();
+        let word = next.eat_while(|c| !is_whitespace(c));
+        let found = self.template.content(word) == keyword;
+        if found {
+            *cursor = next;
         }
-    }
-
-    fn lex_text(
-        &mut self,
-        chars: &mut std::str::Chars,
-        end: char,
-    ) -> Result<IfConditionToken, LexerError> {
-        match lex_text(self.byte, self.rest, chars, end) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(IfConditionToken {
-                    token_type: IfConditionTokenType::Atom(IfConditionAtom::Text),
-                    at,
-                })
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e)
-            }
-        }
-    }
-
-    fn lex_translated(
-        &mut self,
-        chars: &mut std::str::Chars,
-    ) -> Result<IfConditionToken, LexerError> {
-        match lex_translated(self.byte, self.rest, chars) {
-            Ok((at, byte, rest)) => {
-                self.rest = rest;
-                self.byte = byte;
-                Ok(IfConditionToken {
-                    token_type: IfConditionTokenType::Atom(IfConditionAtom::TranslatedText),
-                    at,
-                })
-            }
-            Err(e) => {
-                self.rest = "";
-                Err(e)
-            }
-        }
-    }
-
-    fn lex_remainder(&mut self) -> Result<(), LexerError> {
-        match self.rest.next_whitespace() {
-            0 => {
-                let rest = trim_start(self.rest);
-                self.byte += self.rest.len() - rest.len();
-                self.rest = rest;
-                Ok(())
-            }
-            n => {
-                self.rest = "";
-                let at = (self.byte, n).into();
-                Err(LexerError::InvalidRemainder { at })
-            }
-        }
+        found
     }
 }
 
@@ -176,85 +107,41 @@ impl Iterator for IfConditionLexer<'_> {
     type Item = Result<IfConditionToken, LexerError>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.rest.is_empty() {
+        if self.cursor.is_empty() {
             return None;
         }
 
-        let index = self.rest.next_whitespace();
-        let (token_type, index) = match &self.rest[..index] {
-            "and" => (
-                IfConditionTokenType::Operator(IfConditionOperator::And),
-                index,
-            ),
-            "or" => (
-                IfConditionTokenType::Operator(IfConditionOperator::Or),
-                index,
-            ),
-            "not" => {
-                let rest = &self.rest[index..];
-                let whitespace_index = rest.next_non_whitespace();
-                let rest = &rest[whitespace_index..];
-                let next_index = rest.next_whitespace();
-                match &rest[..next_index] {
-                    "in" => (
-                        IfConditionTokenType::Operator(IfConditionOperator::NotIn),
-                        index + whitespace_index + next_index,
-                    ),
-                    _ => (IfConditionTokenType::Not, index),
-                }
+        let mut cursor = self.cursor.clone();
+        let word = cursor.eat_while(|c| !is_whitespace(c));
+        let token_type = match self.template.content(word) {
+            "and" => IfConditionTokenType::Operator(IfConditionOperator::And),
+            "or" => IfConditionTokenType::Operator(IfConditionOperator::Or),
+            "not" if self.eat_keyword(&mut cursor, "in") => {
+                IfConditionTokenType::Operator(IfConditionOperator::NotIn)
             }
-            "==" => (
-                IfConditionTokenType::Operator(IfConditionOperator::Equal),
-                index,
-            ),
-            "!=" => (
-                IfConditionTokenType::Operator(IfConditionOperator::NotEqual),
-                index,
-            ),
-            "<" => (
-                IfConditionTokenType::Operator(IfConditionOperator::LessThan),
-                index,
-            ),
-            ">" => (
-                IfConditionTokenType::Operator(IfConditionOperator::GreaterThan),
-                index,
-            ),
-            "<=" => (
-                IfConditionTokenType::Operator(IfConditionOperator::LessThanEqual),
-                index,
-            ),
-            ">=" => (
-                IfConditionTokenType::Operator(IfConditionOperator::GreaterThanEqual),
-                index,
-            ),
-            "in" => (
-                IfConditionTokenType::Operator(IfConditionOperator::In),
-                index,
-            ),
-            "is" => {
-                let rest = &self.rest[index..];
-                let whitespace_index = rest.next_non_whitespace();
-                let rest = &rest[whitespace_index..];
-                let next_index = rest.next_whitespace();
-                match &rest[..next_index] {
-                    "not" => (
-                        IfConditionTokenType::Operator(IfConditionOperator::IsNot),
-                        index + whitespace_index + next_index,
-                    ),
-                    _ => (
-                        IfConditionTokenType::Operator(IfConditionOperator::Is),
-                        index,
-                    ),
-                }
+            "not" => IfConditionTokenType::Not,
+            "==" => IfConditionTokenType::Operator(IfConditionOperator::Equal),
+            "!=" => IfConditionTokenType::Operator(IfConditionOperator::NotEqual),
+            "<" => IfConditionTokenType::Operator(IfConditionOperator::LessThan),
+            ">" => IfConditionTokenType::Operator(IfConditionOperator::GreaterThan),
+            "<=" => IfConditionTokenType::Operator(IfConditionOperator::LessThanEqual),
+            ">=" => IfConditionTokenType::Operator(IfConditionOperator::GreaterThanEqual),
+            "in" => IfConditionTokenType::Operator(IfConditionOperator::In),
+            "is" if self.eat_keyword(&mut cursor, "not") => {
+                IfConditionTokenType::Operator(IfConditionOperator::IsNot)
             }
-            _ => return Some(self.lex_condition()),
+            "is" => IfConditionTokenType::Operator(IfConditionOperator::Is),
+            _ => {
+                let token = self.lex_condition();
+                if token.is_err() {
+                    self.cursor.skip_to_end();
+                }
+                return Some(token);
+            }
         };
-        let at = (self.byte, index);
-
-        let rest = &self.rest[index..];
-        let next_index = rest.next_non_whitespace();
-        self.byte += index + next_index;
-        self.rest = &rest[next_index..];
+        let at = cursor.at_from(self.cursor.pos());
+        cursor.eat_whitespace();
+        self.cursor = cursor;
 
         Some(Ok(IfConditionToken { at, token_type }))
     }
