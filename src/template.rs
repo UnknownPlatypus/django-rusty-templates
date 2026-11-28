@@ -1027,4 +1027,151 @@ user = User(["Lily"])
             assert_eq!(engine_error.value(py).to_string(), message);
         });
     }
+
+    /// Random templates and contexts must render, or fail, the same as Django.
+    mod differential {
+        use super::*;
+        use proptest::prelude::*;
+        use pyo3::types::{PyAnyMethods, PyTypeMethods};
+
+        const NAMES: [&str; 5] = ["a", "b", "items", "obj", "n"];
+        // Only filters implemented in Rust: the engine has no builtins to fall back on.
+        const FILTERS: [&str; 21] = [
+            "upper",
+            "lower",
+            "title",
+            "length",
+            "last",
+            "safe",
+            "escape",
+            "force_escape",
+            "wordcount",
+            "default:'-'",
+            "default_if_none:'?'",
+            "cut:' '",
+            "add:1",
+            "yesno",
+            "addslashes",
+            "capfirst",
+            "center:9",
+            "divisibleby:2",
+            "escapejs",
+            "slugify",
+            "wordwrap:3",
+        ];
+
+        fn name() -> impl Strategy<Value = &'static str> {
+            proptest::sample::select(&NAMES[..])
+        }
+
+        fn text() -> impl Strategy<Value = String> {
+            "[ab &<>\"'{}%#\n é✓]{0,40}"
+        }
+
+        fn var_tag() -> impl Strategy<Value = String> {
+            let lookup = (
+                name(),
+                proptest::sample::select(&["", ".0", ".x", ".upper", ".items"][..]),
+            );
+            let filters = proptest::collection::vec(proptest::sample::select(&FILTERS[..]), 0..=3);
+            (lookup, filters).prop_map(|((name, attr), filters)| {
+                let mut expr = format!("{name}{attr}");
+                for filter in filters {
+                    expr.push('|');
+                    expr.push_str(filter);
+                }
+                format!("{{{{ {expr} }}}}")
+            })
+        }
+
+        fn template() -> impl Strategy<Value = String> {
+            prop_oneof![text(), var_tag()].prop_recursive(4, 12, 4, |children| {
+                let cond = proptest::sample::select(&["a", "not a", "n > 1", "items", "a == b", "obj.x"][..]);
+                prop_oneof![
+                    (cond, children.clone(), children.clone()).prop_map(|(c, t, f)| {
+                        format!("{{% if {c} %}}{t}{{% else %}}{f}{{% endif %}}")
+                    }),
+                    (name(), children.clone(), children.clone()).prop_map(|(n, body, empty)| {
+                        format!("{{% for it in {n} %}}{{{{ it }}}}{body}{{% empty %}}{empty}{{% endfor %}}")
+                    }),
+                    (prop_oneof![Just("on"), Just("off")], children.clone()).prop_map(|(mode, body)| {
+                        format!("{{% autoescape {mode} %}}{body}{{% endautoescape %}}")
+                    }),
+                    proptest::collection::vec(children, 2..=4).prop_map(|parts| parts.concat()),
+                ]
+            })
+        }
+
+        // Python literals, evaluated on the Python side to build the context.
+        fn value() -> impl Strategy<Value = String> {
+            let scalar = prop_oneof![
+                Just("None".to_string()),
+                Just("True".to_string()),
+                Just("False".to_string()),
+                (-5i64..=5).prop_map(|i| i.to_string()),
+                (-1e3f64..1e3).prop_map(|f| format!("{f:?}")),
+                // Rust's Debug escaping matches Python's for this alphabet.
+                "[ab &<>\"'é\n]{0,30}".prop_map(|s| format!("{s:?}")),
+            ];
+            prop_oneof![
+                scalar.clone(),
+                proptest::collection::vec(scalar.clone(), 0..=4)
+                    .prop_map(|v| format!("[{}]", v.join(", "))),
+                proptest::collection::btree_map(
+                    proptest::sample::select(&["x", "0", "items"][..]),
+                    scalar,
+                    0..=3,
+                )
+                .prop_map(|m| {
+                    let items: Vec<_> = m.iter().map(|(k, v)| format!("{k:?}: {v}")).collect();
+                    format!("{{{}}}", items.join(", "))
+                }),
+            ]
+        }
+
+        fn context() -> impl Strategy<Value = String> {
+            proptest::collection::btree_map(name(), value(), 0..=NAMES.len()).prop_map(|m| {
+                let items: Vec<_> = m.iter().map(|(k, v)| format!("{k:?}: {v}")).collect();
+                format!("{{{}}}", items.join(", "))
+            })
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(300))]
+            #[test]
+            fn test_render_matches_django(src in template(), ctx in context()) {
+                Python::initialize();
+                Python::attach(|py| {
+                    let os = py.import("os").unwrap();
+                    os.getattr("environ").unwrap()
+                        .call_method1("setdefault", ("DJANGO_SETTINGS_MODULE", "tests.settings"))
+                        .unwrap();
+                    py.import("django").unwrap().call_method0("setup").unwrap();
+
+                    let ctx_code = std::ffi::CString::new(ctx.as_str()).unwrap();
+                    let new_context = || py.eval(&ctx_code, None, None).unwrap();
+
+                    let django = py.import("django.template").unwrap();
+                    let expected = django
+                        .getattr("Engine").unwrap().call0().unwrap()
+                        .call_method1("from_string", (&src,))
+                        .and_then(|t| {
+                            let context = django.getattr("Context")?.call1((new_context(),))?;
+                            t.call_method1("render", (context,))?.extract::<String>()
+                        })
+                        .map_err(|e| e.get_type(py).name().unwrap().to_string());
+
+                    let engine = PyEngine::new(
+                        py, None, false, None, false, None, String::new(), "utf-8".to_string(), None, None, true,
+                    ).unwrap();
+                    let actual = engine.from_string(PyString::new(py, &src))
+                        .and_then(|t| t.py_render(py, Some(new_context()), None))
+                        .map_err(|e| e.get_type(py).name().unwrap().to_string());
+
+                    prop_assert_eq!(actual, expected, "template: {:?}, context: {}", src, ctx);
+                    Ok(())
+                })?;
+            }
+        }
+    }
 }
